@@ -165,7 +165,7 @@ export class MineruParser implements DocumentParser {
 
     const response = await fetch(uploadUrl, {
       method: 'PUT',
-      body: fileBuffer,
+      body: fileBuffer as unknown as BodyInit,
       // Note: No Content-Type header needed per MinerU API docs
     })
 

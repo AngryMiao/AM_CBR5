@@ -377,6 +377,36 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
 
   extension: ExtensionSettingsSchema,
   mcp: MCPSettingsSchema,
+
+  voice: z
+    .object({
+      enabled: z.boolean().default(false),
+      asrProvider: z.enum(['whisper-local', 'openai', 'azure', 'google']).default('whisper-local'),
+      ttsProvider: z.enum(['browser', 'openai', 'azure', 'elevenlabs']).default('browser'),
+      asrConfig: z.record(z.string(), z.any()).default({}),
+      ttsConfig: z.record(z.string(), z.any()).default({}),
+      shortcuts: z
+        .object({
+          toggleVoice: z.string().default('Ctrl+Shift+V'),
+        })
+        .default({ toggleVoice: 'Ctrl+Shift+V' }),
+      keyboardDriverPath: z.string().optional(),
+      keyboardShortcuts: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        triggerWords: z.array(z.string()),
+        keyCodes: z.array(z.string()),
+        enabled: z.boolean().default(true),
+      })).default([]),
+      autoStopRecording: z.boolean().default(true),
+      silenceThreshold: z.number().default(0.01),
+      silenceDuration: z.number().default(1500),
+      maxRecordingDuration: z.number().default(60000),
+      autoPlayResponse: z.boolean().default(true),
+      showTranscript: z.boolean().default(true),
+    })
+    .optional()
+    .catch(undefined),
 })
 
 // TODO: provider的 base info 和 settings混在一起了，可以考虑像 session settings 和 global settings一样拆开

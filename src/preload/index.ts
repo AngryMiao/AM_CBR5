@@ -58,6 +58,10 @@ const electronHandler: ElectronIPC = {
     ipcRenderer.on('navigate-to', listener)
     return () => ipcRenderer.off('navigate-to', listener)
   },
+  onVoiceToggle: (callback: () => void) => {
+    ipcRenderer.on('voice:toggle', callback)
+    return () => ipcRenderer.off('voice:toggle', callback)
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronHandler)

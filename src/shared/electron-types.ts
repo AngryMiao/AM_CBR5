@@ -7,4 +7,5 @@ export interface ElectronIPC {
   onUpdateDownloaded: (callback: () => void) => () => void
   addMcpStdioTransportEventListener: (transportId: string, event: string, callback?: (...args: any[]) => void) => void
   onNavigate: (callback: (path: string) => void) => () => void
+  onVoiceToggle: (callback: () => void) => () => void
 }

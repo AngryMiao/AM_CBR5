@@ -9,7 +9,19 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeTheme, session, shell, Tray } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  Menu,
+  nativeTheme,
+  session,
+  shell,
+  systemPreferences,
+  Tray,
+} from 'electron'
 import electronDebug from 'electron-debug'
 import log from 'electron-log/main'
 import { autoUpdater } from 'electron-updater'
@@ -19,6 +31,7 @@ import path from 'path'
 import * as sourceMapSupport from 'source-map-support'
 import type { ShortcutSetting } from 'src/shared/types'
 import * as analystic from './analystic-node'
+import { AppUpdater } from './app-updater'
 import * as autoLauncher from './autoLauncher'
 import { handleDeepLink } from './deeplinks'
 import { parseFile } from './file-parser'
@@ -132,10 +145,12 @@ function isValidShortcut(shortcut: string): boolean {
 }
 
 function registerShortcuts(shortcutSetting?: ShortcutSetting) {
+  log.info('registerShortcuts called')
   if (!shortcutSetting) {
     shortcutSetting = getSettings().shortcuts
   }
   if (!shortcutSetting) {
+    log.warn('No shortcut settings found')
     return
   }
   try {
@@ -145,6 +160,33 @@ function registerShortcuts(shortcutSetting?: ShortcutSetting) {
     }
   } catch (error) {
     log.error('Failed to register shortcut [windowQuickToggle]:', error)
+  }
+
+  // 注册语音控制快捷键
+  try {
+    const allSettings = getSettings()
+    log.info('All settings keys:', Object.keys(allSettings))
+    const voiceSettings = allSettings.voice
+    log.info('Voice settings:', JSON.stringify(voiceSettings))
+    if (voiceSettings?.enabled && voiceSettings.shortcuts?.toggleVoice) {
+      const toggleVoice = normalizeShortcut(voiceSettings.shortcuts.toggleVoice)
+      log.info('Registering voice shortcut:', toggleVoice)
+      if (isValidShortcut(toggleVoice)) {
+        const success = globalShortcut.register(toggleVoice, () => {
+          log.info('Voice shortcut triggered!')
+          if (mainWindow) {
+            mainWindow.webContents.send('voice:toggle')
+          }
+        })
+        log.info('Voice shortcut registration result:', success)
+      } else {
+        log.warn('Invalid voice shortcut:', toggleVoice)
+      }
+    } else {
+      log.info('Voice control not enabled or shortcut not configured')
+    }
+  } catch (error) {
+    log.error('Failed to register shortcut [voiceToggle]:', error)
   }
 }
 
@@ -340,8 +382,26 @@ async function createWindow() {
         ...details.responseHeaders,
         // 'Content-Security-Policy': ['default-src \'self\'']
         // 'Content-Security-Policy': ['*'], // 为了支持代理
+        'Access-Control-Allow-Origin': ['*'],
+        'Access-Control-Allow-Methods': ['GET, POST, PUT, DELETE, OPTIONS'],
+        'Access-Control-Allow-Headers': ['*'],
       },
     })
+  })
+
+  // 允许访问 HuggingFace 和镜像站点（用于下载 Whisper 模型）
+  session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
+    const url = details.url
+    if (url.includes('huggingface.co') || url.includes('hf-mirror.com')) {
+      callback({
+        requestHeaders: {
+          ...details.requestHeaders,
+          Origin: url,
+        },
+      })
+    } else {
+      callback({ requestHeaders: details.requestHeaders })
+    }
   })
 
   // 监听系统主题更新
@@ -560,6 +620,55 @@ ipcMain.handle('getVersion', () => {
 ipcMain.handle('getPlatform', () => {
   return process.platform
 })
+ipcMain.handle('getSystemControlMCPPath', () => {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'system-control-mcp', 'dist', 'index.js')
+    : path.join(__dirname, '../../system-control-mcp/dist/index.js')
+})
+ipcMain.handle('getSystemControlMCPCommand', () => {
+  return app.isPackaged ? process.execPath : 'node'
+})
+ipcMain.handle('ensureAccessibilityPermission', async () => {
+  if (process.platform !== 'darwin') return true
+
+  // 1. 检查并请求辅助功能权限
+  const accessibilityGranted = systemPreferences.isTrustedAccessibilityClient(true)
+
+  // 2. 测试自动化权限（向 System Events 发送无害命令）
+  const { execFile } = await import('child_process')
+  const automationGranted = await new Promise<boolean>((resolve) => {
+    execFile(
+      'osascript',
+      ['-e', 'tell application "System Events" to return name of first process'],
+      { timeout: 10000 },
+      (error) => {
+        resolve(!error)
+      }
+    )
+  })
+
+  // 3. 如果权限缺失，弹对话框引导用户去系统设置
+  if (!accessibilityGranted || !automationGranted) {
+    const missing: string[] = []
+    if (!accessibilityGranted) missing.push('辅助功能 (Accessibility)')
+    if (!automationGranted) missing.push('自动化 → System Events (Automation)')
+
+    const { response } = await dialog.showMessageBox({
+      type: 'warning',
+      title: '需要系统权限',
+      message: '语音控制需要以下 macOS 权限才能正常工作：',
+      detail: missing.join('\n') + '\n\n请在系统设置中授权后重启 Chatbox。',
+      buttons: ['打开系统设置', '稍后再说'],
+      defaultId: 0,
+    })
+    if (response === 0) {
+      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Automation')
+    }
+    return false
+  }
+
+  return true
+})
 ipcMain.handle('getArch', () => {
   return process.arch
 })
@@ -597,7 +706,20 @@ ipcMain.handle('ensureShortcutConfig', (event, json) => {
   registerShortcuts(config)
 })
 
+ipcMain.handle('ensureVoiceShortcut', () => {
+  // 重新注册所有快捷键（包括语音快捷键）
+  unregisterShortcuts()
+  registerShortcuts()
+})
+
 ipcMain.handle('shouldUseDarkColors', () => nativeTheme.shouldUseDarkColors)
+
+ipcMain.handle('dialog:openDirectory', async () => {
+  const { dialog } = require('electron')
+  return await dialog.showOpenDialog(mainWindow!, {
+    properties: ['openDirectory'],
+  })
+})
 
 ipcMain.handle('ensureProxy', (event, json) => {
   const config: { proxy?: string } = JSON.parse(json)

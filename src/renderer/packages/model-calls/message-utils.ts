@@ -1,6 +1,6 @@
-import type { Message, MessageContentParts } from '@shared/types'
+import type { Message, MessageContentParts, MessageToolCallPart } from '@shared/types'
 import type { ModelDependencies } from '@shared/types/adapters'
-import type { FilePart, ImagePart, ModelMessage, TextPart } from 'ai'
+import type { FilePart, ImagePart, ModelMessage, TextPart, ToolCallPart, ToolResultPart } from 'ai'
 import dayjs from 'dayjs'
 import { compact } from 'lodash'
 import { createModelDependencies } from '@/adapters'
@@ -65,8 +65,19 @@ async function convertUserContentParts(
 async function convertAssistantContentParts(
   contentParts: MessageContentParts,
   dependencies: ModelDependencies
-): Promise<Array<TextPart | FilePart>> {
-  return await convertContentParts<TextPart | FilePart>(contentParts, 'file', dependencies)
+): Promise<Array<TextPart | FilePart | ToolCallPart>> {
+  const textAndFileParts = await convertContentParts<TextPart | FilePart>(contentParts, 'file', dependencies)
+
+  const toolCallParts: ToolCallPart[] = contentParts
+    .filter((c) => c.type === 'tool-call')
+    .map((c) => ({
+      type: 'tool-call' as const,
+      toolCallId: c.toolCallId,
+      toolName: c.toolName,
+      input: c.args,
+    }))
+
+  return [...textAndFileParts, ...toolCallParts]
 }
 
 export async function convertToModelMessages(
@@ -75,7 +86,7 @@ export async function convertToModelMessages(
 ): Promise<ModelMessage[]> {
   const dependencies = await createModelDependencies()
   const results = await Promise.all(
-    messages.map(async (m): Promise<ModelMessage | null> => {
+    messages.map(async (m): Promise<ModelMessage | ModelMessage[] | null> => {
       switch (m.role) {
         case 'system':
           return {
@@ -91,10 +102,32 @@ export async function convertToModelMessages(
         }
         case 'assistant': {
           const contentParts = m.contentParts || []
-          return {
+          const assistantMsg: ModelMessage = {
             role: 'assistant' as const,
             content: await convertAssistantContentParts(contentParts, dependencies),
           }
+
+          // Generate tool result messages for completed tool calls
+          const completedToolCalls = contentParts.filter(
+            (c): c is MessageToolCallPart => c.type === 'tool-call' && (c.state === 'result' || c.state === 'error')
+          )
+          if (completedToolCalls.length > 0) {
+            const toolMsg: ModelMessage = {
+              role: 'tool' as const,
+              content: completedToolCalls.map((c) => ({
+                type: 'tool-result' as const,
+                toolCallId: c.toolCallId,
+                toolName: c.toolName,
+                output: {
+                  type: 'text' as const,
+                  value: typeof c.result === 'string' ? c.result : JSON.stringify(c.result ?? ''),
+                },
+              })) as ToolResultPart[],
+            }
+            return [assistantMsg, toolMsg]
+          }
+
+          return assistantMsg
         }
         case 'tool':
           return null
@@ -105,9 +138,9 @@ export async function convertToModelMessages(
       }
     })
   )
-  
-  // Filter out null values manually instead of using compact
-  return results.filter((result): result is ModelMessage => result !== null)
+
+  // Flatten arrays and filter out null values
+  return results.flat().filter((result): result is ModelMessage => result !== null)
 }
 
 /**

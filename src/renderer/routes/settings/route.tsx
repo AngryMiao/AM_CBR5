@@ -10,6 +10,7 @@ import {
   IconFileText,
   IconKeyboard,
   IconMessages,
+  IconMicrophone,
   IconSparkles,
   IconWorldWww,
 } from '@tabler/icons-react'
@@ -73,6 +74,11 @@ const ITEMS = [
     key: 'chat',
     label: 'Chat Settings',
     icon: <IconMessages className="w-full h-full" />,
+  },
+  {
+    key: 'voice',
+    label: 'Voice Control',
+    icon: <IconMicrophone className="w-full h-full" />,
   },
   ...(platform.type === 'mobile'
     ? []

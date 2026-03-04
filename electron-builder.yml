@@ -77,10 +77,14 @@ directories:
 
 extraResources:
   - ./assets/**
+  - from: ./system-control-mcp/dist
+    to: system-control-mcp/dist
+    filter:
+      - "**/*"
 
 publish:
   - provider: s3
     bucket: chatbox
     endpoint: https://208624959c9d215edea0720162a740c1.r2.cloudflarestorage.com
     path: /releases
-    channel: ${env.UPDATE_CHANNEL}
+    channel: latest

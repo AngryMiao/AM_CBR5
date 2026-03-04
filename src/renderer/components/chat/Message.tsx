@@ -628,7 +628,7 @@ const PictureGallery = memo(({ pictures, compact, onReport }: PictureGalleryProp
           outlineID: 'pswp__icn-download',
         },
         appendTo: 'bar',
-        onClick: async (_e, _el, pswp) => {
+        onClick: async (_e: any, _el: any, pswp: any) => {
           const picture = pictures[pswp.currIndex]
           if (picture.storageKey) {
             const base64 = await storage.getBlob(picture.storageKey)
@@ -678,7 +678,7 @@ const PictureGallery = memo(({ pictures, compact, onReport }: PictureGalleryProp
             <ImageInStorageGalleryItem key={p.storageKey} storageKey={p.storageKey} height={imageHeight} />
           ) : p.url ? (
             <GalleryItem key={p.url} original={p.url} thumbnail={p.url} width={1024} height={1024}>
-              {({ ref, open }) => (
+              {({ ref, open }: { ref: any; open: () => void }) => (
                 <Img
                   src={p.url}
                   h={imageHeight}

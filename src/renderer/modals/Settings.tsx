@@ -32,6 +32,7 @@ import { RouteComponent as SettingsProviderIndexRouteComponent } from '@/routes/
 import { RouteComponent as SettingsProviderRouteRouteComponent } from '@/routes/settings/provider/route'
 import { SettingsRoot } from '@/routes/settings/route'
 import { RouteComponent as SettingsWebSearchRouteComponent } from '@/routes/settings/web-search'
+import { RouteComponent as SettingsVoiceRouteComponent } from '@/routes/settings/voice'
 
 export type SettingsModalProps = {}
 
@@ -189,6 +190,12 @@ const SettingsDefaultModelsRoute = createRoute({
   getParentRoute: () => RootRoute,
 })
 
+const SettingsVoiceRoute = createRoute({
+  component: SettingsVoiceRouteComponent,
+  path: '/settings/voice',
+  getParentRoute: () => RootRoute,
+})
+
 const SettingsProviderRouteRoute = createRoute({
   component: SettingsProviderRouteRouteComponent,
   path: '/settings/provider',
@@ -230,6 +237,7 @@ const routeTree = RootRoute.addChildren([
   SettingsDocumentParserRoute,
   SettingsHotkeysRoute,
   SettingsDefaultModelsRoute,
+  SettingsVoiceRoute,
   SettingsProviderRouteRoute,
 ])
 

@@ -195,6 +195,11 @@ export const mcpController = {
   },
 
   getAvailableTools(): ToolSet {
+    const DEFERRED_EXECUTION_TOOLS = new Set([
+      'system_sleep',
+      'system_shutdown',
+      'system_restart',
+    ])
     const toolSet: ToolSet = {}
     for (const { instance, config } of this.servers.values()) {
       const mcpTools = instance.getAvailableTools()
@@ -204,10 +209,17 @@ export const mcpController = {
           ...tool,
           execute: async (args, options) => {
             try {
+              if (DEFERRED_EXECUTION_TOOLS.has(toolName)) {
+                setTimeout(() => {
+                  rawExecute?.(args, options).catch((err: unknown) => {
+                    console.error(`Deferred tool ${toolName} failed:`, err)
+                  })
+                }, 3000)
+                return { success: true, message: `${toolName} will execute in 3 seconds` }
+              }
               return await rawExecute?.(args, options)
             } catch (err) {
-              // 返回而非抛出，否则会导致流程中断
-              return err
+              throw err
             }
           },
         }

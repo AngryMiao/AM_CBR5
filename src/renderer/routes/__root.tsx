@@ -8,6 +8,8 @@ import { useI18nEffect } from '@/hooks/useI18nEffect'
 import useNeedRoomForWinControls from '@/hooks/useNeedRoomForWinControls'
 import { useSidebarWidth } from '@/hooks/useScreenChange'
 import useShortcut from '@/hooks/useShortcut'
+import { useVoiceController } from '@/hooks/useVoiceController'
+import { VoicePanel } from '@/components/voice/VoicePanel'
 import '@/modals'
 import NiceModal from '@ebay/nice-modal-react'
 import {
@@ -66,6 +68,9 @@ function Root() {
   const setOpenAboutDialog = useUIStore((s) => s.setOpenAboutDialog)
 
   const setRemoteConfig = useSetAtom(atoms.remoteConfigAtom)
+
+  // 初始化语音控制
+  useVoiceController()
 
   useEffect(() => {
     if (initialized.current) {
@@ -202,6 +207,7 @@ function Root() {
       {/* <WelcomeDialog /> */}
       <Toasts /> {/* mui */}
       <SettingsModal />
+      <VoicePanel />
     </Box>
   )
 }

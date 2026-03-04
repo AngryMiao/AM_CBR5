@@ -70,7 +70,7 @@ async function initializeApp() {
   import('./setup/storage_clear')
 
   // 启动mcp服务器
-  import('./setup/mcp_bootstrap')
+  import('./setup/mcp_bootstrap.js')
 }
 
 // ==========渲染节点==============
