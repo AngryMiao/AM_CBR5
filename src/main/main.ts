@@ -27,6 +27,7 @@ import log from 'electron-log/main'
 import { autoUpdater } from 'electron-updater'
 import os from 'os'
 import path from 'path'
+import { spawn, type ChildProcess } from 'child_process'
 // @ts-expect-error - source-map-support doesn't have type definitions
 import * as sourceMapSupport from 'source-map-support'
 import type { ShortcutSetting } from 'src/shared/types'
@@ -87,6 +88,162 @@ console.log(`📱 URL Scheme registered: ${PROTOCOL_SCHEME}://`)
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
+let funasrProcess: ChildProcess | null = null
+let funasrStarting = false
+let funasrManagedBaseURL = ''
+
+type FunASRLaunchConfig = {
+  enabled: boolean
+  asrProvider?: string
+  baseURL: string
+  autoStart: boolean
+  launchCommand: string
+  launchArgs: string
+  launchCwd?: string
+}
+
+function parseLaunchArgs(args: string): string[] {
+  if (!args.trim()) return []
+  const matches = args.match(/"[^"]*"|'[^']*'|\S+/g) || []
+  return matches.map((item) => item.replace(/^['"]|['"]$/g, ''))
+}
+
+function getFunASRLaunchConfig(): FunASRLaunchConfig {
+  const settings = getSettings()
+  const voiceSettings = settings.voice
+  const funasrConfig = (voiceSettings?.asrConfig as any)?.funasrLocal || {}
+  return {
+    enabled: !!voiceSettings?.enabled,
+    asrProvider: voiceSettings?.asrProvider,
+    baseURL: String(funasrConfig.baseURL || 'http://127.0.0.1:10095'),
+    autoStart: funasrConfig.autoStart !== false,
+    launchCommand: String(funasrConfig.launchCommand || 'python3'),
+    launchArgs: String(funasrConfig.launchArgs || '-m funasr_server --port 10095'),
+    launchCwd: funasrConfig.launchCwd ? String(funasrConfig.launchCwd) : undefined,
+  }
+}
+
+function shouldManageFunASR(config: FunASRLaunchConfig): boolean {
+  return config.enabled && config.asrProvider === 'funasr-local' && config.autoStart
+}
+
+function stopFunASRService(reason: string) {
+  if (!funasrProcess) return
+  const pid = funasrProcess.pid
+  log.info(`[FunASR] stopping service (${reason}), pid=${pid}`)
+  try {
+    if (process.platform === 'win32' && pid) {
+      const killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], { windowsHide: true })
+      killer.on('error', (error) => {
+        log.error('[FunASR] taskkill failed:', error)
+      })
+    } else {
+      funasrProcess.kill('SIGTERM')
+      setTimeout(() => {
+        if (funasrProcess && !funasrProcess.killed) {
+          funasrProcess.kill('SIGKILL')
+        }
+      }, 2000)
+    }
+  } catch (error) {
+    log.error('[FunASR] stop failed:', error)
+  } finally {
+    funasrProcess = null
+    funasrManagedBaseURL = ''
+    funasrStarting = false
+  }
+}
+
+function startFunASRService(config: FunASRLaunchConfig) {
+  if (funasrProcess || funasrStarting) return
+  if (!shouldManageFunASR(config)) return
+
+  const command = config.launchCommand.trim()
+  if (!command) {
+    log.warn('[FunASR] skip start: launchCommand is empty')
+    return
+  }
+
+  funasrStarting = true
+  const args = parseLaunchArgs(config.launchArgs)
+  const child = spawn(command, args, {
+    cwd: config.launchCwd,
+    env: process.env,
+    windowsHide: true,
+    detached: false,
+    stdio: 'pipe',
+  })
+
+  funasrProcess = child
+  funasrManagedBaseURL = config.baseURL
+  log.info(`[FunASR] service started, pid=${child.pid}, cmd=${command} ${args.join(' ')}`)
+
+  child.stdout?.on('data', (data) => {
+    log.info(`[FunASR] ${String(data).trim()}`)
+  })
+  child.stderr?.on('data', (data) => {
+    log.warn(`[FunASR][stderr] ${String(data).trim()}`)
+  })
+  child.on('error', (error) => {
+    log.error('[FunASR] process error:', error)
+  })
+  child.on('exit', (code, signal) => {
+    log.info(`[FunASR] process exited: code=${code}, signal=${signal}`)
+    funasrProcess = null
+    funasrStarting = false
+    funasrManagedBaseURL = ''
+  })
+  child.on('spawn', () => {
+    funasrStarting = false
+  })
+}
+
+function ensureFunASRService() {
+  const config = getFunASRLaunchConfig()
+  const shouldRun = shouldManageFunASR(config)
+
+  if (!shouldRun) {
+    stopFunASRService('config disabled')
+    return { running: false, managed: false, baseURL: config.baseURL }
+  }
+
+  if (funasrProcess) {
+    if (funasrManagedBaseURL !== config.baseURL) {
+      stopFunASRService('baseURL changed')
+      startFunASRService(config)
+    }
+  } else {
+    startFunASRService(config)
+  }
+
+  return {
+    running: !!funasrProcess,
+    starting: funasrStarting,
+    managed: true,
+    pid: funasrProcess?.pid,
+    baseURL: config.baseURL,
+    command: config.launchCommand,
+    args: config.launchArgs,
+  }
+}
+
+function getFunASRServiceStatus() {
+  const config = getFunASRLaunchConfig()
+  return {
+    running: !!funasrProcess,
+    starting: funasrStarting,
+    managed: shouldManageFunASR(config),
+    pid: funasrProcess?.pid,
+    baseURL: config.baseURL,
+    command: config.launchCommand,
+    args: config.launchArgs,
+  }
+}
+
+function restartFunASRService() {
+  stopFunASRService('manual restart')
+  return ensureFunASRService()
+}
 
 // --------- 快捷键 ---------
 
@@ -144,7 +301,7 @@ function isValidShortcut(shortcut: string): boolean {
   return hasNonModifier
 }
 
-function registerShortcuts(shortcutSetting?: ShortcutSetting) {
+function registerShortcuts(shortcutSetting?: ShortcutSetting, voiceShortcutOverride?: string) {
   log.info('registerShortcuts called')
   if (!shortcutSetting) {
     shortcutSetting = getSettings().shortcuts
@@ -168,9 +325,13 @@ function registerShortcuts(shortcutSetting?: ShortcutSetting) {
     log.info('All settings keys:', Object.keys(allSettings))
     const voiceSettings = allSettings.voice
     log.info('Voice settings:', JSON.stringify(voiceSettings))
-    if (voiceSettings?.enabled && voiceSettings.shortcuts?.toggleVoice) {
-      const toggleVoice = normalizeShortcut(voiceSettings.shortcuts.toggleVoice)
-      log.info('Registering voice shortcut:', toggleVoice)
+
+    // 使用传入的 override 值或从设置中读取
+    const toggleVoiceRaw = voiceShortcutOverride || voiceSettings?.shortcuts?.toggleVoice
+
+    if (voiceSettings?.enabled && toggleVoiceRaw) {
+      const toggleVoice = normalizeShortcut(toggleVoiceRaw)
+      log.info('Registering voice shortcut:', toggleVoice, voiceShortcutOverride ? '(override)' : '(from settings)')
       if (isValidShortcut(toggleVoice)) {
         const success = globalShortcut.register(toggleVoice, () => {
           log.info('Voice shortcut triggered!')
@@ -537,12 +698,14 @@ if (!gotTheLock) {
       })
       registerShortcuts()
       proxy.init()
+      ensureFunASRService()
       app.on('will-quit', () => {
         try {
           unregisterShortcuts()
         } catch (e) {
           log.error('shortcut: failed to unregister', e)
         }
+        stopFunASRService('app will quit')
         mcpIpc.closeAllTransports()
         destroyTray()
       })
@@ -706,10 +869,23 @@ ipcMain.handle('ensureShortcutConfig', (event, json) => {
   registerShortcuts(config)
 })
 
-ipcMain.handle('ensureVoiceShortcut', () => {
+ipcMain.handle('ensureVoiceShortcut', (event, newShortcut?: string) => {
+  log.info('ensureVoiceShortcut called with:', newShortcut)
   // 重新注册所有快捷键（包括语音快捷键）
   unregisterShortcuts()
-  registerShortcuts()
+  registerShortcuts(undefined, newShortcut)
+})
+
+ipcMain.handle('ensureFunASRService', () => {
+  return ensureFunASRService()
+})
+
+ipcMain.handle('getFunASRServiceStatus', () => {
+  return getFunASRServiceStatus()
+})
+
+ipcMain.handle('restartFunASRService', () => {
+  return restartFunASRService()
 })
 
 ipcMain.handle('shouldUseDarkColors', () => nativeTheme.shouldUseDarkColors)

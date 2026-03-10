@@ -1,12 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useVoiceSettings } from '@/hooks/useVoiceSettings'
 import type { ASRProvider, TTSProvider, WhisperModelSize, KeyboardShortcut } from '@shared/types/voice'
-import { WhisperLocalProvider, OpenAIASRProvider, AzureASRProvider, GoogleASRProvider } from '@/packages/voice/asr'
+import { WhisperLocalProvider, FunASRLocalProvider, OpenAIASRProvider, AzureASRProvider, GoogleASRProvider } from '@/packages/voice/asr'
 import type { WhisperDownloadProgress } from '@/packages/voice/asr/whisper-local'
 import { BrowserTTSProvider, OpenAITTSProvider, AzureTTSProvider, ElevenLabsTTSProvider } from '@/packages/voice/tts'
-import { getDefaultKeyboardShortcuts, HID, makeCombo, makeSingleKey } from '@shared/defaults/keyboard-shortcuts'
+import { getDefaultKeyboardShortcuts, buildKeyCodes, KEY_CATEGORIES } from '@shared/defaults/keyboard-shortcuts'
 import platform from '@/platform'
 
 export const Route = createFileRoute('/settings/voice')({
@@ -37,7 +37,60 @@ export function RouteComponent() {
   const [error, setError] = useState<string | null>(null)
   const [whisperDownloading, setWhisperDownloading] = useState(false)
   const [whisperProgress, setWhisperProgress] = useState<WhisperDownloadProgress | null>(null)
+  const [funasrServiceStatus, setFunasrServiceStatus] = useState<any>(null)
+  const [funasrServiceLoading, setFunasrServiceLoading] = useState(false)
+  const [funasrServiceActionLoading, setFunasrServiceActionLoading] = useState(false)
   const whisperProviderRef = useRef<WhisperLocalProvider | null>(null)
+
+  const parseCsv = (value: string): string[] =>
+    value
+      .split(/[,，]/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+
+  const joinCsv = (value?: string[]): string => (value || []).join(', ')
+
+  const refreshFunASRServiceStatus = useCallback(async () => {
+    if (settings.asrProvider !== 'funasr-local') return
+    setFunasrServiceLoading(true)
+    try {
+      const status = await window.electronAPI?.invoke('getFunASRServiceStatus')
+      setFunasrServiceStatus(status)
+    } catch (err) {
+      setFunasrServiceStatus({
+        running: false,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setFunasrServiceLoading(false)
+    }
+  }, [settings.asrProvider])
+
+  const restartFunASRService = useCallback(async () => {
+    setFunasrServiceActionLoading(true)
+    try {
+      await window.electronAPI?.invoke('restartFunASRService')
+      await refreshFunASRServiceStatus()
+      alert(t('FunASR 服务已重启'))
+    } catch (err) {
+      alert(t('重启 FunASR 服务失败: {{error}}', { error: err instanceof Error ? err.message : String(err) }))
+    } finally {
+      setFunasrServiceActionLoading(false)
+    }
+  }, [refreshFunASRServiceStatus, t])
+
+  useEffect(() => {
+    if (settings.asrProvider !== 'funasr-local') return
+    refreshFunASRServiceStatus()
+  }, [settings.asrProvider, refreshFunASRServiceStatus])
+
+  useEffect(() => {
+    if (settings.asrProvider !== 'funasr-local') return
+    const timer = setTimeout(() => {
+      refreshFunASRServiceStatus()
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [settings.asrProvider, settings.asrConfig.funasrLocal, refreshFunASRServiceStatus])
 
   const downloadWhisperModel = async () => {
     setWhisperDownloading(true)
@@ -114,6 +167,9 @@ export function RouteComponent() {
             settings.asrConfig.whisperLocal?.remoteHost,
             settings.asrConfig.whisperLocal?.localModelPath
           )
+          break
+        case 'funasr-local':
+          asrProvider = new FunASRLocalProvider(settings.asrConfig.funasrLocal)
           break
         case 'openai':
           if (!settings.asrConfig.openai?.apiKey) {
@@ -238,10 +294,441 @@ export function RouteComponent() {
           className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700"
         >
           <option value="whisper-local">{t('Whisper 本地模型')}</option>
+          <option value="funasr-local">{t('FunASR 本地服务')}</option>
           <option value="openai">{t('OpenAI Whisper API')}</option>
           <option value="azure">{t('Azure Speech Services')}</option>
           <option value="google">{t('Google Cloud Speech')}</option>
         </select>
+
+        {/* FunASR Local 配置 */}
+        {settings.asrProvider === 'funasr-local' && (
+          <div className="pl-4 space-y-3 border-l-2 border-gray-300 dark:border-gray-700">
+            <div>
+              <label className="text-sm font-medium">{t('服务地址')}</label>
+              <input
+                type="text"
+                value={settings.asrConfig.funasrLocal?.baseURL || 'http://127.0.0.1:10095'}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      funasrLocal: {
+                        ...settings.asrConfig.funasrLocal,
+                        baseURL: e.target.value,
+                      },
+                    },
+                  })
+                }
+                placeholder="http://127.0.0.1:10095"
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+            </div>
+            <div className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">{t('服务状态')}</span>
+                <span className={`text-xs ${funasrServiceStatus?.running ? 'text-green-600' : 'text-gray-500'}`}>
+                  {funasrServiceLoading ? t('检查中...') : funasrServiceStatus?.running ? t('运行中') : t('未运行')}
+                </span>
+              </div>
+              {funasrServiceStatus?.pid && (
+                <div className="text-xs text-gray-500">{t('PID')}: {funasrServiceStatus.pid}</div>
+              )}
+              {funasrServiceStatus?.error && (
+                <div className="text-xs text-red-600">{funasrServiceStatus.error}</div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={refreshFunASRServiceStatus}
+                  disabled={funasrServiceLoading || funasrServiceActionLoading}
+                  className="px-3 py-1 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
+                >
+                  {t('刷新状态')}
+                </button>
+                <button
+                  onClick={restartFunASRService}
+                  disabled={funasrServiceActionLoading}
+                  className="px-3 py-1 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
+                >
+                  {funasrServiceActionLoading ? t('重启中...') : t('重启服务')}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('模型名称')}</label>
+              <input
+                type="text"
+                value={settings.asrConfig.funasrLocal?.model || 'paraformer-zh-streaming'}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      funasrLocal: {
+                        ...settings.asrConfig.funasrLocal,
+                        model: e.target.value,
+                      },
+                    },
+                  })
+                }
+                placeholder="paraformer-zh-streaming / SenseVoiceSmall"
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.asrConfig.funasrLocal?.autoStart ?? true}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      funasrLocal: {
+                        ...settings.asrConfig.funasrLocal,
+                        autoStart: e.target.checked,
+                      },
+                    },
+                  })
+                }
+                className="w-4 h-4"
+              />
+              <span>{t('随 App 自动启动 FunASR 服务')}</span>
+            </label>
+            <div>
+              <label className="text-sm font-medium">{t('启动命令')}</label>
+              <input
+                type="text"
+                value={settings.asrConfig.funasrLocal?.launchCommand || 'python3'}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      funasrLocal: {
+                        ...settings.asrConfig.funasrLocal,
+                        launchCommand: e.target.value,
+                      },
+                    },
+                  })
+                }
+                placeholder="python3"
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('启动参数')}</label>
+              <input
+                type="text"
+                value={settings.asrConfig.funasrLocal?.launchArgs || '-m funasr_server --port 10095'}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      funasrLocal: {
+                        ...settings.asrConfig.funasrLocal,
+                        launchArgs: e.target.value,
+                      },
+                    },
+                  })
+                }
+                placeholder="-m funasr_server --port 10095"
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('工作目录（可选）')}</label>
+              <input
+                type="text"
+                value={settings.asrConfig.funasrLocal?.launchCwd || ''}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      funasrLocal: {
+                        ...settings.asrConfig.funasrLocal,
+                        launchCwd: e.target.value || undefined,
+                      },
+                    },
+                  })
+                }
+                placeholder="/path/to/funasr-runtime"
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('识别语言')}</label>
+              <input
+                type="text"
+                value={settings.asrConfig.funasrLocal?.language || 'zh'}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      funasrLocal: {
+                        ...settings.asrConfig.funasrLocal,
+                        language: e.target.value,
+                      },
+                    },
+                  })
+                }
+                placeholder="zh / en / auto"
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('健康检查路径模板（逗号分隔）')}</label>
+              <input
+                type="text"
+                value={joinCsv(settings.asrConfig.funasrLocal?.healthPaths || ['/health', '/status'])}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      funasrLocal: {
+                        ...settings.asrConfig.funasrLocal,
+                        healthPaths: parseCsv(e.target.value),
+                      },
+                    },
+                  })
+                }
+                placeholder="/health, /status"
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('识别接口路径模板（逗号分隔）')}</label>
+              <input
+                type="text"
+                value={joinCsv(settings.asrConfig.funasrLocal?.transcribePaths || ['/transcribe', '/asr'])}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      funasrLocal: {
+                        ...settings.asrConfig.funasrLocal,
+                        transcribePaths: parseCsv(e.target.value),
+                      },
+                    },
+                  })
+                }
+                placeholder="/transcribe, /asr"
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('返回文本字段路径模板（逗号分隔）')}</label>
+              <input
+                type="text"
+                value={joinCsv(settings.asrConfig.funasrLocal?.responseTextPaths || ['text', 'result', 'data.text', 'data.result'])}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      funasrLocal: {
+                        ...settings.asrConfig.funasrLocal,
+                        responseTextPaths: parseCsv(e.target.value),
+                      },
+                    },
+                  })
+                }
+                placeholder="text, result, data.text"
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium">{t('请求文件字段')}</label>
+                <input
+                  type="text"
+                  value={settings.asrConfig.funasrLocal?.requestTemplate?.fileField || 'file'}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      asrConfig: {
+                        ...settings.asrConfig,
+                        funasrLocal: {
+                          ...settings.asrConfig.funasrLocal,
+                          requestTemplate: {
+                            ...settings.asrConfig.funasrLocal?.requestTemplate,
+                            fileField: e.target.value,
+                          },
+                        },
+                      },
+                    })
+                  }
+                  className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">{t('请求模型字段')}</label>
+                <input
+                  type="text"
+                  value={settings.asrConfig.funasrLocal?.requestTemplate?.modelField || 'model'}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      asrConfig: {
+                        ...settings.asrConfig,
+                        funasrLocal: {
+                          ...settings.asrConfig.funasrLocal,
+                          requestTemplate: {
+                            ...settings.asrConfig.funasrLocal?.requestTemplate,
+                            modelField: e.target.value,
+                          },
+                        },
+                      },
+                    })
+                  }
+                  className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">{t('请求语言字段')}</label>
+                <input
+                  type="text"
+                  value={settings.asrConfig.funasrLocal?.requestTemplate?.languageField || 'language'}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      asrConfig: {
+                        ...settings.asrConfig,
+                        funasrLocal: {
+                          ...settings.asrConfig.funasrLocal,
+                          requestTemplate: {
+                            ...settings.asrConfig.funasrLocal?.requestTemplate,
+                            languageField: e.target.value,
+                          },
+                        },
+                      },
+                    })
+                  }
+                  className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">{t('请求热词字段')}</label>
+                <input
+                  type="text"
+                  value={settings.asrConfig.funasrLocal?.requestTemplate?.hotwordsField || 'hotwords'}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      asrConfig: {
+                        ...settings.asrConfig,
+                        funasrLocal: {
+                          ...settings.asrConfig.funasrLocal,
+                          requestTemplate: {
+                            ...settings.asrConfig.funasrLocal?.requestTemplate,
+                            hotwordsField: e.target.value,
+                          },
+                        },
+                      },
+                    })
+                  }
+                  className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.asrConfig.funasrLocal?.enableVAD ?? true}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      asrConfig: {
+                        ...settings.asrConfig,
+                        funasrLocal: {
+                          ...settings.asrConfig.funasrLocal,
+                          enableVAD: e.target.checked,
+                        },
+                      },
+                    })
+                  }
+                  className="w-4 h-4"
+                />
+                <span>{t('启用 VAD')}</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.asrConfig.funasrLocal?.enablePunctuation ?? true}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      asrConfig: {
+                        ...settings.asrConfig,
+                        funasrLocal: {
+                          ...settings.asrConfig.funasrLocal,
+                          enablePunctuation: e.target.checked,
+                        },
+                      },
+                    })
+                  }
+                  className="w-4 h-4"
+                />
+                <span>{t('启用标点')}</span>
+              </label>
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('热词（逗号分隔，可选）')}</label>
+              <input
+                type="text"
+                value={(settings.asrConfig.funasrLocal?.hotwords || []).join(', ')}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      funasrLocal: {
+                        ...settings.asrConfig.funasrLocal,
+                        hotwords: e.target.value
+                          .split(/[,，]/)
+                          .map((item) => item.trim())
+                          .filter(Boolean),
+                      },
+                    },
+                  })
+                }
+                placeholder="angrymiao, chatbox, 截图"
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('请求超时（毫秒）')}</label>
+              <input
+                type="number"
+                min={1000}
+                max={120000}
+                value={settings.asrConfig.funasrLocal?.timeoutMs || 30000}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      funasrLocal: {
+                        ...settings.asrConfig.funasrLocal,
+                        timeoutMs: Number(e.target.value || 30000),
+                      },
+                    },
+                  })
+                }
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+            </div>
+            <p className="text-xs text-gray-500">
+              {t('支持通过模板自定义健康检查路径、识别接口路径和返回文本字段路径。')}
+            </p>
+          </div>
+        )}
 
         {/* Whisper Local 配置 */}
         {settings.asrProvider === 'whisper-local' && (
@@ -585,18 +1072,17 @@ export function RouteComponent() {
         <label className="font-medium">{t('快捷键')}</label>
         <div>
           <label className="text-sm font-medium">{t('切换语音模式')}</label>
-          <input
-            type="text"
-            value={settings.shortcuts.toggleVoice}
-            onChange={(e) =>
-              setSettings({
-                ...settings,
-                shortcuts: { ...settings.shortcuts, toggleVoice: e.target.value },
-              })
-            }
-            placeholder="Ctrl+Shift+V"
-            className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
-          />
+          <div className="mt-1">
+            <HotkeyPicker
+              value={settings.shortcuts.toggleVoice}
+              onChange={(v) =>
+                setSettings({
+                  ...settings,
+                  shortcuts: { ...settings.shortcuts, toggleVoice: v },
+                })
+              }
+            />
+          </div>
         </div>
       </div>
 
@@ -660,28 +1146,276 @@ export function RouteComponent() {
   )
 }
 
-// ─── Modifier / Key options for the key code builder ─────────────────────────
+// ─── Key display helpers ──────────────────────────────────────────────────────
 
-const MODIFIER_OPTIONS = [
-  { label: 'Ctrl', value: HID.CtrlLeft },
-  { label: 'Cmd/Win', value: HID.CmdLeft },
-  { label: 'Shift', value: HID.ShiftLeft },
-  { label: 'Alt', value: HID.AltLeft },
-] as const
+const HID_KEY_DISPLAY: Record<string, string> = {
+  CtrlLeft: 'Ctrl', CmdLeft: 'Cmd/Win', ShiftLeft: 'Shift', AltLeft: 'Alt',
+  Num0: '0', Num1: '1', Num2: '2', Num3: '3', Num4: '4',
+  Num5: '5', Num6: '6', Num7: '7', Num8: '8', Num9: '9',
+  Up: '↑', Down: '↓', Left: '←', Right: '→',
+  PageUp: 'PgUp', PageDown: 'PgDn', PrintScreen: 'PrtScr',
+  BracketLeft: '[', BracketRight: ']', Backslash: '\\',
+  Semicolon: ';', Apostrophe: "'", Grave: '`',
+  Comma: ',', Period: '.', Slash: '/', Minus: '-', Equal: '=',
+}
 
-const KEY_OPTIONS = [
-  { label: 'A', value: HID.A },
-  { label: 'C', value: HID.C },
-  { label: 'S', value: HID.S },
-  { label: 'V', value: HID.V },
-  { label: 'X', value: HID.X },
-  { label: 'Y', value: HID.Y },
-  { label: 'Z', value: HID.Z },
-  { label: 'Enter', value: HID.Enter },
-  { label: 'Backspace', value: HID.Backspace },
-  { label: 'Tab', value: HID.Tab },
-  { label: 'Escape', value: HID.Escape },
-] as const
+const HID_CATEGORY_NAMES: Record<string, string> = {
+  modifiers: '修饰键', letters: '字母', numbers: '数字',
+  function: 'F键', arrows: '方向', special: '特殊', punctuation: '标点',
+}
+
+function getHIDKeyLabel(key: string): string {
+  return HID_KEY_DISPLAY[key] || key
+}
+
+const MAX_COMBO_KEYS = 7
+
+// ─── KeyComboBuilder ──────────────────────────────────────────────────────────
+
+function KeyComboBuilder({ slots, onChange }: { slots: string[]; onChange: (s: string[]) => void }) {
+  const [showPicker, setShowPicker] = useState(false)
+  const [activeCategory, setActiveCategory] = useState<string>('modifiers')
+  const pickerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showPicker) return
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showPicker])
+
+  const toggleKey = (key: string) => {
+    if (slots.includes(key)) {
+      onChange(slots.filter((k) => k !== key))
+    } else if (slots.length < MAX_COMBO_KEYS) {
+      onChange([...slots, key])
+    }
+  }
+
+  return (
+    <div className="relative space-y-1.5">
+      <div className="flex flex-wrap gap-1 items-center">
+        {slots.map((key, idx) => (
+          <span
+            key={idx}
+            className="inline-flex items-center gap-0.5 px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded border border-blue-300 dark:border-blue-700"
+          >
+            {getHIDKeyLabel(key)}
+            <button
+              type="button"
+              onClick={() => onChange(slots.filter((_, i) => i !== idx))}
+              className="ml-0.5 hover:text-red-600"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <button
+          type="button"
+          disabled={slots.length >= MAX_COMBO_KEYS}
+          onClick={() => setShowPicker(!showPicker)}
+          className="px-2 py-0.5 text-xs border rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          + 添加键
+        </button>
+        {slots.length >= MAX_COMBO_KEYS && (
+          <span className="text-xs text-gray-400">最多 {MAX_COMBO_KEYS} 个键</span>
+        )}
+      </div>
+      {slots.length > 0 && (
+        <p className="text-xs text-gray-400">{buildKeyCodes(slots).join(', ')}</p>
+      )}
+      {showPicker && (
+        <div
+          ref={pickerRef}
+          className="absolute left-0 top-full mt-1 z-50 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg min-w-64"
+        >
+          <div className="flex flex-wrap gap-1 mb-2">
+            {(Object.keys(KEY_CATEGORIES) as Array<keyof typeof KEY_CATEGORIES>).map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setActiveCategory(cat)}
+                className={`px-2 py-0.5 text-xs rounded ${activeCategory === cat ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+              >
+                {HID_CATEGORY_NAMES[cat] || cat}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1 max-w-72">
+            {KEY_CATEGORIES[activeCategory as keyof typeof KEY_CATEGORIES]?.map((key) => (
+              <button
+                key={key}
+                type="button"
+                disabled={slots.length >= MAX_COMBO_KEYS && !slots.includes(key)}
+                onClick={() => toggleKey(key)}
+                className={`px-2 py-1 text-xs rounded border min-w-8 ${
+                  slots.includes(key)
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 border-gray-200 dark:border-gray-500'
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
+              >
+                {getHIDKeyLabel(key)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── HotkeyPicker ─────────────────────────────────────────────────────────────
+
+const HOTKEY_MODIFIERS = new Set(['Ctrl', 'Shift', 'Alt', 'Meta'])
+
+const HOTKEY_CATEGORIES = {
+  modifiers: ['Ctrl', 'Shift', 'Alt', 'Meta'],
+  letters: ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'],
+  numbers: ['0','1','2','3','4','5','6','7','8','9'],
+  function: ['F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'],
+  special: ['Return','Tab','Escape','Space','Backspace','Delete','Up','Down','Left','Right'],
+  punctuation: ['-','=','[',']','\\',';',"'",'`',',','.','/'],
+} as const
+
+const HOTKEY_CATEGORY_NAMES: Record<string, string> = {
+  modifiers: '修饰键', letters: '字母', numbers: '数字', function: 'F键', special: '特殊键', punctuation: '标点',
+}
+
+function getHotkeyLabel(key: string, isMac: boolean): string {
+  if (key === 'Meta') return isMac ? 'Cmd' : 'Win'
+  if (key === 'Return') return 'Enter'
+  if (key === 'Up') return '↑'
+  if (key === 'Down') return '↓'
+  if (key === 'Left') return '←'
+  if (key === 'Right') return '→'
+  return key
+}
+
+function HotkeyPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [selectedKeys, setSelectedKeys] = useState<string[]>(() =>
+    value ? value.split('+').filter(Boolean) : []
+  )
+  const [showPicker, setShowPicker] = useState(false)
+  const [activeCategory, setActiveCategory] = useState<string>('modifiers')
+  const pickerRef = useRef<HTMLDivElement>(null)
+  const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
+
+  useEffect(() => {
+    if (!showPicker) return
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showPicker])
+
+  const toggleKey = (key: string) => {
+    let newKeys: string[]
+    if (HOTKEY_MODIFIERS.has(key)) {
+      newKeys = selectedKeys.includes(key)
+        ? selectedKeys.filter((k) => k !== key)
+        : [...selectedKeys, key]
+    } else {
+      const mods = selectedKeys.filter((k) => HOTKEY_MODIFIERS.has(k))
+      newKeys = selectedKeys.includes(key) ? mods : [...mods, key]
+    }
+    setSelectedKeys(newKeys)
+    onChange(newKeys.join('+'))
+  }
+
+  const removeKey = (key: string) => {
+    const newKeys = selectedKeys.filter((k) => k !== key)
+    setSelectedKeys(newKeys)
+    onChange(newKeys.join('+'))
+  }
+
+  const reset = () => {
+    const defaultKeys = ['Ctrl', 'Shift', 'V']
+    setSelectedKeys(defaultKeys)
+    onChange(defaultKeys.join('+'))
+  }
+
+  return (
+    <div className="relative space-y-1.5">
+      <div className="flex flex-wrap gap-1 items-center">
+        {selectedKeys.map((key) => (
+          <span
+            key={key}
+            className="inline-flex items-center gap-0.5 px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded border border-blue-300 dark:border-blue-700"
+          >
+            {getHotkeyLabel(key, isMac)}
+            <button
+              type="button"
+              onClick={() => removeKey(key)}
+              className="ml-0.5 hover:text-red-600"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <button
+          type="button"
+          onClick={() => setShowPicker(!showPicker)}
+          className="px-2 py-0.5 text-xs border rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          + 选择键
+        </button>
+        <button
+          type="button"
+          onClick={reset}
+          className="px-2 py-0.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+        >
+          重置
+        </button>
+      </div>
+      {selectedKeys.length > 0 && (
+        <p className="text-xs text-gray-500">{selectedKeys.join('+')}</p>
+      )}
+      {showPicker && (
+        <div
+          ref={pickerRef}
+          className="absolute left-0 top-full mt-1 z-50 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg min-w-64"
+        >
+          <div className="flex flex-wrap gap-1 mb-2">
+            {(Object.keys(HOTKEY_CATEGORIES) as Array<keyof typeof HOTKEY_CATEGORIES>).map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setActiveCategory(cat)}
+                className={`px-2 py-0.5 text-xs rounded ${activeCategory === cat ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+              >
+                {HOTKEY_CATEGORY_NAMES[cat] || cat}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1 max-w-72">
+            {HOTKEY_CATEGORIES[activeCategory as keyof typeof HOTKEY_CATEGORIES]?.map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => toggleKey(key)}
+                className={`px-2 py-1 text-xs rounded border min-w-8 ${
+                  selectedKeys.includes(key)
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 border-gray-200 dark:border-gray-500'
+                }`}
+              >
+                {getHotkeyLabel(key, isMac)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Keyboard Shortcuts Section ──────────────────────────────────────────────
 
@@ -697,8 +1431,7 @@ function KeyboardShortcutsSection({
   const [addingNew, setAddingNew] = useState(false)
   const [newName, setNewName] = useState('')
   const [newTriggerWords, setNewTriggerWords] = useState('')
-  const [newModifiers, setNewModifiers] = useState<string[]>([])
-  const [newKey, setNewKey] = useState('')
+  const [newSlots, setNewSlots] = useState<string[]>([])
 
   const shortcuts = settings.keyboardShortcuts || []
 
@@ -719,9 +1452,8 @@ function KeyboardShortcutsSection({
   )
 
   const addShortcut = useCallback(() => {
-    if (!newName.trim() || !newTriggerWords.trim() || !newKey) return
-    const keyCodes =
-      newModifiers.length > 0 ? makeCombo(newModifiers, newKey) : makeSingleKey(newKey)
+    if (!newName.trim() || !newTriggerWords.trim() || newSlots.length === 0) return
+    const keyCodes = buildKeyCodes(newSlots)
     const entry: KeyboardShortcut = {
       id: `ks_custom_${Date.now()}`,
       name: newName.trim(),
@@ -732,10 +1464,9 @@ function KeyboardShortcutsSection({
     setSettings({ keyboardShortcuts: [...shortcuts, entry] })
     setNewName('')
     setNewTriggerWords('')
-    setNewModifiers([])
-    setNewKey('')
+    setNewSlots([])
     setAddingNew(false)
-  }, [newName, newTriggerWords, newModifiers, newKey, shortcuts, setSettings])
+  }, [newName, newTriggerWords, newSlots, shortcuts, setSettings])
 
   const resetDefaults = useCallback(async () => {
     const platformType = await platform.getPlatform()
@@ -858,46 +1589,15 @@ function KeyboardShortcutsSection({
             />
           </div>
           <div>
-            <label className="text-xs text-gray-500">{t('修饰键')}</label>
-            <div className="flex gap-2 flex-wrap">
-              {MODIFIER_OPTIONS.map((mod) => (
-                <label key={mod.value} className="flex items-center gap-1 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={newModifiers.includes(mod.value)}
-                    onChange={(e) => {
-                      setNewModifiers(
-                        e.target.checked
-                          ? [...newModifiers, mod.value]
-                          : newModifiers.filter((m) => m !== mod.value)
-                      )
-                    }}
-                    className="w-3.5 h-3.5"
-                  />
-                  {mod.label}
-                </label>
-              ))}
+            <label className="text-xs text-gray-500">{t('按键组合')}</label>
+            <div className="mt-1">
+              <KeyComboBuilder slots={newSlots} onChange={setNewSlots} />
             </div>
-          </div>
-          <div>
-            <label className="text-xs text-gray-500">{t('主键')}</label>
-            <select
-              value={newKey}
-              onChange={(e) => setNewKey(e.target.value)}
-              className="w-full p-1.5 text-sm border rounded dark:bg-gray-800 dark:border-gray-700"
-            >
-              <option value="">{t('选择按键')}</option>
-              {KEY_OPTIONS.map((k) => (
-                <option key={k.value} value={k.value}>
-                  {k.label}
-                </option>
-              ))}
-            </select>
           </div>
           <div className="flex gap-2">
             <button
               onClick={addShortcut}
-              disabled={!newName.trim() || !newTriggerWords.trim() || !newKey}
+              disabled={!newName.trim() || !newTriggerWords.trim() || newSlots.length === 0}
               className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {t('确认添加')}

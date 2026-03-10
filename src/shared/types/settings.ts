@@ -381,7 +381,7 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
   voice: z
     .object({
       enabled: z.boolean().default(false),
-      asrProvider: z.enum(['whisper-local', 'openai', 'azure', 'google']).default('whisper-local'),
+      asrProvider: z.enum(['whisper-local', 'funasr-local', 'openai', 'azure', 'google']).default('whisper-local'),
       ttsProvider: z.enum(['browser', 'openai', 'azure', 'elevenlabs']).default('browser'),
       asrConfig: z.record(z.string(), z.any()).default({}),
       ttsConfig: z.record(z.string(), z.any()).default({}),

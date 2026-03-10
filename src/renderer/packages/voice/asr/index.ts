@@ -37,6 +37,7 @@ export class ASRError extends Error {
 }
 
 export { WhisperLocalProvider } from './whisper-local'
+export { FunASRLocalProvider } from './funasr-local'
 export { OpenAIASRProvider } from './openai'
 export { AzureASRProvider } from './azure'
 export { GoogleASRProvider } from './google'

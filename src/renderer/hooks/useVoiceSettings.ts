@@ -22,8 +22,11 @@ export function useVoiceSettings() {
     // 通知主进程重新注册快捷键
     if (platform.type === 'desktop') {
       try {
-        await window.electronAPI?.invoke('ensureVoiceShortcut')
-        console.log('Voice shortcut updated')
+        // 如果修改了 toggleVoice 快捷键，直接传递新值给主进程
+        const newShortcut = settings.shortcuts?.toggleVoice
+        await window.electronAPI?.invoke('ensureVoiceShortcut', newShortcut)
+        await window.electronAPI?.invoke('ensureFunASRService')
+        console.log('Voice shortcut updated:', newShortcut || 'default')
       } catch (error) {
         console.error('Failed to update voice shortcut:', error)
       }

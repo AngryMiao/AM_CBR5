@@ -5,7 +5,7 @@ export const VoiceModeSchema = z.enum(['inactive', 'listening', 'processing', 's
 export type VoiceMode = z.infer<typeof VoiceModeSchema>
 
 // ASR (Automatic Speech Recognition) 提供商
-export const ASRProviderSchema = z.enum(['whisper-local', 'openai', 'azure', 'google'])
+export const ASRProviderSchema = z.enum(['whisper-local', 'funasr-local', 'openai', 'azure', 'google'])
 export type ASRProvider = z.infer<typeof ASRProviderSchema>
 
 // TTS (Text-to-Speech) 提供商
@@ -18,6 +18,34 @@ export type WhisperModelSize = z.infer<typeof WhisperModelSizeSchema>
 
 // ASR 配置
 export const ASRConfigSchema = z.object({
+  funasrLocal: z
+    .object({
+      baseURL: z.string().default('http://127.0.0.1:10095'),
+      model: z.string().default('paraformer-zh-streaming'),
+      language: z.string().default('zh'),
+      autoStart: z.boolean().default(true),
+      launchCommand: z.string().default('python3'),
+      launchArgs: z.string().default('-m funasr_server --port 10095'),
+      launchCwd: z.string().optional(),
+      healthPaths: z.array(z.string()).default(['/health', '/status']),
+      transcribePaths: z.array(z.string()).default(['/transcribe', '/asr']),
+      responseTextPaths: z.array(z.string()).default(['text', 'result', 'data.text', 'data.result']),
+      requestTemplate: z
+        .object({
+          fileField: z.string().default('file'),
+          modelField: z.string().default('model'),
+          languageField: z.string().default('language'),
+          vadField: z.string().default('enable_vad'),
+          punctuationField: z.string().default('enable_punctuation'),
+          hotwordsField: z.string().default('hotwords'),
+        })
+        .default({}),
+      enableVAD: z.boolean().default(true),
+      enablePunctuation: z.boolean().default(true),
+      hotwords: z.array(z.string()).default([]),
+      timeoutMs: z.number().min(1000).max(120000).default(30000),
+    })
+    .optional(),
   whisperLocal: z
     .object({
       modelSize: WhisperModelSizeSchema.default('base'),

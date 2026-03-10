@@ -14,7 +14,7 @@ import { useVoiceSettings } from '@/hooks/useVoiceSettings'
 import { VoiceRecorder } from '@/packages/voice/recorder'
 import type { ASRProvider } from '@/packages/voice/asr'
 import type { TTSProvider } from '@/packages/voice/tts'
-import { WhisperLocalProvider, OpenAIASRProvider, AzureASRProvider, GoogleASRProvider } from '@/packages/voice/asr'
+import { WhisperLocalProvider, FunASRLocalProvider, OpenAIASRProvider, AzureASRProvider, GoogleASRProvider } from '@/packages/voice/asr'
 import { BrowserTTSProvider, OpenAITTSProvider, AzureTTSProvider, ElevenLabsTTSProvider } from '@/packages/voice/tts'
 import * as chatStore from '@/stores/chatStore'
 import { switchCurrentSession } from '@/stores/session/crud'
@@ -133,11 +133,13 @@ ${shortcutTable}
 </intent_mapping>
 
 <behavior>
-- 收到指令后立即调用工具执行，不要反问或解释。
-- 回复简短，只需确认执行结果（如"已输入"、"已按下 Enter"）。
+- 收到指令后，直接调用对应的工具，不要生成任何文本内容。
+- 只在以下情况生成文本回复：
+  1. 无法识别用户意图时，简短询问
+  2. 工具调用失败时，说明错误原因
+  3. 关机/重启操作需要确认时
 - 如果语音文本有歧义，优先理解为文本输入意图。
-- 对于关机和重启操作，先确认用户意图再执行。
-- 如果无法识别意图，简短询问用户想做什么。
+- 工具执行成功后，不要再输出确认信息，工具结果已经足够。
 </behavior>`
 }
 
@@ -145,23 +147,37 @@ async function ensureVoiceSystemPrompt(sessionId: string, keyboardShortcuts: Key
   const session = await chatStore.getSession(sessionId)
   if (!session) return
 
-  // 检查是否已有正确格式的 system prompt（包含 skill 段或 MCP 前缀的工具名）
-  const hasCorrectPrompt = session.messages.some(
-    (m) => m.role === 'system' && m.contentParts?.some((p) => p.type === 'text' && p.text.includes('<skill name="keyboard_shortcuts">'))
-  )
-  if (hasCorrectPrompt) return
-
   const platformType = await platform.getPlatform()
-  const prompt = buildVoiceSystemPrompt(platformType, keyboardShortcuts)
+  const newPrompt = buildVoiceSystemPrompt(platformType, keyboardShortcuts)
 
   const existingSystemIdx = session.messages.findIndex((m) => m.role === 'system')
+
+  // 检查 system prompt 是否真的变化了
+  let promptChanged = false
+  if (existingSystemIdx >= 0) {
+    const oldPrompt = session.messages[existingSystemIdx].contentParts?.[0]?.text || ''
+    promptChanged = oldPrompt !== newPrompt
+  } else {
+    promptChanged = true
+  }
+
+  // 更新 system prompt
   if (existingSystemIdx >= 0) {
     await chatStore.updateMessage(sessionId, session.messages[existingSystemIdx].id, {
-      contentParts: [{ type: 'text', text: prompt }],
+      contentParts: [{ type: 'text', text: newPrompt }],
     })
   } else {
-    const systemMsg = createMessage('system', prompt)
+    const systemMsg = createMessage('system', newPrompt)
     await chatStore.insertMessage(sessionId, systemMsg)
+  }
+
+  // 如果 prompt 变化了，清空历史消息（避免新旧指令冲突）
+  if (promptChanged && session.messages.length > 1) {
+    console.log('[Voice] Keyboard shortcuts changed, clearing conversation history')
+    const nonSystemMessages = session.messages.filter((m) => m.role !== 'system')
+    for (const msg of nonSystemMessages) {
+      await chatStore.deleteMessage(sessionId, msg.id)
+    }
   }
 }
 
@@ -215,6 +231,9 @@ export function useVoiceController() {
           settings.asrConfig.whisperLocal?.remoteHost,
           settings.asrConfig.whisperLocal?.localModelPath
         )
+        break
+      case 'funasr-local':
+        asrProviderRef.current = new FunASRLocalProvider(settings.asrConfig.funasrLocal)
         break
       case 'openai':
         if (!settings.asrConfig.openai?.apiKey) {
