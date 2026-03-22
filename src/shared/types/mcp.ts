@@ -2,6 +2,8 @@ export type MCPServerConfig<TransportConfig = MCPTransportConfig> = {
   id: string
   name: string
   enabled: boolean
+  scope?: 'global' | 'skill-bundle'
+  skillBundleId?: string
   transport: TransportConfig
 }
 

@@ -194,7 +194,7 @@ export const mcpController = {
     }
   },
 
-  getAvailableTools(): ToolSet {
+  getAvailableTools(options?: { skillBundleId?: string }): ToolSet {
     const DEFERRED_EXECUTION_TOOLS = new Set([
       'system_sleep',
       'system_shutdown',
@@ -202,6 +202,14 @@ export const mcpController = {
     ])
     const toolSet: ToolSet = {}
     for (const { instance, config } of this.servers.values()) {
+      const isSkillScoped = config.scope === 'skill-bundle' || !!config.skillBundleId
+      if (isSkillScoped && config.skillBundleId !== options?.skillBundleId) {
+        continue
+      }
+      if (!options?.skillBundleId && isSkillScoped) {
+        continue
+      }
+
       const mcpTools = instance.getAvailableTools()
       for (const [toolName, tool] of Object.entries(mcpTools)) {
         const rawExecute = tool.execute?.bind(tool)

@@ -248,6 +248,8 @@ export const SessionThreadSchema = z.object({
 
 export const AgentSkillReferenceSchema = z.object({
   id: z.string(),
+  bundleId: z.string().optional(),
+  runtimeId: z.string().optional(),
   version: z.number().int().positive().default(1),
 })
 

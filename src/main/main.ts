@@ -41,6 +41,11 @@ import * as mcpIpc from './mcp/ipc-stdio-transport'
 import MenuBuilder from './menu'
 import * as proxy from './proxy'
 import {
+  listInstalledSkillBundles,
+  readSkillBundleTextFile,
+  resolveSkillBundleRuntimeServerConfig,
+} from './skill-bundles'
+import {
   delStoreBlob,
   getConfig,
   getSettings,
@@ -786,13 +791,14 @@ ipcMain.handle('getVersion', () => {
 ipcMain.handle('getPlatform', () => {
   return process.platform
 })
-ipcMain.handle('getSystemControlMCPPath', () => {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'system-control-mcp', 'dist', 'index.js')
-    : path.join(__dirname, '../../system-control-mcp/dist/index.js')
+ipcMain.handle('listInstalledSkillBundles', () => {
+  return listInstalledSkillBundles()
 })
-ipcMain.handle('getSystemControlMCPCommand', () => {
-  return app.isPackaged ? process.execPath : 'node'
+ipcMain.handle('readSkillBundleTextFile', (_event, bundleId: string, relativePath: string) => {
+  return readSkillBundleTextFile(bundleId, relativePath)
+})
+ipcMain.handle('resolveSkillBundleRuntimeServerConfig', (_event, bundleId: string, runtimeId: string, settings) => {
+  return resolveSkillBundleRuntimeServerConfig(bundleId, runtimeId, settings)
 })
 ipcMain.handle('ensureAccessibilityPermission', async () => {
   if (process.platform !== 'darwin') return true

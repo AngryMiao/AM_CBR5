@@ -1,14 +1,9 @@
 import { execSync, spawn, spawnSync } from 'child_process'
-import { isWindows, isMacOS } from '../utils/platform'
+import { isMacOS, isWindows } from '../utils/platform'
 
-/**
- * 在光标处输入文本
- * 使用平台特定的方法模拟键盘输入
- */
 export async function typeText(text: string): Promise<{ success: boolean; message: string }> {
   try {
     if (isWindows()) {
-      // Windows: 使用 PowerShell 的 SendKeys
       const escapedText = text.replace(/'/g, "''").replace(/[+^%~(){}[\]]/g, '{$&}')
       const script = `
         Add-Type -AssemblyName System.Windows.Forms
@@ -16,29 +11,19 @@ export async function typeText(text: string): Promise<{ success: boolean; messag
       `
       execSync(`powershell -Command "${script}"`, { timeout: 10000 })
     } else if (isMacOS()) {
-      // macOS: 使用剪贴板 + 粘贴方案，支持 Unicode/中文字符
-      // keystroke 只能模拟物理按键，无法输入中文
       let previousClipboard = ''
       try {
         previousClipboard = execSync('pbpaste', { encoding: 'utf-8', timeout: 5000 })
       } catch {
-        // 剪贴板可能为空或包含非文本数据
+        // Clipboard may be empty or contain non-text content.
       }
 
       try {
-        // 通过 stdin 传递文本给 pbcopy，避免 shell 转义问题
         spawnSync('pbcopy', { input: text, encoding: 'utf-8', timeout: 5000 })
-
-        // 添加短暂延迟确保剪贴板已更新
         await new Promise((resolve) => setTimeout(resolve, 50))
-
-        // 模拟 Cmd+V 粘贴
-        execSync(
-          `osascript -e 'tell application "System Events" to keystroke "v" using command down'`,
-          { timeout: 10000 }
-        )
-
-        // 等待粘贴完成后恢复剪贴板
+        execSync(`osascript -e 'tell application "System Events" to keystroke "v" using command down'`, {
+          timeout: 10000,
+        })
         await new Promise((resolve) => setTimeout(resolve, 200))
         try {
           spawnSync('pbcopy', {
@@ -47,10 +32,9 @@ export async function typeText(text: string): Promise<{ success: boolean; messag
             timeout: 5000,
           })
         } catch {
-          // 恢复失败不影响主流程
+          // Restore failures should not block the main action.
         }
       } catch (error) {
-        // 粘贴失败时也尝试恢复剪贴板
         try {
           spawnSync('pbcopy', {
             input: previousClipboard,
@@ -58,12 +42,11 @@ export async function typeText(text: string): Promise<{ success: boolean; messag
             timeout: 5000,
           })
         } catch {
-          // ignore
+          // Ignore clipboard restore failures during error handling.
         }
         throw error
       }
     } else {
-      // Linux: 使用 xdotool
       execSync(`xdotool type --clearmodifiers "${text}"`, { timeout: 10000 })
     }
 
@@ -88,11 +71,6 @@ export async function typeText(text: string): Promise<{ success: boolean; messag
   }
 }
 
-/**
- * 使用 driver.exe 执行键盘控制
- * 调用格式: driver.exe -k <code1> <code2> ...
- * 每个 code 为 8 位 hex：XXYYYYYY
- */
 export async function keyboardControl(
   driverPath: string,
   keyCodes: string[]
@@ -127,7 +105,7 @@ export async function keyboardControl(
         if (code === 0) {
           resolve({
             success: true,
-            message: `键盘控制执行成功`,
+            message: '键盘控制执行成功',
             output: stdout.trim(),
           })
         } else {

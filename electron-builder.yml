@@ -77,8 +77,8 @@ directories:
 
 extraResources:
   - ./assets/**
-  - from: ./system-control-mcp/dist
-    to: system-control-mcp/dist
+  - from: ./skill-bundles
+    to: skill-bundles
     filter:
       - "**/*"
 

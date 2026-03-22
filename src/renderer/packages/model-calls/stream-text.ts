@@ -178,8 +178,10 @@ export async function streamText(
   }
 
   let skillPrompt = ''
+  let skillBundleId = ''
   if (sessionId) {
     const session = await chatStore.getSession(sessionId)
+    skillBundleId = session?.agentSkill?.bundleId || ''
     skillPrompt = await resolveAgentSkillPrompt(session?.agentSkill)
   }
   const injectionRole = model.isSupportSystemMessage() ? 'system' : 'user'
@@ -306,7 +308,7 @@ export async function streamText(
 
     // 4. construct tool set
     let tools: ToolSet = {
-      ...mcpController.getAvailableTools(),
+      ...mcpController.getAvailableTools({ skillBundleId }),
     }
     if (webBrowsing) {
       tools.web_search = webSearchTool

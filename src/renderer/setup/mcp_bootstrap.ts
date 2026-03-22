@@ -1,6 +1,8 @@
 import { getBuiltinServerConfig } from '@/packages/mcp/builtin'
 import { mcpController } from '@/packages/mcp/controller'
 import type { MCPServerConfig } from '@/packages/mcp/types'
+import { ANGRYMIAO_SKILL_BUNDLE_ID, ANGRYMIAO_SKILL_RUNTIME_ID } from '@/packages/agent-skills'
+import { getInstalledSkillBundle, resolveSkillBundleRuntimeServerConfig } from '@/packages/skill-bundles'
 import platform from '@/platform'
 import { NODE_ENV } from '@/variables'
 
@@ -23,33 +25,22 @@ function monitorServerStatus() {
   }, 10000)
 }
 
-async function getSystemControlServerConfig(
-  keyboardDriverPath?: string
-): Promise<MCPServerConfig | null> {
+async function getAngrymiaoSkillRuntimeServerConfig(settings?: { voice?: { keyboardDriverPath?: string } }): Promise<MCPServerConfig | null> {
   if (platform.type !== 'desktop') return null
   try {
-    const mcpPath = await window.electronAPI.invoke('getSystemControlMCPPath')
-    const mcpCommand = await window.electronAPI.invoke('getSystemControlMCPCommand')
-    const env: Record<string, string> = {}
-    if (keyboardDriverPath) {
-      env.KEYBOARD_DRIVER_PATH = keyboardDriverPath
-    }
-    if (mcpCommand !== 'node') {
-      env.ELECTRON_RUN_AS_NODE = '1'
-    }
+    const bundle = await getInstalledSkillBundle(ANGRYMIAO_SKILL_BUNDLE_ID)
+    if (!bundle) return null
+
+    const runtimeConfig = await resolveSkillBundleRuntimeServerConfig(bundle.id, ANGRYMIAO_SKILL_RUNTIME_ID, settings)
+    if (!runtimeConfig) return null
+
     return {
-      id: 'system-control',
-      name: 'system-control',
-      enabled: true,
-      transport: {
-        type: 'stdio' as const,
-        command: mcpCommand,
-        args: [mcpPath],
-        env,
-      },
+      ...runtimeConfig,
+      scope: 'skill-bundle',
+      skillBundleId: bundle.id,
     }
   } catch (err) {
-    console.error('Failed to get system-control-mcp path:', err)
+    console.error('Failed to resolve Angrymiao skill runtime:', err)
     return null
   }
 }
@@ -62,9 +53,9 @@ platform
       ...(mcp.servers || []), // user defined servers
     ]
 
-    // Auto-register system-control-mcp for voice control
+    // Auto-register installed skill runtime for voice control
     if (voice?.enabled) {
-      const systemControlConfig = await getSystemControlServerConfig(voice.keyboardDriverPath)
+      const systemControlConfig = await getAngrymiaoSkillRuntimeServerConfig({ voice })
       if (systemControlConfig) {
         servers.push(systemControlConfig)
       }

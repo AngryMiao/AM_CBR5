@@ -26,41 +26,37 @@ import { BrowserTTSProvider, OpenAITTSProvider, AzureTTSProvider, ElevenLabsTTSP
 import * as chatStore from '@/stores/chatStore'
 import { switchCurrentSession } from '@/stores/session/crud'
 import { submitNewUserMessage } from '@/stores/session/messages'
-import { createMessage } from '@shared/types'
+import { createMessage, type Settings } from '@shared/types'
 import { getMessageText } from '@shared/utils/message'
 import platform from '@/platform'
+import { ANGRYMIAO_SKILL_BUNDLE_ID, ANGRYMIAO_SKILL_RUNTIME_ID } from '@/packages/agent-skills'
 import { mcpController } from '@/packages/mcp/controller'
+import { getInstalledSkillBundle, resolveSkillBundleRuntimeServerConfig } from '@/packages/skill-bundles'
 import { ensureAngrymiaoSession } from '@/packages/voice/angrymiao-session'
 
-async function ensureSystemControlMCP(keyboardDriverPath?: string): Promise<void> {
+async function ensureAngrymiaoSkillRuntime(settings?: Partial<Settings>): Promise<void> {
   if (platform.type !== 'desktop') return
-  const existing = mcpController.servers.get('system-control')
+  const bundle = await getInstalledSkillBundle(ANGRYMIAO_SKILL_BUNDLE_ID)
+  if (!bundle) return
+
+  const existing = mcpController.servers.get('angrymiao-system-control')
   if (existing && existing.instance.status.state === 'running') return
 
   try {
-    const mcpPath = await window.electronAPI.invoke('getSystemControlMCPPath')
-    const mcpCommand = await window.electronAPI.invoke('getSystemControlMCPCommand')
-    const env: Record<string, string> = {}
-    if (keyboardDriverPath) {
-      env.KEYBOARD_DRIVER_PATH = keyboardDriverPath
-    }
-    if (mcpCommand !== 'node') {
-      env.ELECTRON_RUN_AS_NODE = '1'
-    }
+    const runtimeConfig = await resolveSkillBundleRuntimeServerConfig(
+      bundle.id,
+      ANGRYMIAO_SKILL_RUNTIME_ID,
+      settings
+    )
+    if (!runtimeConfig) return
     await mcpController.updateServer({
-      id: 'system-control',
-      name: 'system-control',
-      enabled: true,
-      transport: {
-        type: 'stdio' as const,
-        command: mcpCommand,
-        args: [mcpPath],
-        env,
-      },
+      ...runtimeConfig,
+      scope: 'skill-bundle',
+      skillBundleId: bundle.id,
     })
-    console.info('system-control-mcp server started for voice control')
+    console.info('Angrymiao skill runtime started for voice control')
   } catch (err) {
-    console.error('Failed to start system-control-mcp:', err)
+    console.error('Failed to start Angrymiao skill runtime:', err)
   }
 }
 
@@ -531,7 +527,7 @@ export function useVoiceController() {
   }, [setIsSpeaking, setSpeakingText, setVoiceMode])
 
   const activateVoiceInput = useCallback(async () => {
-    await ensureSystemControlMCP(settings.keyboardDriverPath)
+    await ensureAngrymiaoSkillRuntime({ voice: settings })
     try {
       const granted = await window.electronAPI?.invoke('ensureAccessibilityPermission')
       if (!granted) {

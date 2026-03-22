@@ -1,10 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
-import { typeText, keyboardControl } from './tools/keyboard'
-import { executeSystemCommand, type SystemCommandType } from './tools/system'
+import { keyboardControl, typeText } from './tools/keyboard'
+import { executeSystemCommand } from './tools/system'
 
-// 从环境变量读取 driver.exe 路径
 const DRIVER_PATH = process.env.KEYBOARD_DRIVER_PATH || ''
 
 const server = new McpServer({
@@ -18,12 +17,10 @@ function assertExecutionSuccess(result: { success: boolean; message: string }) {
   }
 }
 
-// ─── 工具：在光标处输入文本 ───────────────────────────────────────────────────
 server.registerTool(
   'type_text',
   {
-    description:
-      '在当前光标位置输入文本。适用于：用户要求输入文字、填写表单、在编辑器中写内容等场景。',
+    description: '在当前光标位置输入文本。适用于：用户要求输入文字、填写表单、在编辑器中写内容等场景。',
     inputSchema: z.object({
       text: z.string().describe('要输入的文本内容'),
     }),
@@ -38,16 +35,12 @@ server.registerTool(
   }
 )
 
-// ─── 工具：键盘控制（调用 driver.exe）────────────────────────────────────────
 server.registerTool(
   'keyboard_control',
   {
-    description:
-      '通过 driver.exe 执行键盘控制操作，如按下快捷键、组合键等。使用 8 位 hex key codes 序列，按下和抬起成对出现。',
+    description: '通过 driver.exe 执行键盘控制操作，如按下快捷键、组合键等。使用 8 位 hex key codes 序列，按下和抬起成对出现。',
     inputSchema: z.object({
-      keyCodes: z
-        .array(z.string())
-        .describe('按键序列，8位hex码（XXYYYYYY），按下和抬起成对出现'),
+      keyCodes: z.array(z.string()).describe('按键序列，8位hex码（XXYYYYYY），按下和抬起成对出现'),
     }),
   },
   async ({ keyCodes }) => {
@@ -56,7 +49,7 @@ server.registerTool(
         content: [
           {
             type: 'text',
-            text: '错误：键盘驱动路径未配置。请在 Chatbox 设置 → 语音控制 → 键盘控制驱动 中配置 driver.exe 路径。',
+            text: '错误：键盘驱动路径未配置。请先为 skill runtime 配置 KEYBOARD_DRIVER_PATH。',
           },
         ],
         isError: true,
@@ -77,7 +70,6 @@ server.registerTool(
   }
 )
 
-// ─── 工具：系统关机 ───────────────────────────────────────────────────────────
 server.registerTool(
   'system_shutdown',
   {
@@ -103,7 +95,6 @@ server.registerTool(
   }
 )
 
-// ─── 工具：系统重启 ───────────────────────────────────────────────────────────
 server.registerTool(
   'system_restart',
   {
@@ -129,7 +120,6 @@ server.registerTool(
   }
 )
 
-// ─── 工具：锁屏 ──────────────────────────────────────────────────────────────
 server.registerTool(
   'system_lock_screen',
   {
@@ -146,7 +136,6 @@ server.registerTool(
   }
 )
 
-// ─── 工具：睡眠 ──────────────────────────────────────────────────────────────
 server.registerTool(
   'system_sleep',
   {
@@ -163,12 +152,10 @@ server.registerTool(
   }
 )
 
-// ─── 工具：打开浏览器 ─────────────────────────────────────────────────────────
 server.registerTool(
   'open_browser',
   {
-    description:
-      '在浏览器中打开指定 URL。适用于：用户要求打开网页、搜索内容等场景。可指定浏览器，不指定则使用默认浏览器。',
+    description: '在浏览器中打开指定 URL。适用于：用户要求打开网页、搜索内容等场景。可指定浏览器，不指定则使用默认浏览器。',
     inputSchema: z.object({
       url: z.string().url().describe('要打开的 URL，必须包含协议（如 https://）'),
       browser: z
@@ -187,14 +174,13 @@ server.registerTool(
   }
 )
 
-// ─── 启动服务器 ───────────────────────────────────────────────────────────────
 async function main() {
   const transport = new StdioServerTransport()
   await server.connect(transport)
-  console.error('System Control MCP Server started')
+  console.error('Angrymiao skill system-control runtime started')
 }
 
 main().catch((error) => {
-  console.error('Failed to start MCP server:', error)
+  console.error('Failed to start skill runtime:', error)
   process.exit(1)
 })

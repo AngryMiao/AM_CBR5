@@ -211,5 +211,6 @@ export type FileMeta = {
 }
 
 export * from './types/image-generation'
+export * from './types/skill-bundle'
 export * from './types/session'
 export * from './types/settings'

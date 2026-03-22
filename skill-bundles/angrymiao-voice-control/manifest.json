@@ -1,0 +1,33 @@
+{
+  "id": "angrymiao-voice-control",
+  "version": "1.0.0",
+  "name": "Angrymiao Voice Control",
+  "description": "Voice-command skill bundle for desktop system control. Ships a reusable system-control MCP runtime plus prompt instructions and installation scripts.",
+  "prompt": {
+    "file": "SKILL.md",
+    "examplesFile": "examples.md"
+  },
+  "platforms": ["darwin", "win32"],
+  "runtimes": [
+    {
+      "id": "system-control",
+      "transport": "mcp-stdio",
+      "launcher": "node-script",
+      "entry": "runtime/system-control-mcp/dist/index.js",
+      "name": "system-control",
+      "server": {
+        "id": "angrymiao-system-control",
+        "name": "system-control"
+      },
+      "platforms": ["darwin", "win32"],
+      "env": [
+        {
+          "name": "KEYBOARD_DRIVER_PATH",
+          "source": "settings-path",
+          "settingPath": "voice.keyboardDriverPath",
+          "required": false
+        }
+      ]
+    }
+  ]
+}

@@ -2,7 +2,7 @@ import type { Session, SessionMeta } from '@shared/types'
 import type { KeyboardShortcut } from '@shared/types/voice'
 import storage from '@/storage'
 import { StorageKeyGenerator } from '@/storage/StoreStorage'
-import { ANGRYMIAO_AGENT_SKILL_ID } from '@/packages/agent-skills'
+import { ANGRYMIAO_AGENT_SKILL_ID, ANGRYMIAO_SKILL_BUNDLE_ID, ANGRYMIAO_SKILL_RUNTIME_ID } from '@/packages/agent-skills'
 import * as chatStore from '@/stores/chatStore'
 import { getSessionMeta, initEmptyChatSession } from '@/stores/sessionHelpers'
 
@@ -23,6 +23,8 @@ function normalizeAngrymiaoSession(session: Session): Session {
     singletonKey: ANGRYMIAO_SINGLETON_KEY,
     agentSkill: {
       id: ANGRYMIAO_AGENT_SKILL_ID,
+      bundleId: ANGRYMIAO_SKILL_BUNDLE_ID,
+      runtimeId: ANGRYMIAO_SKILL_RUNTIME_ID,
       version: 1,
     },
     // Angrymiao skill is injected at runtime now, so legacy system prompts can be removed.
@@ -43,6 +45,8 @@ async function ensureAngrymiaoAgentSkill(sessionId: string, _keyboardShortcuts: 
   const alreadyNormalized = session.name === ANGRYMIAO_SESSION_NAME
     && session.singletonKey === ANGRYMIAO_SINGLETON_KEY
     && session.agentSkill?.id === ANGRYMIAO_AGENT_SKILL_ID
+    && session.agentSkill.bundleId === ANGRYMIAO_SKILL_BUNDLE_ID
+    && session.agentSkill.runtimeId === ANGRYMIAO_SKILL_RUNTIME_ID
     && session.agentSkill.version === 1
     && !session.messages.some((message) => message.role === 'system')
     && !session.threads
@@ -63,6 +67,8 @@ function createAngrymiaoSession(): Omit<Session, 'id'> {
   session.singletonKey = ANGRYMIAO_SINGLETON_KEY
   session.agentSkill = {
     id: ANGRYMIAO_AGENT_SKILL_ID,
+    bundleId: ANGRYMIAO_SKILL_BUNDLE_ID,
+    runtimeId: ANGRYMIAO_SKILL_RUNTIME_ID,
     version: 1,
   }
   session.messages = session.messages.filter((message) => message.role !== 'system')
