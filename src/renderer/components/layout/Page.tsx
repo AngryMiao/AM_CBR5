@@ -1,10 +1,6 @@
-import { ActionIcon, Box, Flex, Title } from '@mantine/core'
-import { IconLayoutSidebarLeftExpand, IconMenu2 } from '@tabler/icons-react'
-import clsx from 'clsx'
+import { Box, Flex, Title } from '@mantine/core'
 import type { FC } from 'react'
-import useNeedRoomForWinControls from '@/hooks/useNeedRoomForWinControls'
 import { useIsSmallScreen } from '@/hooks/useScreenChange'
-import { useUIStore } from '@/stores/uiStore'
 import Divider from '../common/Divider'
 import WindowControls from './WindowControls'
 
@@ -16,28 +12,11 @@ export type PageProps = {
 }
 
 export const Page: FC<PageProps> = ({ children, title, left, right }) => {
-  const showSidebar = useUIStore((s) => s.showSidebar)
-  const setShowSidebar = useUIStore((s) => s.setShowSidebar)
   const isSmallScreen = useIsSmallScreen()
-  const { needRoomForMacWindowControls } = useNeedRoomForWinControls()
   return (
     <div className="flex flex-col h-full">
-      <Flex h={54} align="center" px="sm" className={clsx('title-bar')}>
-        {left ||
-          ((!showSidebar || isSmallScreen) && (
-            <Flex align="center" className={needRoomForMacWindowControls ? 'pl-20' : ''}>
-              <ActionIcon
-                className="controls"
-                variant="subtle"
-                size={isSmallScreen ? 24 : 20}
-                color={isSmallScreen ? 'chatbox-secondary' : 'chatbox-tertiary'}
-                mr="sm"
-                onClick={() => setShowSidebar(!showSidebar)}
-              >
-                {isSmallScreen ? <IconMenu2 /> : <IconLayoutSidebarLeftExpand />}
-              </ActionIcon>
-            </Flex>
-          ))}
+      <Flex h={54} align="center" px="sm" className="title-bar">
+        {left}
 
         <Flex align="center" gap={'xxs'} flex={1} {...(isSmallScreen ? { justify: 'center', px: 'sm' } : {})}>
           {typeof title === 'string' ? (

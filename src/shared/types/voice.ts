@@ -4,8 +4,12 @@ import { z } from 'zod'
 export const VoiceModeSchema = z.enum(['inactive', 'listening', 'processing', 'speaking'])
 export type VoiceMode = z.infer<typeof VoiceModeSchema>
 
+// 语音触发方式
+export const VoiceTriggerModeSchema = z.enum(['toggle', 'hold'])
+export type VoiceTriggerMode = z.infer<typeof VoiceTriggerModeSchema>
+
 // ASR (Automatic Speech Recognition) 提供商
-export const ASRProviderSchema = z.enum(['whisper-local', 'funasr-local', 'openai', 'azure', 'google'])
+export const ASRProviderSchema = z.enum(['whisper-local', 'funasr-local', 'openai', 'aliyun', 'azure', 'google'])
 export type ASRProvider = z.infer<typeof ASRProviderSchema>
 
 // TTS (Text-to-Speech) 提供商
@@ -39,7 +43,14 @@ export const ASRConfigSchema = z.object({
           punctuationField: z.string().default('enable_punctuation'),
           hotwordsField: z.string().default('hotwords'),
         })
-        .default({}),
+        .default({
+          fileField: 'file',
+          modelField: 'model',
+          languageField: 'language',
+          vadField: 'enable_vad',
+          punctuationField: 'enable_punctuation',
+          hotwordsField: 'hotwords',
+        }),
       enableVAD: z.boolean().default(true),
       enablePunctuation: z.boolean().default(true),
       hotwords: z.array(z.string()).default([]),
@@ -59,6 +70,15 @@ export const ASRConfigSchema = z.object({
       apiKey: z.string(),
       model: z.string().default('whisper-1'),
       baseURL: z.string().optional(),
+    })
+    .optional(),
+  aliyun: z
+    .object({
+      apiKey: z.string(),
+      model: z.string().default('qwen3-asr-flash'),
+      baseURL: z.string().default('https://dashscope.aliyuncs.com/compatible-mode/v1'),
+      language: z.string().optional(),
+      enableITN: z.boolean().default(false),
     })
     .optional(),
   azure: z
@@ -134,6 +154,7 @@ export type VoiceShortcuts = z.infer<typeof VoiceShortcutsSchema>
 // 语音设置
 export const VoiceSettingsSchema = z.object({
   enabled: z.boolean().default(false),
+  triggerMode: VoiceTriggerModeSchema.default('toggle'),
   asrProvider: ASRProviderSchema.default('whisper-local'),
   ttsProvider: TTSProviderSchema.default('browser'),
   asrConfig: ASRConfigSchema.default({}),

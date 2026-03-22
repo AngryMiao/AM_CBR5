@@ -1,4 +1,4 @@
-import type { Message, MessageContentParts, MessageToolCallPart } from '@shared/types'
+import { createMessage, type Message, type MessageContentParts, type MessageToolCallPart } from '@shared/types'
 import type { ModelDependencies } from '@shared/types/adapters'
 import type { FilePart, ImagePart, ModelMessage, TextPart, ToolCallPart, ToolResultPart } from 'ai'
 import dayjs from 'dayjs'
@@ -144,6 +144,35 @@ export async function convertToModelMessages(
 }
 
 /**
+ * 将提示词注入到首个指定角色消息中；若不存在则补一个新消息。
+ */
+export function injectPrompt(
+  messages: Message[],
+  prompt: string,
+  role: 'system' | 'user' = 'system'
+) {
+  if (!prompt) {
+    return messages
+  }
+
+  let hasInjected = false
+  const nextMessages = messages.map((m) => {
+    if (m.role === role && !hasInjected) {
+      m = cloneMessage(m) // 复制，防止原始数据在其他地方被直接渲染使用
+      m.contentParts = [{ type: 'text', text: prompt + getMessageText(m) }]
+      hasInjected = true
+    }
+    return m
+  })
+
+  if (hasInjected) {
+    return nextMessages
+  }
+
+  return [createMessage(role, prompt), ...nextMessages]
+}
+
+/**
  * 在 system prompt 中注入模型信息
  * @param model
  * @param messages
@@ -158,13 +187,5 @@ export function injectModelSystemPrompt(
   const metadataPrompt = `Current model: ${model}\nCurrent date: ${dayjs().format(
     'YYYY-MM-DD'
   )}\n Additional info for this conversation: ${additionalInfo}\n\n`
-  let hasInjected = false
-  return messages.map((m) => {
-    if (m.role === role && !hasInjected) {
-      m = cloneMessage(m) // 复制，防止原始数据在其他地方被直接渲染使用
-      m.contentParts = [{ type: 'text', text: metadataPrompt + getMessageText(m) }]
-      hasInjected = true
-    }
-    return m
-  })
+  return injectPrompt(messages, metadataPrompt, role)
 }

@@ -246,10 +246,17 @@ export const SessionThreadSchema = z.object({
   compactionPoints: z.array(CompactionPointSchema).optional(),
 })
 
+export const AgentSkillReferenceSchema = z.object({
+  id: z.string(),
+  version: z.number().int().positive().default(1),
+})
+
 export const SessionSchema = z.object({
   id: z.string(),
   type: SessionTypeSchema.optional(),
   name: z.string(),
+  singletonKey: z.string().optional(),
+  agentSkill: AgentSkillReferenceSchema.optional(),
   picUrl: z.string().optional(),
   messages: z.array(MessageSchema),
   starred: z.boolean().optional(),
@@ -266,6 +273,7 @@ export const SessionSchema = z.object({
 export const SessionMetaSchema = SessionSchema.pick({
   id: true,
   name: true,
+  singletonKey: true,
   starred: true,
   hidden: true,
   assistantAvatarKey: true,
@@ -308,3 +316,4 @@ export type Session = z.infer<typeof SessionSchema>
 export type SessionMeta = z.infer<typeof SessionMetaSchema>
 export type SessionThread = z.infer<typeof SessionThreadSchema>
 export type SessionThreadBrief = z.infer<typeof SessionThreadBriefSchema>
+export type AgentSkillReference = z.infer<typeof AgentSkillReferenceSchema>

@@ -37,6 +37,7 @@ import './setup/ga_init'
 // 引入保护代码
 import './setup/protect'
 import { QueryClientProvider } from '@tanstack/react-query'
+import { ensureAngrymiaoSession } from './packages/voice/angrymiao-session'
 import { initLastUsedModelStore } from './stores/lastUsedModelStore'
 import { initSettingsStore } from './stores/settingsStore'
 
@@ -61,6 +62,8 @@ async function initializeApp() {
     // 数据迁移
     await migration.migrate()
     log.info('migrate done')
+    await ensureAngrymiaoSession({ purgeOthers: true })
+    log.info('angrymiao session ensured')
   } catch (e) {
     log.error('migrate error', e)
     Sentry.captureException(e as Error)

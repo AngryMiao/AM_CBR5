@@ -1,7 +1,7 @@
 import NiceModal from '@ebay/nice-modal-react'
-import { Button } from '@mantine/core'
 import type { Message, ModelProvider } from '@shared/types'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { getDefaultStore } from 'jotai'
 import { ForwardedRef, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from 'zustand'
@@ -9,11 +9,12 @@ import MessageList, { type MessageListRef } from '@/components/chat/MessageList'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import InputBox from '@/components/InputBox/InputBox'
 import Header from '@/components/layout/Header'
-import ThreadHistoryDrawer from '@/components/session/ThreadHistoryDrawer'
+import { ANGRYMIAO_SINGLETON_KEY, ensureAngrymiaoSession } from '@/packages/voice/angrymiao-session'
+import { currentSessionIdAtom } from '@/stores/atoms/sessionAtoms'
 import { updateSession as updateSessionStore, useSession } from '@/stores/chatStore'
 import { lastUsedModelStore } from '@/stores/lastUsedModelStore'
 import * as scrollActions from '@/stores/scrollActions'
-import { modifyMessage, removeCurrentThread, startNewThread, submitNewUserMessage } from '@/stores/sessionActions'
+import { modifyMessage, submitNewUserMessage } from '@/stores/sessionActions'
 import { getAllMessageList } from '@/stores/sessionHelpers'
 
 export const Route = createFileRoute('/session/$sessionId')({
@@ -36,15 +37,28 @@ function RouteComponent() {
 
   const messageListRef = useRef<MessageListRef>(null)
 
-  const goHome = useCallback(() => {
-    navigate({ to: '/', replace: true })
-  }, [navigate])
-
   useEffect(() => {
     setTimeout(() => {
       scrollActions.scrollToBottom('auto') // 每次启动时自动滚动到底部
     }, 200)
   }, [])
+
+  useEffect(() => {
+    getDefaultStore().set(currentSessionIdAtom, currentSessionId)
+  }, [currentSessionId])
+
+  useEffect(() => {
+    if (currentSession?.singletonKey === ANGRYMIAO_SINGLETON_KEY) {
+      return
+    }
+    if (!isFetching) {
+      void ensureAngrymiaoSession({ purgeOthers: true }).then((session) => {
+        if (session.id !== currentSessionId) {
+          navigate({ to: `/session/${session.id}`, replace: true })
+        }
+      })
+    }
+  }, [currentSession?.singletonKey, currentSessionId, isFetching, navigate])
 
   // currentSession变化时（包括session settings变化），存下当前的settings作为新Session的默认值
   useEffect(() => {
@@ -79,22 +93,6 @@ function RouteComponent() {
     },
     [currentSession]
   )
-
-  const onStartNewThread = useCallback(() => {
-    if (!currentSession) {
-      return false
-    }
-    void startNewThread(currentSession.id)
-    return true
-  }, [currentSession])
-
-  const onRollbackThread = useCallback(() => {
-    if (!currentSession) {
-      return false
-    }
-    void removeCurrentThread(currentSession.id)
-    return true
-  }, [currentSession])
 
   const onSubmit = useCallback(
     async ({
@@ -164,8 +162,6 @@ function RouteComponent() {
           sessionId={currentSession.id}
           sessionType={currentSession.type}
           model={model}
-          onStartNewThread={onStartNewThread}
-          onRollbackThread={onRollbackThread}
           onSelectModel={onSelectModel}
           onClickSessionSettings={onClickSessionSettings}
           generating={!!lastGeneratingMessage}
@@ -173,16 +169,10 @@ function RouteComponent() {
           onStopGenerating={onStopGenerating}
         />
       </ErrorBoundary>
-      <ThreadHistoryDrawer session={currentSession} />
     </div>
-  ) : (
-    !isFetching && (
-      <div className="flex flex-1 flex-col items-center justify-center min-h-[60vh]">
-        <div className="text-2xl font-semibold text-gray-700 mb-4">{t('Conversation not found')}</div>
-        <Button variant="outline" onClick={goHome}>
-          {t('Back to HomePage')}
-        </Button>
-      </div>
-    )
-  )
+  ) : !isFetching ? (
+    <div className="flex flex-1 items-center justify-center text-sm text-[var(--chatbox-tint-secondary)]">
+      {t('Loading')}...
+    </div>
+  ) : null
 }

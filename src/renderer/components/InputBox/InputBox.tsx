@@ -1096,7 +1096,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                 </Tooltip>
 
                 {!isSmallScreen &&
-                  (showRollbackThreadButton ? (
+                  (showRollbackThreadButton && onRollbackThread ? (
                     <Tooltip label={t('Rollback Thread')} position="top" withArrow>
                       <UnstyledButton
                         onClick={rollbackThread}
@@ -1109,12 +1109,11 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                         />
                       </UnstyledButton>
                     </Tooltip>
-                  ) : (
+                  ) : onStartNewThread ? (
                     <Tooltip label={t('New Thread')} position="top" withArrow>
                       <UnstyledButton
                         onClick={startNewThread}
-                        disabled={!onStartNewThread}
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors"
                       >
                         <IconFilePencil
                           size={toolbarIconSize}
@@ -1123,7 +1122,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                         />
                       </UnstyledButton>
                     </Tooltip>
-                  ))}
+                  ) : null)}
 
                 {!isSmallScreen && (
                   <Tooltip label={t('Conversation Settings')} position="top" withArrow>
@@ -1142,7 +1141,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                 )}
 
                 {/* Mobile: Settings menu */}
-                {isSmallScreen && (
+                {isSmallScreen && (onStartNewThread || onClickSessionSettings) && (
                   <Menu
                     trigger="click"
                     openDelay={100}
@@ -1163,15 +1162,19 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                       </UnstyledButton>
                     </Menu.Target>
                     <Menu.Dropdown>
-                      <Menu.Item leftSection={<ScalableIcon icon={IconPlus} size={16} />} onClick={startNewThread}>
-                        {t('New Thread')}
-                      </Menu.Item>
-                      <Menu.Item
-                        leftSection={<ScalableIcon icon={IconAdjustmentsHorizontal} size={16} />}
-                        onClick={onClickSessionSettings}
-                      >
-                        {t('Conversation Settings')}
-                      </Menu.Item>
+                      {onStartNewThread && (
+                        <Menu.Item leftSection={<ScalableIcon icon={IconPlus} size={16} />} onClick={startNewThread}>
+                          {t('New Thread')}
+                        </Menu.Item>
+                      )}
+                      {onClickSessionSettings && (
+                        <Menu.Item
+                          leftSection={<ScalableIcon icon={IconAdjustmentsHorizontal} size={16} />}
+                          onClick={onClickSessionSettings}
+                        >
+                          {t('Conversation Settings')}
+                        </Menu.Item>
+                      )}
                     </Menu.Dropdown>
                   </Menu>
                 )}

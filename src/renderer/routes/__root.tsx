@@ -6,7 +6,6 @@ import useAppTheme from '@/hooks/useAppTheme'
 import { useSystemLanguageWhenInit } from '@/hooks/useDefaultSystemLanguage'
 import { useI18nEffect } from '@/hooks/useI18nEffect'
 import useNeedRoomForWinControls from '@/hooks/useNeedRoomForWinControls'
-import { useSidebarWidth } from '@/hooks/useScreenChange'
 import useShortcut from '@/hooks/useShortcut'
 import { useVoiceController } from '@/hooks/useVoiceController'
 import { VoicePanel } from '@/components/voice/VoicePanel'
@@ -41,7 +40,7 @@ import {
 import { Box, Grid } from '@mui/material'
 import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeProvider } from '@mui/material/styles'
-import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router'
+import { createRootRoute, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import { useSetAtom } from 'jotai'
 import { useEffect, useMemo, useRef } from 'react'
 import SettingsModal, { navigateToSettings } from '@/modals/Settings'
@@ -51,16 +50,16 @@ import PictureDialog from '@/pages/PictureDialog'
 import RemoteDialogWindow from '@/pages/RemoteDialogWindow'
 import SearchDialog from '@/pages/SearchDialog'
 import platform from '@/platform'
-import { router } from '@/router'
-import Sidebar from '@/Sidebar'
+import { ensureAngrymiaoSession } from '@/packages/voice/angrymiao-session'
 import * as atoms from '@/stores/atoms'
 import * as premiumActions from '@/stores/premiumActions'
 import * as settingActions from '@/stores/settingActions'
-import { settingsStore, useLanguage, useSettingsStore, useTheme } from '@/stores/settingsStore'
+import { useLanguage, useSettingsStore, useTheme } from '@/stores/settingsStore'
 import { useUIStore } from '@/stores/uiStore'
 
 function Root() {
   const location = useLocation()
+  const navigate = useNavigate()
   const spellCheck = useSettingsStore((state) => state.spellCheck)
   const language = useLanguage()
   const initialized = useRef(false)
@@ -71,6 +70,23 @@ function Root() {
 
   // 初始化语音控制
   useVoiceController()
+
+  useEffect(() => {
+    const pathname = location.pathname
+    const isAllowedPath =
+      pathname === '/'
+      || pathname.startsWith('/session/')
+      || pathname === '/settings'
+      || pathname.startsWith('/settings/')
+
+    if (isAllowedPath) {
+      return
+    }
+
+    void ensureAngrymiaoSession({ purgeOthers: true }).then((session) => {
+      navigate({ to: `/session/${session.id}`, replace: true })
+    })
+  }, [location.pathname, navigate])
 
   useEffect(() => {
     if (initialized.current) {
@@ -103,9 +119,6 @@ function Root() {
     return () => clearTimeout(tid)
   }, [setOpenAboutDialog, setRemoteConfig, location.pathname])
 
-  const showSidebar = useUIStore((s) => s.showSidebar)
-  const sidebarWidth = useSidebarWidth()
-
   const _theme = useTheme()
   const { setColorScheme } = useMantineColorScheme()
   // biome-ignore lint/correctness/useExhaustiveDependencies: setColorScheme is stable
@@ -118,19 +131,6 @@ function Root() {
       setColorScheme('auto')
     }
   }, [_theme])
-
-  useEffect(() => {
-    ;(() => {
-      const { startupPage } = settingsStore.getState()
-      const sid = JSON.parse(localStorage.getItem('_currentSessionIdCachedAtom') || '""') as string
-      if (sid && startupPage === 'session') {
-        router.navigate({
-          to: `/session/${sid}`,
-          replace: true,
-        })
-      }
-    })()
-  }, [])
 
   useEffect(() => {
     if (platform.onNavigate) {
@@ -162,18 +162,7 @@ function Root() {
     <Box className="box-border App" spellCheck={spellCheck} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       {platform.type === 'desktop' && (getOS() === 'Windows' || getOS() === 'Linux') && <ExitFullscreenButton />}
       <Grid container className="h-full">
-        <Sidebar />
-        <Box
-          className="h-full w-full"
-          sx={{
-            flexGrow: 1,
-            ...(showSidebar
-              ? language === 'ar'
-                ? { paddingRight: { sm: `${sidebarWidth}px` } }
-                : { paddingLeft: { sm: `${sidebarWidth}px` } }
-              : {}),
-          }}
-        >
+        <Box className="h-full w-full" sx={{ flexGrow: 1 }}>
           <ErrorBoundary name="main">
             <Outlet />
           </ErrorBoundary>

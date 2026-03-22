@@ -2,8 +2,15 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useVoiceSettings } from '@/hooks/useVoiceSettings'
-import type { ASRProvider, TTSProvider, WhisperModelSize, KeyboardShortcut } from '@shared/types/voice'
-import { WhisperLocalProvider, FunASRLocalProvider, OpenAIASRProvider, AzureASRProvider, GoogleASRProvider } from '@/packages/voice/asr'
+import type { ASRProvider, TTSProvider, WhisperModelSize, KeyboardShortcut, VoiceTriggerMode } from '@shared/types/voice'
+import {
+  WhisperLocalProvider,
+  FunASRLocalProvider,
+  OpenAIASRProvider,
+  AliyunASRProvider,
+  AzureASRProvider,
+  GoogleASRProvider,
+} from '@/packages/voice/asr'
 import type { WhisperDownloadProgress } from '@/packages/voice/asr/whisper-local'
 import { BrowserTTSProvider, OpenAITTSProvider, AzureTTSProvider, ElevenLabsTTSProvider } from '@/packages/voice/tts'
 import { getDefaultKeyboardShortcuts, buildKeyCodes, KEY_CATEGORIES } from '@shared/defaults/keyboard-shortcuts'
@@ -178,6 +185,13 @@ export function RouteComponent() {
           }
           asrProvider = new OpenAIASRProvider(settings.asrConfig.openai)
           break
+        case 'aliyun':
+          if (!settings.asrConfig.aliyun?.apiKey) {
+            alert(t('请先配置阿里云 API Key'))
+            return
+          }
+          asrProvider = new AliyunASRProvider(settings.asrConfig.aliyun)
+          break
         case 'azure':
           if (!settings.asrConfig.azure) {
             alert(t('请先配置 Azure 设置'))
@@ -296,6 +310,7 @@ export function RouteComponent() {
           <option value="whisper-local">{t('Whisper 本地模型')}</option>
           <option value="funasr-local">{t('FunASR 本地服务')}</option>
           <option value="openai">{t('OpenAI Whisper API')}</option>
+          <option value="aliyun">{t('阿里云 Qwen ASR')}</option>
           <option value="azure">{t('Azure Speech Services')}</option>
           <option value="google">{t('Google Cloud Speech')}</option>
         </select>
@@ -896,6 +911,139 @@ export function RouteComponent() {
           </div>
         )}
 
+        {/* Aliyun 配置 */}
+        {settings.asrProvider === 'aliyun' && (
+          <div className="pl-4 space-y-3 border-l-2 border-gray-300 dark:border-gray-700">
+            <div>
+              <label className="text-sm font-medium">{t('API Key')}</label>
+              <input
+                type="password"
+                value={settings.asrConfig.aliyun?.apiKey || ''}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      aliyun: {
+                        ...settings.asrConfig.aliyun,
+                        apiKey: e.target.value,
+                        model: settings.asrConfig.aliyun?.model || 'qwen3-asr-flash',
+                        baseURL:
+                          settings.asrConfig.aliyun?.baseURL || 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+                      },
+                    },
+                  })
+                }
+                placeholder="sk-..."
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('模型名称')}</label>
+              <input
+                type="text"
+                value={settings.asrConfig.aliyun?.model || 'qwen3-asr-flash'}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      aliyun: {
+                        ...settings.asrConfig.aliyun,
+                        apiKey: settings.asrConfig.aliyun?.apiKey || '',
+                        model: e.target.value,
+                        baseURL:
+                          settings.asrConfig.aliyun?.baseURL || 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+                      },
+                    },
+                  })
+                }
+                placeholder="qwen3-asr-flash"
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('Base URL')}</label>
+              <input
+                type="text"
+                value={settings.asrConfig.aliyun?.baseURL || 'https://dashscope.aliyuncs.com/compatible-mode/v1'}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      aliyun: {
+                        ...settings.asrConfig.aliyun,
+                        apiKey: settings.asrConfig.aliyun?.apiKey || '',
+                        model: settings.asrConfig.aliyun?.model || 'qwen3-asr-flash',
+                        baseURL: e.target.value,
+                      },
+                    },
+                  })
+                }
+                placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {t('中国内地可用 dashscope.aliyuncs.com，新加坡地域可替换为 dashscope-intl.aliyuncs.com')}
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('语言代码（可选）')}</label>
+              <input
+                type="text"
+                value={settings.asrConfig.aliyun?.language || ''}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      aliyun: {
+                        ...settings.asrConfig.aliyun,
+                        apiKey: settings.asrConfig.aliyun?.apiKey || '',
+                        model: settings.asrConfig.aliyun?.model || 'qwen3-asr-flash',
+                        baseURL:
+                          settings.asrConfig.aliyun?.baseURL || 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+                        language: e.target.value,
+                      },
+                    },
+                  })
+                }
+                placeholder="zh"
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">{t('留空时自动识别，可填 zh、en、ja 等')}</p>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-sm font-medium">{t('启用 ITN')}</label>
+                <p className="text-xs text-gray-500 mt-1">{t('将口语数字等内容标准化，仅适用于中文和英文音频')}</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.asrConfig.aliyun?.enableITN || false}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      aliyun: {
+                        ...settings.asrConfig.aliyun,
+                        apiKey: settings.asrConfig.aliyun?.apiKey || '',
+                        model: settings.asrConfig.aliyun?.model || 'qwen3-asr-flash',
+                        baseURL:
+                          settings.asrConfig.aliyun?.baseURL || 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+                        enableITN: e.target.checked,
+                      },
+                    },
+                  })
+                }
+                className="w-5 h-5"
+              />
+            </div>
+          </div>
+        )}
+
         {/* Azure 配置 */}
         {settings.asrProvider === 'azure' && (
           <div className="pl-4 space-y-3 border-l-2 border-gray-300 dark:border-gray-700">
@@ -1071,7 +1219,28 @@ export function RouteComponent() {
       <div className="space-y-3">
         <label className="font-medium">{t('快捷键')}</label>
         <div>
-          <label className="text-sm font-medium">{t('切换语音模式')}</label>
+          <label className="text-sm font-medium">{t('触发方式')}</label>
+          <select
+            value={settings.triggerMode}
+            onChange={(e) =>
+              setSettings({
+                ...settings,
+                triggerMode: e.target.value as VoiceTriggerMode,
+              })
+            }
+            className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+          >
+            <option value="toggle">{t('按一次开始，再按一次停止')}</option>
+            <option value="hold">{t('长按录音，松开结束')}</option>
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            {settings.triggerMode === 'hold'
+              ? t('长按模式依赖 Chatbox 窗口内的按下/抬起事件，使用时请保持窗口处于激活状态。')
+              : t('切换模式下，首次按下开始录音，再按一次结束录音。')}
+          </p>
+        </div>
+        <div>
+          <label className="text-sm font-medium">{t('语音快捷键')}</label>
           <div className="mt-1">
             <HotkeyPicker
               value={settings.shortcuts.toggleVoice}

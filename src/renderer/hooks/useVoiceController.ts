@@ -14,20 +14,23 @@ import { useVoiceSettings } from '@/hooks/useVoiceSettings'
 import { VoiceRecorder } from '@/packages/voice/recorder'
 import type { ASRProvider } from '@/packages/voice/asr'
 import type { TTSProvider } from '@/packages/voice/tts'
-import { WhisperLocalProvider, FunASRLocalProvider, OpenAIASRProvider, AzureASRProvider, GoogleASRProvider } from '@/packages/voice/asr'
+import {
+  WhisperLocalProvider,
+  FunASRLocalProvider,
+  OpenAIASRProvider,
+  AliyunASRProvider,
+  AzureASRProvider,
+  GoogleASRProvider,
+} from '@/packages/voice/asr'
 import { BrowserTTSProvider, OpenAITTSProvider, AzureTTSProvider, ElevenLabsTTSProvider } from '@/packages/voice/tts'
 import * as chatStore from '@/stores/chatStore'
 import { switchCurrentSession } from '@/stores/session/crud'
 import { submitNewUserMessage } from '@/stores/session/messages'
 import { createMessage } from '@shared/types'
 import { getMessageText } from '@shared/utils/message'
-import { initEmptyChatSession } from '@/stores/sessionHelpers'
 import platform from '@/platform'
 import { mcpController } from '@/packages/mcp/controller'
-
-import type { KeyboardShortcut } from '@shared/types/voice'
-
-const VOICE_SESSION_NAME = 'angrymiao'
+import { ensureAngrymiaoSession } from '@/packages/voice/angrymiao-session'
 
 async function ensureSystemControlMCP(keyboardDriverPath?: string): Promise<void> {
   if (platform.type !== 'desktop') return
@@ -61,142 +64,157 @@ async function ensureSystemControlMCP(keyboardDriverPath?: string): Promise<void
   }
 }
 
-
-function buildVoiceSystemPrompt(platformType: string, keyboardShortcuts: KeyboardShortcut[] = []): string {
-  // 工具名需要与 MCP controller 注册的名称一致（mcp__<server_name>__<tool_name>）
-  const t = (name: string) => `mcp__system-control__${name}`
-
-  const enabledShortcuts = keyboardShortcuts.filter((s) => s.enabled)
-
-  // 构建快捷键映射表
-  let shortcutTable = ''
-  if (enabledShortcuts.length > 0) {
-    const rows = enabledShortcuts
-      .map((s) => `| ${s.triggerWords.join(' / ')} | ${JSON.stringify(s.keyCodes)} |`)
-      .join('\n')
-    shortcutTable = `
-<skill name="keyboard_shortcuts">
-你具备键盘快捷键控制能力。以下是已配置的快捷键映射表，当用户语音匹配触发词时，直接调用 ${t('keyboard_control')} 并传入对应的 keyCodes：
-
-| 触发词 | keyCodes |
-|--------|----------|
-${rows}
-
-规则：
-- 用户说出触发词时，直接调用 ${t('keyboard_control')}(keyCodes: [...])，不要反问
-- 如果用户说的快捷键不在映射表中，尝试根据 key code 格式自行组合
-- 回复简短确认即可，如"已复制"、"已粘贴"
-</skill>`
-  }
-
-  return `<identity>
-你是 Angrymiao 语音控制助手，一个通过语音指令控制用户计算机的智能代理。你接收用户的语音转文字输入，理解意图后调用对应的工具执行操作。
-</identity>
-
-<available_tools>
-你可以使用以下工具：
-
-1. ${t('type_text')} - 在当前光标位置输入文本
-   参数: text (string) - 要输入的文本内容
-   触发词: "打"、"输入"、"写"、"键入"、"打字"
-
-2. ${t('keyboard_control')} - 执行键盘快捷键操作
-   参数: keyCodes (string[]) - 8位hex按键序列，按下和抬起成对出现
-
-3. ${t('open_browser')} - 在默认浏览器中打开 URL
-   参数: url (string) - 完整 URL（含协议）
-   触发词: "打开浏览器"、"打开网页"、"搜索"、"上网"
-
-4. ${t('system_shutdown')} - 关闭计算机（需确认）
-5. ${t('system_restart')} - 重启计算机（需确认）
-6. ${t('system_lock_screen')} - 锁定屏幕
-7. ${t('system_sleep')} - 进入睡眠模式
-</available_tools>
-${shortcutTable}
-<intent_mapping>
-语音输入的意图识别规则（按优先级排序）：
-
-优先级 1 - 文本输入：当用户说"打"、"输入"、"写"、"键入"后跟内容时，使用 ${t('type_text')} 输入该内容。
-  - "帮我打一二三" → ${t('type_text')}("一二三")
-  - "输入你好世界" → ${t('type_text')}("你好世界")
-  - "打 hello world" → ${t('type_text')}("hello world")
-  - "写一个邮箱地址 test@example.com" → ${t('type_text')}("test@example.com")
-
-优先级 2 - 键盘控制：当用户说出快捷键映射表中的触发词时，查找映射表并调用 ${t('keyboard_control')}(keyCodes: [...])。
-
-优先级 3 - 浏览器/搜索：
-  - "打开百度" → ${t('open_browser')}("https://www.baidu.com")
-  - "搜索天气预报" → ${t('open_browser')}("https://www.google.com/search?q=天气预报")
-
-优先级 4 - 系统控制：
-  - "关机" / "重启" / "锁屏" / "睡眠" → 对应系统工具
-</intent_mapping>
-
-<behavior>
-- 收到指令后，直接调用对应的工具，不要生成任何文本内容。
-- 只在以下情况生成文本回复：
-  1. 无法识别用户意图时，简短询问
-  2. 工具调用失败时，说明错误原因
-  3. 关机/重启操作需要确认时
-- 如果语音文本有歧义，优先理解为文本输入意图。
-- 工具执行成功后，不要再输出确认信息，工具结果已经足够。
-</behavior>`
+type ParsedShortcut = {
+  modifiers: Set<'ctrl' | 'meta' | 'alt' | 'shift' | 'mod'>
+  key?: string
 }
 
-async function ensureVoiceSystemPrompt(sessionId: string, keyboardShortcuts: KeyboardShortcut[] = []): Promise<void> {
-  const session = await chatStore.getSession(sessionId)
-  if (!session) return
+function normalizeShortcutToken(token: string): string {
+  switch (token.trim().toLowerCase()) {
+    case 'control':
+    case 'ctrl':
+      return 'ctrl'
+    case 'command':
+    case 'cmd':
+    case 'meta':
+    case 'win':
+      return 'meta'
+    case 'option':
+    case 'alt':
+      return 'alt'
+    case 'shift':
+      return 'shift'
+    case 'commandorcontrol':
+    case 'mod':
+      return 'mod'
+    case 'return':
+    case 'enter':
+      return 'enter'
+    case 'space':
+      return ' '
+    case 'escape':
+    case 'esc':
+      return 'escape'
+    case 'up':
+      return 'arrowup'
+    case 'down':
+      return 'arrowdown'
+    case 'left':
+      return 'arrowleft'
+    case 'right':
+      return 'arrowright'
+    default:
+      return token.trim().toLowerCase()
+  }
+}
 
-  const platformType = await platform.getPlatform()
-  const newPrompt = buildVoiceSystemPrompt(platformType, keyboardShortcuts)
-
-  const existingSystemIdx = session.messages.findIndex((m) => m.role === 'system')
-
-  // 检查 system prompt 是否真的变化了
-  let promptChanged = false
-  if (existingSystemIdx >= 0) {
-    const oldPrompt = session.messages[existingSystemIdx].contentParts?.[0]?.text || ''
-    promptChanged = oldPrompt !== newPrompt
-  } else {
-    promptChanged = true
+function parseShortcut(shortcut: string): ParsedShortcut {
+  const parsed: ParsedShortcut = {
+    modifiers: new Set(),
   }
 
-  // 更新 system prompt
-  if (existingSystemIdx >= 0) {
-    await chatStore.updateMessage(sessionId, session.messages[existingSystemIdx].id, {
-      contentParts: [{ type: 'text', text: newPrompt }],
-    })
-  } else {
-    const systemMsg = createMessage('system', newPrompt)
-    await chatStore.insertMessage(sessionId, systemMsg)
-  }
-
-  // 如果 prompt 变化了，清空历史消息（避免新旧指令冲突）
-  if (promptChanged && session.messages.length > 1) {
-    console.log('[Voice] Keyboard shortcuts changed, clearing conversation history')
-    const nonSystemMessages = session.messages.filter((m) => m.role !== 'system')
-    for (const msg of nonSystemMessages) {
-      await chatStore.deleteMessage(sessionId, msg.id)
+  for (const part of shortcut.split('+').filter(Boolean)) {
+    const normalized = normalizeShortcutToken(part)
+    if (normalized === 'ctrl' || normalized === 'meta' || normalized === 'alt' || normalized === 'shift' || normalized === 'mod') {
+      parsed.modifiers.add(normalized)
+    } else {
+      parsed.key = normalized
     }
   }
+
+  return parsed
 }
 
-async function findOrCreateVoiceSession(keyboardShortcuts: KeyboardShortcut[] = []): Promise<string> {
-  const sessions = await chatStore.listSessionsMeta()
-  const existing = sessions.find((s) => s.name === VOICE_SESSION_NAME)
-  if (existing) {
-    await ensureVoiceSystemPrompt(existing.id, keyboardShortcuts)
-    return existing.id
+function normalizeEventKey(key: string): string {
+  switch (key) {
+    case 'Control':
+      return 'ctrl'
+    case 'Meta':
+      return 'meta'
+    case 'Alt':
+      return 'alt'
+    case 'Shift':
+      return 'shift'
+    case 'Enter':
+      return 'enter'
+    case ' ':
+      return ' '
+    case 'Escape':
+      return 'escape'
+    case 'ArrowUp':
+      return 'arrowup'
+    case 'ArrowDown':
+      return 'arrowdown'
+    case 'ArrowLeft':
+      return 'arrowleft'
+    case 'ArrowRight':
+      return 'arrowright'
+    default:
+      return key.toLowerCase()
+  }
+}
+
+function matchesShortcutEvent(event: KeyboardEvent, shortcut: string): boolean {
+  const parsed = parseShortcut(shortcut)
+  if (!parsed.key) {
+    return false
   }
 
-  const platformType = await platform.getPlatform()
-  const session = initEmptyChatSession()
-  session.messages = [createMessage('system', buildVoiceSystemPrompt(platformType, keyboardShortcuts))]
-  session.name = VOICE_SESSION_NAME
+  const requiresCtrl = parsed.modifiers.has('ctrl')
+  const requiresMeta = parsed.modifiers.has('meta')
+  const requiresAlt = parsed.modifiers.has('alt')
+  const requiresShift = parsed.modifiers.has('shift')
+  const requiresMod = parsed.modifiers.has('mod')
 
-  const newSession = await chatStore.createSession(session)
-  return newSession.id
+  if (normalizeEventKey(event.key) !== parsed.key) {
+    return false
+  }
+  if (requiresCtrl && !event.ctrlKey) {
+    return false
+  }
+  if (requiresMeta && !event.metaKey) {
+    return false
+  }
+  if (requiresAlt && !event.altKey) {
+    return false
+  }
+  if (requiresShift && !event.shiftKey) {
+    return false
+  }
+  if (requiresMod && !(event.ctrlKey || event.metaKey)) {
+    return false
+  }
+  if (!requiresAlt && event.altKey) {
+    return false
+  }
+  if (!requiresShift && event.shiftKey) {
+    return false
+  }
+  if (!requiresMod && !requiresCtrl && event.ctrlKey) {
+    return false
+  }
+  if (!requiresMod && !requiresMeta && event.metaKey) {
+    return false
+  }
+
+  return true
 }
+
+function releasesShortcut(event: KeyboardEvent, shortcut: string): boolean {
+  const parsed = parseShortcut(shortcut)
+  const released = normalizeEventKey(event.key)
+
+  if (parsed.key === released) {
+    return true
+  }
+  if (released === 'ctrl' || released === 'meta' || released === 'alt' || released === 'shift') {
+    return parsed.modifiers.has(released) || (parsed.modifiers.has('mod') && (released === 'ctrl' || released === 'meta'))
+  }
+
+  return false
+}
+
+
 
 /**
  * 语音控制器 Hook
@@ -217,6 +235,21 @@ export function useVoiceController() {
   const asrProviderRef = useRef<ASRProvider | null>(null)
   const ttsProviderRef = useRef<TTSProvider | null>(null)
   const isSpeakingRef = useRef(false)
+  const voiceModeRef = useRef(voiceMode)
+  const holdShortcutActiveRef = useRef(false)
+  const holdActivationPendingRef = useRef(false)
+  const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearRecordingTimeout = useCallback(() => {
+    if (recordingTimeoutRef.current) {
+      clearTimeout(recordingTimeoutRef.current)
+      recordingTimeoutRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    voiceModeRef.current = voiceMode
+  }, [voiceMode])
 
   // 初始化 ASR 提供商
   const getASRProvider = useCallback((): ASRProvider => {
@@ -240,6 +273,12 @@ export function useVoiceController() {
           throw new Error('OpenAI API Key 未配置')
         }
         asrProviderRef.current = new OpenAIASRProvider(settings.asrConfig.openai)
+        break
+      case 'aliyun':
+        if (!settings.asrConfig.aliyun?.apiKey) {
+          throw new Error('阿里云 API Key 未配置')
+        }
+        asrProviderRef.current = new AliyunASRProvider(settings.asrConfig.aliyun)
         break
       case 'azure':
         if (!settings.asrConfig.azure) {
@@ -298,6 +337,7 @@ export function useVoiceController() {
   // 开始录音
   const startRecording = useCallback(async () => {
     try {
+      clearRecordingTimeout()
       setError(null)
       setVoiceMode('listening')
       setPanelVisible(true)
@@ -318,7 +358,7 @@ export function useVoiceController() {
       })
 
       // 自动停止录音（最大时长）
-      setTimeout(() => {
+      recordingTimeoutRef.current = setTimeout(() => {
         if (recorderRef.current) {
           stopRecording()
         }
@@ -339,6 +379,7 @@ export function useVoiceController() {
     setPanelVisible,
     setIsRecording,
     setAudioLevel,
+    clearRecordingTimeout,
   ])
 
   // 停止录音并识别
@@ -346,6 +387,7 @@ export function useVoiceController() {
     if (!recorderRef.current) return
 
     try {
+      clearRecordingTimeout()
       setIsRecording(false)
       setVoiceMode('processing')
 
@@ -361,7 +403,8 @@ export function useVoiceController() {
 
       // 将识别结果发送到 angrymiao 对话
       if (text) {
-        const sessionId = await findOrCreateVoiceSession(settings.keyboardShortcuts)
+        const session = await ensureAngrymiaoSession({ keyboardShortcuts: settings.keyboardShortcuts, purgeOthers: true })
+        const sessionId = session.id
         const msg = createMessage('user', text)
         await submitNewUserMessage(sessionId, {
           newUserMsg: msg,
@@ -435,7 +478,7 @@ export function useVoiceController() {
       setVoiceMode('inactive')
       return null
     }
-  }, [getASRProvider, getTTSProvider, setIsRecording, setIsSpeaking, setSpeakingText, setVoiceMode, setTranscript, setError, settings.autoPlayResponse])
+  }, [getASRProvider, getTTSProvider, setIsRecording, setIsSpeaking, setSpeakingText, setVoiceMode, setTranscript, setError, settings.autoPlayResponse, clearRecordingTimeout])
 
   // 播放语音
   const speak = useCallback(
@@ -487,34 +530,35 @@ export function useVoiceController() {
     setVoiceMode('inactive')
   }, [setIsSpeaking, setSpeakingText, setVoiceMode])
 
+  const activateVoiceInput = useCallback(async () => {
+    await ensureSystemControlMCP(settings.keyboardDriverPath)
+    try {
+      const granted = await window.electronAPI?.invoke('ensureAccessibilityPermission')
+      if (!granted) {
+        console.warn('Accessibility permission not granted, system control may not work')
+      }
+    } catch (e) {
+      console.error('Failed to check accessibility permission:', e)
+    }
+    try {
+      const session = await ensureAngrymiaoSession({ keyboardShortcuts: settings.keyboardShortcuts, purgeOthers: true })
+      switchCurrentSession(session.id)
+    } catch (e) {
+      console.error('Failed to switch to voice session:', e)
+    }
+    await startRecording()
+  }, [settings.keyboardDriverPath, settings.keyboardShortcuts, startRecording])
+
   // 切换语音模式
   const toggleVoice = useCallback(async () => {
     if (voiceMode === 'inactive') {
-      // 确保 system-control-mcp 已启动
-      await ensureSystemControlMCP(settings.keyboardDriverPath)
-      // macOS: 检查并请求辅助功能权限
-      try {
-        const granted = await window.electronAPI?.invoke('ensureAccessibilityPermission')
-        if (!granted) {
-          console.warn('Accessibility permission not granted, system control may not work')
-        }
-      } catch (e) {
-        console.error('Failed to check accessibility permission:', e)
-      }
-      // 自动跳转到 angrymiao 对话
-      try {
-        const sessionId = await findOrCreateVoiceSession(settings.keyboardShortcuts)
-        switchCurrentSession(sessionId)
-      } catch (e) {
-        console.error('Failed to switch to voice session:', e)
-      }
-      startRecording()
+      await activateVoiceInput()
     } else if (voiceMode === 'listening' && isRecording) {
-      stopRecording()
+      await stopRecording()
     } else if (voiceMode === 'speaking' && isSpeaking) {
       stopSpeaking()
     }
-  }, [voiceMode, isRecording, isSpeaking, startRecording, stopRecording, stopSpeaking, settings.keyboardDriverPath])
+  }, [voiceMode, isRecording, isSpeaking, activateVoiceInput, stopRecording, stopSpeaking])
 
   // 监听快捷键事件
   useEffect(() => {
@@ -526,18 +570,93 @@ export function useVoiceController() {
     console.log('Setting up voice toggle listener')
 
     const handleVoiceToggle = () => {
+      if (settings.triggerMode !== 'toggle') {
+        return
+      }
       console.log('Voice toggle event received!')
-      toggleVoice()
+      void (async () => {
+        if (voiceModeRef.current === 'inactive') {
+          await activateVoiceInput()
+        } else if (voiceModeRef.current === 'listening' && recorderRef.current) {
+          await stopRecording()
+        } else if (voiceModeRef.current === 'speaking' && isSpeakingRef.current) {
+          stopSpeaking()
+        }
+      })()
     }
 
     // 监听来自主进程的语音切换事件
     const cleanup = window.electronAPI?.onVoiceToggle?.(handleVoiceToggle)
+
+    const handleHoldShortcutKeyDown = (event: KeyboardEvent) => {
+      if (settings.triggerMode !== 'hold' || event.repeat || !matchesShortcutEvent(event, settings.shortcuts.toggleVoice)) {
+        return
+      }
+
+      event.preventDefault()
+      if (holdShortcutActiveRef.current || holdActivationPendingRef.current) {
+        return
+      }
+
+      holdShortcutActiveRef.current = true
+      holdActivationPendingRef.current = true
+
+      void (async () => {
+        try {
+          if (voiceModeRef.current === 'inactive') {
+            await activateVoiceInput()
+            if (!holdShortcutActiveRef.current && recorderRef.current) {
+              await stopRecording()
+            }
+          } else if (voiceModeRef.current === 'speaking' && isSpeakingRef.current) {
+            stopSpeaking()
+          }
+        } finally {
+          holdActivationPendingRef.current = false
+        }
+      })()
+    }
+
+    const handleHoldShortcutKeyUp = (event: KeyboardEvent) => {
+      if (settings.triggerMode !== 'hold' || !releasesShortcut(event, settings.shortcuts.toggleVoice)) {
+        return
+      }
+
+      if (!holdShortcutActiveRef.current && !holdActivationPendingRef.current) {
+        return
+      }
+
+      holdShortcutActiveRef.current = false
+      if (recorderRef.current && recorderRef.current.getState() === 'recording') {
+        void stopRecording()
+      }
+    }
+
+    const handleWindowBlur = () => {
+      if (settings.triggerMode !== 'hold') {
+        return
+      }
+      holdShortcutActiveRef.current = false
+      if (recorderRef.current && recorderRef.current.getState() === 'recording') {
+        void stopRecording()
+      }
+    }
+
+    window.addEventListener('keydown', handleHoldShortcutKeyDown)
+    window.addEventListener('keyup', handleHoldShortcutKeyUp)
+    window.addEventListener('blur', handleWindowBlur)
 
     console.log('Voice toggle listener registered, cleanup:', !!cleanup)
 
     return () => {
       console.log('Cleaning up voice toggle listener')
       cleanup?.()
+      window.removeEventListener('keydown', handleHoldShortcutKeyDown)
+      window.removeEventListener('keyup', handleHoldShortcutKeyUp)
+      window.removeEventListener('blur', handleWindowBlur)
+      holdShortcutActiveRef.current = false
+      holdActivationPendingRef.current = false
+      clearRecordingTimeout()
       // 清理资源 - 只在 recorder 存在时才调用 stop
       if (recorderRef.current && recorderRef.current.getState() !== 'inactive') {
         recorderRef.current.stop().catch((err) => {
@@ -548,7 +667,7 @@ export function useVoiceController() {
         ttsProviderRef.current.stop()
       }
     }
-  }, [settings.enabled, toggleVoice])
+  }, [settings.enabled, settings.triggerMode, settings.shortcuts.toggleVoice, activateVoiceInput, stopRecording, stopSpeaking, clearRecordingTimeout])
 
   return {
     voiceMode,

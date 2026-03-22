@@ -24,7 +24,9 @@ import {
   type StreamTextResult,
 } from '../../../shared/types'
 import { mcpController } from '../mcp/controller'
-import { convertToModelMessages, injectModelSystemPrompt } from './message-utils'
+import { resolveAgentSkillPrompt } from '../agent-skills'
+import * as chatStore from '@/stores/chatStore'
+import { convertToModelMessages, injectModelSystemPrompt, injectPrompt } from './message-utils'
 import { imageOCR } from './preprocess'
 import {
   combinedSearchByPromptEngineering,
@@ -175,12 +177,22 @@ export async function streamText(
     toolSetInstructions += websearchToolSet.description
   }
 
+  let skillPrompt = ''
+  if (sessionId) {
+    const session = await chatStore.getSession(sessionId)
+    skillPrompt = await resolveAgentSkillPrompt(session?.agentSkill)
+  }
+  const injectionRole = model.isSupportSystemMessage() ? 'system' : 'user'
+  if (skillPrompt) {
+    params.messages = injectPrompt(params.messages, `${skillPrompt}\n\n`, injectionRole)
+  }
+
   params.messages = injectModelSystemPrompt(
     model.modelId,
     params.messages,
     // 在系统提示中添加知识库名称，方便模型理解
     toolSetInstructions,
-    model.isSupportSystemMessage() ? 'system' : 'user'
+    injectionRole
   )
 
   if (!model.isSupportSystemMessage()) {

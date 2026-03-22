@@ -36,6 +36,7 @@ export function useVoiceSettings() {
   // Return default settings if voice is undefined
   const defaultSettings: VoiceSettings = {
     enabled: false,
+    triggerMode: 'toggle',
     asrProvider: 'whisper-local',
     ttsProvider: 'browser',
     asrConfig: {},

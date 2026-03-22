@@ -759,6 +759,9 @@ ipcMain.handle('delStoreValue', (event, key) => {
 ipcMain.handle('getAllStoreValues', (event) => {
   return JSON.stringify(store.store)
 })
+ipcMain.handle('getAllStoreKeys', (event) => {
+  return Object.keys(store.store)
+})
 ipcMain.handle('setAllStoreValues', (event, dataJson) => {
   const data = JSON.parse(dataJson)
   store.store = { ...store.store, ...data }

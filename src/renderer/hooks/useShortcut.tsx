@@ -1,12 +1,11 @@
 import { getDefaultStore } from 'jotai'
 import { useEffect } from 'react'
 import { navigateToSettings } from '@/modals/Settings'
-import { router } from '@/router'
 import { uiStore } from '@/stores/uiStore'
 import { getOS } from '../packages/navigator'
 import platform from '../platform'
 import { currentSessionIdAtom } from '../stores/atoms'
-import { startNewThread, switchToIndex, switchToNext } from '../stores/sessionActions'
+import { clear as clearSession } from '../stores/sessionActions'
 import * as dom from './dom'
 import { useIsSmallScreen } from './useScreenChange'
 
@@ -53,40 +52,14 @@ export default function useShortcut() {
       return
     }
 
-    // 创建新会话 CmdOrCtrl + N
-    if (e.key === 'n' && ctrlKey && !shift) {
-      router.navigate({
-        to: '/',
-      })
-      return
-    }
-    // 创建新图片会话 CmdOrCtrl + Shift + N
-    if (e.key === 'n' && ctrlKey && shift) {
-      router.navigate({
-        to: '/image-creator',
-      })
-      return
-    }
-    // 归档当前会话的上下文。
+    // 清空当前单例语音会话。
     if (e.key === 'r' && ctrlKey) {
       e.preventDefault()
       const sid = getDefaultStore().get(currentSessionIdAtom)
       if (sid) {
-        void startNewThread(sid)
+        void clearSession(sid)
       }
       return
-    }
-
-    if (e.code === 'Tab' && ctrlKey && !shift) {
-      switchToNext()
-    }
-    if (e.code === 'Tab' && ctrlKey && shift) {
-      switchToNext(true)
-    }
-    for (let i = 1; i <= 9; i++) {
-      if (e.code === `Digit${i}` && ctrlKey) {
-        switchToIndex(i - 1)
-      }
     }
 
     if (e.key === 'k' && ctrlKey) {
