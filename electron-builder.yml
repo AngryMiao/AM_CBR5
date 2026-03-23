@@ -42,13 +42,13 @@ dmg:
 
 win:
   target:
-    - target: nsis
+    - target: portable
       arch:
         - x64
-        - arm64
   verifyUpdateCodeSignature: false
-  artifactName: ${productName}-${version}-Setup.${ext}
-  sign: ./custom_win_sign.js
+  # 避免拉取 winCodeSign/rcedit（部分环境解压 7z 时无法创建符号链接导致失败）
+  signAndEditExecutable: false
+  artifactName: ${productName}-${version}-portable.${ext}
   signingHashAlgorithms:
     - sha256
 

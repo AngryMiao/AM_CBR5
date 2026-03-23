@@ -7,10 +7,25 @@ const releaseAppDir = path.join(rootDir, 'release', 'app')
 const releaseAppNodeModulesDir = path.join(releaseAppDir, 'node_modules')
 const srcNodeModulesPath = path.join(rootDir, 'src', 'node_modules')
 
-const installResult = spawnSync('npm', ['ci', '--omit=dev', '--ignore-scripts'], {
+const installEnv = { ...process.env, CI: process.env.CI || 'true' }
+const shell = process.platform === 'win32'
+
+let installResult = spawnSync('npm', ['ci', '--omit=dev', '--ignore-scripts'], {
   cwd: releaseAppDir,
   stdio: 'inherit',
+  env: installEnv,
+  shell,
 })
+
+if (installResult.error?.code === 'ENOENT') {
+  console.warn('[prepare-release-app-deps] npm not found, using pnpm install --prod')
+  installResult = spawnSync('pnpm', ['install', '--prod', '--ignore-scripts'], {
+    cwd: releaseAppDir,
+    stdio: 'inherit',
+    env: installEnv,
+    shell,
+  })
+}
 
 if (installResult.error) {
   console.error(`[prepare-release-app-deps] Failed to install release/app dependencies: ${installResult.error.message}`)

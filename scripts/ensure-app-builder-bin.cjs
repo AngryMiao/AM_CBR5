@@ -18,7 +18,13 @@ function recreateSymlink(linkPath, target) {
   } catch {
     // Missing path is fine.
   }
-  fs.symlinkSync(target, linkPath)
+  const absTarget = path.resolve(target)
+  // Windows: directory junctions work without elevated privileges (unlike symlinks).
+  if (process.platform === 'win32') {
+    fs.symlinkSync(absTarget, linkPath, 'junction')
+  } else {
+    fs.symlinkSync(absTarget, linkPath)
+  }
 }
 
 if (!fs.existsSync(appBuilderBinDir)) {
