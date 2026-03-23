@@ -18,7 +18,7 @@
 
 ## System Actions
 
-- `锁屏` -> call `mcp__system-control__system_lock_screen`
+- `锁屏` -> call `mcp__system-control__system_lock_screen` and on macOS expect the runtime to prefer `ScreenSaverEngine.app`
 - `睡眠` -> call `mcp__system-control__system_sleep`
 - `重启电脑` -> ask for confirmation, then call `mcp__system-control__system_restart`
 - `关机` -> ask for confirmation, then call `mcp__system-control__system_shutdown`

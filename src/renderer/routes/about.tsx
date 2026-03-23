@@ -1,4 +1,4 @@
-import { Anchor, Box, Button, Container, Divider, Flex, Image, Popover, Stack, Text, Title } from '@mantine/core'
+import { Anchor, Box, Container, Divider, Flex, Image, Popover, Stack, Text, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import {
   IconAlertTriangle,
@@ -23,7 +23,6 @@ import useVersion from '@/hooks/useVersion'
 import platform from '@/platform'
 import iconPNG from '@/static/icon.png'
 import IMG_WECHAT_QRCODE from '@/static/wechat_qrcode.png'
-import { useLanguage } from '@/stores/settingsStore'
 
 export const Route = createFileRoute('/about')({
   component: RouteComponent,
@@ -32,7 +31,6 @@ export const Route = createFileRoute('/about')({
 function RouteComponent() {
   const { t, i18n: _i18n } = useTranslation()
   const version = useVersion()
-  const language = useLanguage()
   const isSmallScreen = useIsSmallScreen()
 
   return (
@@ -46,16 +44,6 @@ function RouteComponent() {
                 <Title order={5} lh={1.5} lineClamp={1} title={`Chatbox v${version.version}`}>
                   Chatbox {/\d/.test(version.version) ? `(v${version.version})` : ''}
                 </Title>
-
-                <Button
-                  size="xs"
-                  variant="default"
-                  radius="xl"
-                  className="flex-shrink-0"
-                  onClick={() => platform.openLink(`https://chatboxai.app/redirect_app/check_update/${language}`)}
-                >
-                  {t('Check Update')}
-                </Button>
               </Flex>
               <Text>{t('about-slogan')}</Text>
               <Text c="chatbox-tertiary">{t('about-introduction')}</Text>

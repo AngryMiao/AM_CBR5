@@ -53,9 +53,6 @@ export default class DesktopPlatform implements Platform {
   public onWindowFocused(callback: () => void): () => void {
     return this.ipc.onWindowFocused(callback)
   }
-  public onUpdateDownloaded(callback: () => void): () => void {
-    return this.ipc.onUpdateDownloaded(callback)
-  }
   public onNavigate(callback: (path: string) => void): () => void {
     return window.electronAPI.onNavigate(callback)
   }
@@ -252,10 +249,6 @@ export default class DesktopPlatform implements Platform {
 
   public async setFullscreen(enabled: boolean) {
     return this.ipc.invoke('setFullscreen', enabled)
-  }
-
-  public async installUpdate() {
-    return this.ipc.invoke('install-update')
   }
 
   public async switchTheme(theme: 'dark' | 'light') {

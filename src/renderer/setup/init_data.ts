@@ -2,9 +2,7 @@ import storage from '@/storage'
 import { StorageKey } from '@/storage/StoreStorage'
 import { ensureAngrymiaoSession } from '@/packages/voice/angrymiao-session'
 import { ModelProviderEnum } from '@shared/types'
-
-// 内置 DeepSeek API Key（仅 demo 用途）
-const BUILT_IN_DEEPSEEK_API_KEY = 'sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+import { BUILT_IN_DEEPSEEK_API_KEY, defaultVoiceSettings } from '@shared/defaults'
 
 export async function initData() {
   await initDefaultSettings()
@@ -24,6 +22,7 @@ async function initDefaultSettings() {
         apiKey: BUILT_IN_DEEPSEEK_API_KEY,
       },
     },
+    voice: defaultVoiceSettings(),
   }
   await storage.setItemNow(StorageKey.Settings, defaultSettings)
 

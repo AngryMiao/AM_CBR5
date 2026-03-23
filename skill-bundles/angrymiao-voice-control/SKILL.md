@@ -24,6 +24,7 @@ description: Control the user's computer through voice-command-style text using 
   Use `mcp__system-control__open_browser` for `打开浏览器`、`打开网页`、`搜索`、`上网`.
 - System actions:
   Use the matching system-control tool for shutdown, restart, lock screen, or sleep. Require confirmation for shutdown and restart.
+  On macOS, the bundled runtime should prefer `ScreenSaverEngine.app` for lock screen and only fall back to the `Control+Command+Q` shortcut when needed.
 
 ## Default Shortcut Mapping
 
@@ -73,6 +74,7 @@ For `Windows`:
 - Keep confirmations short.
 - If a tool call already returns enough signal, avoid extra text.
 - On failure, explain the concrete reason briefly.
+- If macOS lock-screen fails, mention whether it looks like a missing system path or missing Accessibility / Automation permission.
 
 ## Additional Resources
 

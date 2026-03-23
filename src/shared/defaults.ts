@@ -1,6 +1,43 @@
 import { v4 as uuidv4 } from 'uuid'
 import { type Config, ModelProviderEnum, type SessionSettings, type Settings, Theme } from './types'
 
+export const BUILT_IN_DEEPSEEK_API_KEY = 'sk-8bf09678b5804183b7f800f04e1421c8'
+export const BUILT_IN_ALIYUN_ASR_API_KEY = 'sk-02e2c27765c248a092da9760070c8151'
+export const BUILT_IN_ALIYUN_ASR_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+
+export function defaultVoiceSettings(): NonNullable<Settings['voice']> {
+  return {
+    enabled: true,
+    triggerMode: 'toggle',
+    asrProvider: 'aliyun',
+    ttsProvider: 'browser',
+    asrConfig: {
+      openai: {
+        apiKey: BUILT_IN_ALIYUN_ASR_API_KEY,
+        model: 'whisper-1',
+        baseURL: BUILT_IN_ALIYUN_ASR_BASE_URL,
+      },
+      aliyun: {
+        apiKey: BUILT_IN_ALIYUN_ASR_API_KEY,
+        model: 'qwen3-asr-flash',
+        baseURL: BUILT_IN_ALIYUN_ASR_BASE_URL,
+        enableITN: true,
+      },
+    },
+    ttsConfig: {},
+    shortcuts: {
+      toggleVoice: 'Ctrl+Shift+V',
+    },
+    keyboardShortcuts: [],
+    autoStopRecording: true,
+    silenceThreshold: 0.01,
+    silenceDuration: 1500,
+    maxRecordingDuration: 60000,
+    autoPlayResponse: true,
+    showTranscript: true,
+  }
+}
+
 export function settings(): Settings {
   return {
     // aiProvider: ModelProviderEnum.OpenAI,
@@ -67,6 +104,16 @@ export function settings(): Settings {
 
     // customProviders: [],
 
+    providers: {
+      [ModelProviderEnum.DeepSeek]: {
+        apiKey: BUILT_IN_DEEPSEEK_API_KEY,
+      },
+    },
+    defaultChatModel: {
+      provider: ModelProviderEnum.DeepSeek,
+      model: 'deepseek-chat',
+    },
+
     showWordCount: false,
     showTokenCount: false,
     showTokenUsed: true,
@@ -98,8 +145,6 @@ export function settings(): Settings {
     compactionThreshold: 0.6,
 
     autoLaunch: false,
-    autoUpdate: true,
-    betaUpdate: false,
 
     shortcuts: {
       quickToggle: 'Alt+`', // 快速切换窗口显隐的快捷键
@@ -138,6 +183,7 @@ export function settings(): Settings {
       servers: [],
       enabledBuiltinServers: [],
     },
+    voice: defaultVoiceSettings(),
   }
 }
 
@@ -151,15 +197,15 @@ export function getDefaultPrompt() {
 
 export function chatSessionSettings(): SessionSettings {
   return {
-    provider: ModelProviderEnum.ChatboxAI,
-    modelId: 'chatboxai-4',
+    provider: ModelProviderEnum.DeepSeek,
+    modelId: 'deepseek-chat',
     maxContextMessageCount: Number.MAX_SAFE_INTEGER,
   }
 }
 
 export function pictureSessionSettings(): SessionSettings {
   return {
-    provider: ModelProviderEnum.ChatboxAI,
+    provider: ModelProviderEnum.OpenAI,
     modelId: 'DALL-E-3',
     imageGenerateNum: 1,
     dalleStyle: 'vivid',

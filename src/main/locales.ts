@@ -31,26 +31,6 @@ const translations = {
     en: 'Exit',
     zh: '退出',
   },
-  New_Version: {
-    en: 'New Version',
-    zh: '新版本',
-  },
-  Restart: {
-    en: 'Restart',
-    zh: '重启',
-  },
-  Later: {
-    en: 'Later',
-    zh: '稍后',
-  },
-  App_Update: {
-    en: 'App Update',
-    zh: '应用更新',
-  },
-  New_Version_Downloaded: {
-    en: 'New version has been downloaded, restart the application to apply the update.',
-    zh: '新版本已经下载好，重启应用以应用更新。',
-  },
   Copy: {
     en: 'Copy',
     zh: '复制',

@@ -173,8 +173,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
       if (sessionValue !== undefined) {
         return sessionValue
       }
-      // Default: true for ChatboxAI, false for others
-      return model?.provider === ModelProviderEnum.ChatboxAI
+      return false
     }, [sessionWebBrowsingMap, currentSessionId, model?.provider])
 
     // this is used for keyboard shortcut. if we don't provide this, kbd wont know what to set when it's a new session(it doesnt have provider info)

@@ -9,6 +9,13 @@ The bundled `system-control` runtime needs these permissions for reliable typing
 
 Without them, `type_text` and some keyboard actions may fail. Chatbox should prompt the user to grant these permissions before using the skill.
 
+For `system_lock_screen` on macOS:
+
+- Preferred path: launch `/System/Library/CoreServices/ScreenSaverEngine.app`
+- Fallbacks: older `CGSession -suspend` path, then simulated `Control+Command+Q`
+- The shortcut fallback can fail if Accessibility or Automation permission is missing
+- Newer macOS versions may no longer ship `CGSession` at the historical `Menu Extras/User.menu/...` path
+
 ## Windows
 
 The bundled `system-control` runtime may require:

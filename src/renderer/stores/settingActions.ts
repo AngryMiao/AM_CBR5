@@ -6,11 +6,6 @@ import { settingsStore } from './settingsStore'
 export function needEditSetting() {
   const settings = settingsStore.getState()
 
-  // 激活了chatbox ai
-  if (settings.licenseKey) {
-    return false
-  }
-
   if (settings.providers && Object.keys(settings.providers).length > 0) {
     const providers = settings.providers
     const keys = Object.keys(settings.providers)
@@ -43,19 +38,19 @@ export function getProxy() {
 }
 
 export function getLicenseKey() {
-  return settingsStore.getState().licenseKey
+  return undefined
 }
 
 export function getLicenseDetail() {
-  return settingsStore.getState().licenseDetail
+  return undefined
 }
 
 export function isPaid() {
-  return !!getLicenseKey()
+  return false
 }
 
 export function isPro() {
-  return !!getLicenseKey() && !getLicenseDetail()?.name.toLowerCase().includes('lite')
+  return false
 }
 
 export function getRemoteConfig() {

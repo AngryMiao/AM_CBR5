@@ -28,8 +28,7 @@ function getSessionWebBrowsing(sessionId: string, provider: string | undefined):
   if (sessionValue !== undefined) {
     return sessionValue
   }
-  // Default: true for ChatboxAI, false for others
-  return provider === ModelProviderEnum.ChatboxAI
+  return false
 }
 
 /**
@@ -143,7 +142,6 @@ export async function submitNewUserMessage(
 
   const globalSettings = settingsStore.getState().getSettings()
   const isPro = settingActions.isPro()
-  const remoteConfig = settingActions.getRemoteConfig()
 
   // 根据需要，插入空白的回复消息
   let newAssistantMsg = createMessage('assistant', '')
@@ -176,11 +174,7 @@ export async function submitNewUserMessage(
     const dependencies = await createModelDependencies()
     const model = getModel(settings, globalSettings, { uuid: '' }, dependencies)
     if (webBrowsing && platform.type === 'web' && !model.isSupportToolUse()) {
-      if (remoteConfig.setting_chatboxai_first) {
-        throw ChatboxAIAPIError.fromCodeName('model_not_support_web_browsing', 'model_not_support_web_browsing')
-      } else {
-        throw ChatboxAIAPIError.fromCodeName('model_not_support_web_browsing_2', 'model_not_support_web_browsing_2')
-      }
+      throw ChatboxAIAPIError.fromCodeName('model_not_support_web_browsing_2', 'model_not_support_web_browsing_2')
     }
 
     // Files and links are now preprocessed in InputBox with storage keys, so no need to process them here

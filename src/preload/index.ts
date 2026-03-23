@@ -42,10 +42,6 @@ const electronHandler: ElectronIPC = {
     ipcRenderer.on('window-show', callback)
     return () => ipcRenderer.off('window-show', callback)
   },
-  onUpdateDownloaded: (callback: () => void) => {
-    ipcRenderer.on('update-downloaded', callback)
-    return () => ipcRenderer.off('update-downloaded', callback)
-  },
   addMcpStdioTransportEventListener: (transportId: string, event: string, callback?: (...args: any[]) => void) => {
     ipcRenderer.on(`mcp:stdio-transport:${transportId}:${event}`, (_event, ...args) => {
       callback?.(...args)

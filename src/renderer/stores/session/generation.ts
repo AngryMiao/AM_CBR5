@@ -46,8 +46,7 @@ export function getSessionWebBrowsing(sessionId: string, provider: string | unde
   if (sessionValue !== undefined) {
     return sessionValue
   }
-  // Default: true for ChatboxAI, false for others
-  return provider === ModelProviderEnum.ChatboxAI
+  return false
 }
 
 /**

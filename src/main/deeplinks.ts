@@ -25,6 +25,6 @@ export function handleDeepLink(mainWindow: BrowserWindow, link: string) {
   //   const ticketId = url.searchParams.get('ticket_id') || ''
   //   const status = url.searchParams.get('status') || ''
   //   log.info('✅ Auth callback received:', { ticketId, status })
-  //   mainWindow.webContents.send('navigate-to', `/settings/provider/chatbox-ai?ticket_id=${ticketId}&status=${status}`)
+  //   mainWindow.webContents.send('navigate-to', `/settings/provider?ticket_id=${ticketId}&status=${status}`)
   // }
 }

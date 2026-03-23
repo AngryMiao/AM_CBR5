@@ -1,8 +1,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
-import type { MCPServerConfig, Settings, SkillBundleManifest, SkillBundleRuntime } from '@shared/types'
-import { SkillBundleManifestSchema } from '@shared/types'
+import type { MCPServerConfig } from '../shared/types/mcp'
+import type { Settings } from '../shared/types/settings'
+import { SkillBundleManifestSchema, type SkillBundleManifest, type SkillBundleRuntime } from '../shared/types/skill-bundle'
 
 function getSkillBundlesBaseDir() {
   return app.isPackaged
@@ -40,7 +41,7 @@ function getValueByPath(source: unknown, valuePath?: string) {
   }, source)
 }
 
-function resolveRuntimeEnv(runtime: SkillBundleRuntime, settings?: Partial<Settings>) {
+function resolveRuntimeEnv(runtime: SkillBundleRuntime, bundleDir: string, settings?: Partial<Settings>) {
   const env: Record<string, string> = {}
 
   for (const binding of runtime.env) {
@@ -50,6 +51,13 @@ function resolveRuntimeEnv(runtime: SkillBundleRuntime, settings?: Partial<Setti
     } else if (binding.source === 'settings-path') {
       const resolved = getValueByPath(settings, binding.settingPath)
       value = typeof resolved === 'string' ? resolved : ''
+    }
+
+    if (!value && binding.defaultBundlePath) {
+      const resolvedPath = resolvePathInside(bundleDir, binding.defaultBundlePath)
+      if (fs.existsSync(resolvedPath)) {
+        value = resolvedPath
+      }
     }
 
     if (!value) {
@@ -110,8 +118,9 @@ export function resolveSkillBundleRuntimeServerConfig(
     return null
   }
 
-  const entryPath = resolvePathInside(getBundleDir(bundleId), runtime.entry)
-  const env = resolveRuntimeEnv(runtime, settings)
+  const bundleDir = getBundleDir(bundleId)
+  const entryPath = resolvePathInside(bundleDir, runtime.entry)
+  const env = resolveRuntimeEnv(runtime, bundleDir, settings)
   const command = app.isPackaged ? process.execPath : 'node'
   const runtimeEnv = app.isPackaged ? { ...(env || {}), ELECTRON_RUN_AS_NODE: '1' } : env
 

@@ -2,10 +2,8 @@ import { SystemProviders } from '@shared/defaults'
 import { ModelProviderEnum, type ProviderInfo } from '@shared/types'
 import { useCallback, useMemo } from 'react'
 import { useSettingsStore } from '@/stores/settingsStore'
-import useChatboxAIModels from './useChatboxAIModels'
 
 export const useProviders = () => {
-  const { chatboxAIModels } = useChatboxAIModels()
   const { setSettings, ...settings } = useSettingsStore((state) => state)
   const providerSettingsMap = settings.providers
 
@@ -18,13 +16,7 @@ export const useProviders = () => {
       allProviderBaseInfos
         .map((p) => {
           const providerSettings = providerSettingsMap?.[p.id]
-          if (p.id === ModelProviderEnum.ChatboxAI && settings.licenseKey) {
-            return {
-              ...p,
-              ...providerSettings,
-              models: chatboxAIModels,
-            }
-          } else if (
+          if (
             (!p.isCustom && providerSettings?.apiKey) ||
             ((p.isCustom || p.id === ModelProviderEnum.Ollama || p.id === ModelProviderEnum.LMStudio) &&
               providerSettings?.models?.length)
@@ -40,7 +32,7 @@ export const useProviders = () => {
           }
         })
         .filter((p) => !!p),
-    [providerSettingsMap, allProviderBaseInfos, chatboxAIModels, settings.licenseKey]
+    [providerSettingsMap, allProviderBaseInfos]
   )
 
   const favoritedModels = useMemo(

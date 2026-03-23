@@ -2,7 +2,14 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useVoiceSettings } from '@/hooks/useVoiceSettings'
-import type { ASRProvider, TTSProvider, WhisperModelSize, KeyboardShortcut, VoiceTriggerMode } from '@shared/types/voice'
+import {
+  getDefaultFunASRLaunchCommand,
+  type ASRProvider,
+  type TTSProvider,
+  type WhisperModelSize,
+  type KeyboardShortcut,
+  type VoiceTriggerMode,
+} from '@shared/types/voice'
 import {
   WhisperLocalProvider,
   FunASRLocalProvider,
@@ -39,6 +46,7 @@ export const Route = createFileRoute('/settings/voice')({
 export function RouteComponent() {
   const { t } = useTranslation()
   const { settings, setSettings } = useVoiceSettings()
+  const defaultFunASRLaunchCommand = getDefaultFunASRLaunchCommand(platform.getPlatform())
   const [testingASR, setTestingASR] = useState(false)
   const [testingTTS, setTestingTTS] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -414,7 +422,7 @@ export function RouteComponent() {
               <label className="text-sm font-medium">{t('启动命令')}</label>
               <input
                 type="text"
-                value={settings.asrConfig.funasrLocal?.launchCommand || 'python3'}
+                value={settings.asrConfig.funasrLocal?.launchCommand || defaultFunASRLaunchCommand}
                 onChange={(e) =>
                   setSettings({
                     ...settings,
@@ -427,7 +435,7 @@ export function RouteComponent() {
                     },
                   })
                 }
-                placeholder="python3"
+                placeholder={defaultFunASRLaunchCommand}
                 className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
               />
             </div>
@@ -1263,7 +1271,7 @@ export function RouteComponent() {
             type="text"
             value={settings.keyboardDriverPath || ''}
             readOnly
-            placeholder={t('选择 driver.exe 文件') || ''}
+            placeholder={t('使用内置驱动（无需配置）') || ''}
             className="flex-1 p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700"
           />
           <button
@@ -1272,7 +1280,20 @@ export function RouteComponent() {
           >
             {t('浏览...')}
           </button>
+          {settings.keyboardDriverPath && (
+            <button
+              onClick={() => setSettings((prev) => ({ ...prev, keyboardDriverPath: '' }))}
+              className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+            >
+              {t('重置')}
+            </button>
+          )}
         </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          {settings.keyboardDriverPath
+            ? t('当前使用自定义驱动路径，点击重置可恢复内置驱动')
+            : t('已内置 AIKeyBoardDriver.exe，无需手动配置。如需使用自定义版本可点击浏览选择')}
+        </p>
       </div>
 
       {/* 键盘快捷键映射 */}

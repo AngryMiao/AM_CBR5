@@ -641,7 +641,7 @@ export function ChatConfig({
         />
       </Flex>
 
-      {settings?.provider !== ModelProviderEnum.ChatboxAI && (
+      {settings?.provider && (
         <Stack gap="xs" py="xs">
           <Flex align="center" justify="space-between" gap="xs">
             <Text size="sm" fw="600">

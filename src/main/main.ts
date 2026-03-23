@@ -24,15 +24,14 @@ import {
 } from 'electron'
 import electronDebug from 'electron-debug'
 import log from 'electron-log/main'
-import { autoUpdater } from 'electron-updater'
 import os from 'os'
 import path from 'path'
 import { spawn, type ChildProcess } from 'child_process'
 // @ts-expect-error - source-map-support doesn't have type definitions
 import * as sourceMapSupport from 'source-map-support'
 import type { ShortcutSetting } from 'src/shared/types'
+import { getDefaultFunASRLaunchCommand } from 'src/shared/types/voice'
 import * as analystic from './analystic-node'
-import { AppUpdater } from './app-updater'
 import * as autoLauncher from './autoLauncher'
 import { handleDeepLink } from './deeplinks'
 import { parseFile } from './file-parser'
@@ -117,12 +116,13 @@ function getFunASRLaunchConfig(): FunASRLaunchConfig {
   const settings = getSettings()
   const voiceSettings = settings.voice
   const funasrConfig = (voiceSettings?.asrConfig as any)?.funasrLocal || {}
+  const defaultLaunchCommand = getDefaultFunASRLaunchCommand(process.platform)
   return {
     enabled: !!voiceSettings?.enabled,
     asrProvider: voiceSettings?.asrProvider,
     baseURL: String(funasrConfig.baseURL || 'http://127.0.0.1:10095'),
     autoStart: funasrConfig.autoStart !== false,
-    launchCommand: String(funasrConfig.launchCommand || 'python3'),
+    launchCommand: String(funasrConfig.launchCommand || defaultLaunchCommand),
     launchArgs: String(funasrConfig.launchArgs || '-m funasr_server --port 10095'),
     launchCwd: funasrConfig.launchCwd ? String(funasrConfig.launchCwd) : undefined,
   }
@@ -364,6 +364,7 @@ function unregisterShortcuts() {
 
 function createTray() {
   const locale = new Locale()
+  const quitAccelerator = process.platform === 'darwin' ? 'Command+Q' : 'Ctrl+Q'
   let iconPath = getAssetPath('icon.png')
   if (process.platform === 'darwin') {
     // 生成 iconTemplate.png 的命令
@@ -384,7 +385,7 @@ function createTray() {
     {
       label: locale.t('Exit'),
       click: () => app.quit(),
-      accelerator: 'Command+Q',
+      accelerator: quitAccelerator,
     },
   ])
   tray.setToolTip('Chatbox')
@@ -660,9 +661,6 @@ if (!gotTheLock) {
       await knowledgeBaseInitPromise
       await createWindow()
       ensureTray()
-      // Remove this if your app does not use auto updates
-      // eslint-disable-next-line
-      new AppUpdater(() => mainWindow?.webContents.send('update-downloaded', {}))
 
       // 处理启动时的 Deep Link (Windows/Linux)
       // macOS 会通过 open-url 事件处理，不需要在这里处理
@@ -906,6 +904,14 @@ ipcMain.handle('dialog:openDirectory', async () => {
   })
 })
 
+ipcMain.handle('dialog:openFile', async (_event, options) => {
+  const { dialog } = require('electron')
+  return await dialog.showOpenDialog(mainWindow!, {
+    filters: options?.filters,
+    properties: options?.properties || ['openFile'],
+  })
+})
+
 ipcMain.handle('ensureProxy', (event, json) => {
   const config: { proxy?: string } = JSON.parse(json)
   proxy.ensure(config.proxy)
@@ -1025,10 +1031,6 @@ ipcMain.handle('setFullscreen', (event, enable: boolean) => {
     }
     mainWindow.hide()
   }
-})
-
-ipcMain.handle('install-update', () => {
-  autoUpdater.quitAndInstall()
 })
 
 ipcMain.handle('switch-theme', (event, theme: 'dark' | 'light') => {

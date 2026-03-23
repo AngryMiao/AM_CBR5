@@ -131,16 +131,16 @@ export const SessionSettingsSchema = GlobalSessionSettingsSchema.extend({
 })
 
 const UnifiedTokenUsageDetailSchema = z.object({
-  type: z.string(), // "plan" | "trial" | ... (more types in future)
+  type: z.string(),
   token_usage: z.number(),
   token_limit: z.number(),
 })
 
 const ChatboxAILicenseDetailSchema = z.object({
-  type: z.enum(['chatboxai-3.5', 'chatboxai-4']).optional(),
+  type: z.string().optional(),
   name: z.string(),
   status: z.string().optional(),
-  defaultModel: z.enum(['chatboxai-3.5', 'chatboxai-4']).optional(),
+  defaultModel: z.string().optional(),
   remaining_quota_35: z.number(),
   remaining_quota_4: z.number(),
   remaining_quota_image: z.number(),
@@ -305,7 +305,7 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
     .optional()
     .catch(undefined),
 
-  // chatboxai
+  // Legacy compatibility fields retained for stored settings migration.
   licenseKey: z.string().optional(),
   licenseInstances: z.record(z.string(), z.string()).optional().catch(undefined),
   licenseDetail: ChatboxAILicenseDetailSchema.optional().catch(undefined),
@@ -370,8 +370,6 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
   compactionThreshold: z.number().min(0.4).max(0.9).default(0.6),
 
   autoLaunch: z.boolean().default(false),
-  autoUpdate: z.boolean().default(true), // 是否自动检查更新
-  betaUpdate: z.boolean().default(false), // 是否自动检查 beta 更新
 
   shortcuts: ShortcutSettingSchema,
 

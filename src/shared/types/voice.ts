@@ -1,5 +1,11 @@
 import { z } from 'zod'
 
+export function getDefaultFunASRLaunchCommand(
+  platform = typeof process !== 'undefined' ? process.platform : undefined
+) {
+  return platform === 'win32' ? 'python' : 'python3'
+}
+
 // 语音模式状态
 export const VoiceModeSchema = z.enum(['inactive', 'listening', 'processing', 'speaking'])
 export type VoiceMode = z.infer<typeof VoiceModeSchema>
@@ -28,7 +34,7 @@ export const ASRConfigSchema = z.object({
       model: z.string().default('paraformer-zh-streaming'),
       language: z.string().default('zh'),
       autoStart: z.boolean().default(true),
-      launchCommand: z.string().default('python3'),
+      launchCommand: z.string().default(getDefaultFunASRLaunchCommand()),
       launchArgs: z.string().default('-m funasr_server --port 10095'),
       launchCwd: z.string().optional(),
       healthPaths: z.array(z.string()).default(['/health', '/status']),

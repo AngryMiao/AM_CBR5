@@ -203,10 +203,6 @@ export default class TestPlatform implements Platform {
     return () => {}
   }
 
-  public onUpdateDownloaded(callback: () => void): () => void {
-    return () => {}
-  }
-
   public async openLink(url: string): Promise<void> {
     // no-op in test
   }
@@ -301,10 +297,6 @@ export default class TestPlatform implements Platform {
 
   public async setFullscreen(enabled: boolean): Promise<void> {
     // no-op
-  }
-
-  public async installUpdate(): Promise<void> {
-    throw new Error('Method not implemented in test platform.')
   }
 
   public getKnowledgeBaseController(): KnowledgeBaseController {

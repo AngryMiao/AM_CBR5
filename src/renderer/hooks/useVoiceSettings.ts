@@ -3,6 +3,7 @@ import type { VoiceSettings } from '@shared/types/voice'
 import platform from '@/platform'
 import { useEffect, useRef } from 'react'
 import { getDefaultKeyboardShortcuts } from '@shared/defaults/keyboard-shortcuts'
+import { defaultVoiceSettings } from '@shared/defaults'
 
 /**
  * Hook to access voice settings from the settings store
@@ -34,22 +35,7 @@ export function useVoiceSettings() {
   }
 
   // Return default settings if voice is undefined
-  const defaultSettings: VoiceSettings = {
-    enabled: false,
-    triggerMode: 'toggle',
-    asrProvider: 'whisper-local',
-    ttsProvider: 'browser',
-    asrConfig: {},
-    ttsConfig: {},
-    shortcuts: { toggleVoice: 'Ctrl+Shift+V' },
-    keyboardShortcuts: [],
-    autoStopRecording: true,
-    silenceThreshold: 0.01,
-    silenceDuration: 1500,
-    maxRecordingDuration: 60000,
-    autoPlayResponse: true,
-    showTranscript: true,
-  }
+  const defaultSettings: VoiceSettings = defaultVoiceSettings()
 
   const currentSettings = voiceSettings || defaultSettings
 

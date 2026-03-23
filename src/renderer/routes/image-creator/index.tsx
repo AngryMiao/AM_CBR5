@@ -26,7 +26,7 @@ import {
 import { createFileRoute } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CHATBOXAI_DEFAULT_IMAGE_MODEL, ImageModelSelect } from '@/components/ImageModelSelect'
+import { ImageModelSelect } from '@/components/ImageModelSelect'
 import Page from '@/components/layout/Page'
 import { useProviders } from '@/hooks/useProviders'
 import { useIsSmallScreen } from '@/hooks/useScreenChange'
@@ -47,7 +47,6 @@ import { lastUsedModelStore } from '@/stores/lastUsedModelStore'
 import { queryClient } from '@/stores/queryClient'
 import {
   blobToDataUrl,
-  CHATBOXAI_IMAGE_MODEL_IDS,
   GEMINI_IMAGE_MODEL_IDS,
   getRatioOptionsForModel,
   HISTORY_PANEL_WIDTH,
@@ -215,7 +214,7 @@ function ImageCreatorPage() {
   >([])
   const [showHistory, setShowHistory] = useState(true)
   const [showMobileHistory, setShowMobileHistory] = useState(false)
-  const [selectedProvider, setSelectedProvider] = useState<string>(ModelProviderEnum.ChatboxAI)
+  const [selectedProvider, setSelectedProvider] = useState<string>(ModelProviderEnum.OpenAI)
   const [selectedModel, setSelectedModel] = useState<string>('')
   const [selectedRatio, setSelectedRatio] = useState<string>('auto')
   const [showModelDrawer, setShowModelDrawer] = useState(false)
@@ -407,17 +406,6 @@ function ImageCreatorPage() {
   const imageModelGroups = useMemo(() => {
     const groups: { label: string; providerId: string; models: { modelId: string; displayName: string }[] }[] = []
 
-    const chatboxProvider = providers.find((p) => p.id === ModelProviderEnum.ChatboxAI)
-    if (chatboxProvider) {
-      const providerModels = chatboxProvider.models || chatboxProvider.defaultSettings?.models || []
-      const models = getAvailableImageModels(providerModels, CHATBOXAI_IMAGE_MODEL_IDS)
-      groups.push({
-        label: 'Chatbox AI',
-        providerId: ModelProviderEnum.ChatboxAI,
-        models: [CHATBOXAI_DEFAULT_IMAGE_MODEL, ...models],
-      })
-    }
-
     const geminiProvider = providers.find((p) => p.id === ModelProviderEnum.Gemini)
     if (geminiProvider) {
       const providerModels = geminiProvider.models || geminiProvider.defaultSettings?.models || []
@@ -463,9 +451,6 @@ function ImageCreatorPage() {
     const model = providerModels.find((m) => m.modelId === selectedModel)
     const modelName = model?.nickname || IMAGE_MODEL_FALLBACK_NAMES[selectedModel] || selectedModel
 
-    if (selectedProvider === ModelProviderEnum.ChatboxAI) {
-      return modelName
-    }
     const providerName = provider?.name || selectedProvider
     return `${providerName} - ${modelName}`
   }, [selectedProvider, selectedModel, providers])

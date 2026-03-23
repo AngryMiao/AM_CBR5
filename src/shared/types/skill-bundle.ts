@@ -14,6 +14,7 @@ export const SkillBundleRuntimeEnvBindingSchema = z.object({
   source: z.enum(['literal', 'settings-path']),
   value: z.string().optional(),
   settingPath: z.string().optional(),
+  defaultBundlePath: z.string().optional(),
   required: z.boolean().default(false),
 })
 export type SkillBundleRuntimeEnvBinding = z.infer<typeof SkillBundleRuntimeEnvBindingSchema>

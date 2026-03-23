@@ -1,15 +1,33 @@
 import { execSync, spawn, spawnSync } from 'child_process'
 import { isMacOS, isWindows } from '../utils/platform'
 
+function runWindowsPowerShell(script: string) {
+  const encodedCommand = Buffer.from(script, 'utf16le').toString('base64')
+  const result = spawnSync(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encodedCommand],
+    {
+      encoding: 'utf-8',
+      timeout: 10000,
+      windowsHide: true,
+    }
+  )
+
+  if (result.error) {
+    throw result.error
+  }
+
+  if (result.status !== 0) {
+    throw new Error((result.stderr || result.stdout || `PowerShell exited with code ${result.status}`).trim())
+  }
+}
+
 export async function typeText(text: string): Promise<{ success: boolean; message: string }> {
   try {
     if (isWindows()) {
       const escapedText = text.replace(/'/g, "''").replace(/[+^%~(){}[\]]/g, '{$&}')
-      const script = `
-        Add-Type -AssemblyName System.Windows.Forms
-        [System.Windows.Forms.SendKeys]::SendWait('${escapedText}')
-      `
-      execSync(`powershell -Command "${script}"`, { timeout: 10000 })
+      const script = `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('${escapedText}')`
+      runWindowsPowerShell(script)
     } else if (isMacOS()) {
       let previousClipboard = ''
       try {
@@ -53,6 +71,13 @@ export async function typeText(text: string): Promise<{ success: boolean; messag
     return { success: true, message: `成功输入文本: "${text}"` }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    if (isWindows()) {
+      return {
+        success: false,
+        message:
+          `输入文本失败：Windows 文本注入未成功。请确认目标窗口已聚焦、Chatbox 与目标应用权限级别一致，并且系统可用 powershell.exe。原始错误: ${message}`,
+      }
+    }
     if (isMacOS()) {
       const lowerMessage = message.toLowerCase()
       if (

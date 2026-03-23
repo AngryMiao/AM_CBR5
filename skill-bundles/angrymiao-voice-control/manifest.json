@@ -25,6 +25,7 @@
           "name": "KEYBOARD_DRIVER_PATH",
           "source": "settings-path",
           "settingPath": "voice.keyboardDriverPath",
+          "defaultBundlePath": "runtime/system-control-mcp/src/utils/AIKeyBoardDriver.exe",
           "required": false
         }
       ]

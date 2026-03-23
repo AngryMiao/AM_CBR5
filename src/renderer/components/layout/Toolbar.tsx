@@ -6,11 +6,10 @@ import {
   IconDots,
   IconSettings,
 } from '@tabler/icons-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useIsLargeScreen, useIsSmallScreen } from '@/hooks/useScreenChange'
 import { navigateToSettings } from '@/modals/Settings'
-import platform from '@/platform'
 import { getSession } from '@/stores/chatStore'
 import { clear as clearSession } from '@/stores/sessionActions'
 import { useUIStore } from '@/stores/uiStore'
@@ -18,7 +17,6 @@ import ActionMenu from '../ActionMenu'
 import Broom from '../icons/Broom'
 import LayoutExpand from '../icons/LayoutExpand'
 import LayoutShrink from '../icons/LayoutShrink'
-import UpdateAvailableButton from '../UpdateAvailableButton'
 
 /**
  * 顶部标题工具栏（右侧）
@@ -28,19 +26,8 @@ export default function Toolbar({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation()
   const isSmallScreen = useIsSmallScreen()
   const isLargeScreen = useIsLargeScreen()
-
-  const [showUpdateNotification, setShowUpdateNotification] = useState(false)
   const widthFull = useUIStore((s) => s.widthFull)
   const setWidthFull = useUIStore((s) => s.setWidthFull)
-
-  useEffect(() => {
-    const offUpdateDownloaded = platform.onUpdateDownloaded(() => {
-      setShowUpdateNotification(true)
-    })
-    return () => {
-      offUpdateDownloaded()
-    }
-  }, [])
 
   const handleExportAndSave = () => {
     NiceModal.show('export-chat')
@@ -58,8 +45,6 @@ export default function Toolbar({ sessionId }: { sessionId: string }) {
 
   return !isSmallScreen ? (
     <Flex align="center" gap="md" className="controls">
-      {showUpdateNotification && <UpdateAvailableButton />}
-
       {isLargeScreen && (
         <ActionIcon variant="subtle" size={28} color="chatbox-secondary" onClick={() => setWidthFull(!widthFull)}>
           {widthFull ? <LayoutExpand strokeWidth={1.8} /> : <LayoutShrink strokeWidth={1.8} />}

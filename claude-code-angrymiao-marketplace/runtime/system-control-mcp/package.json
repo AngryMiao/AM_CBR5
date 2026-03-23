@@ -1,0 +1,21 @@
+{
+  "name": "angrymiao-system-control-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone MCP runtime used by the Claude Code Angrymiao system-control plugin",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.15.1",
+    "open": "^10.0.0",
+    "zod": "^4.0.17"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  },
+  "engines": {
+    "node": ">=20 <23"
+  }
+}

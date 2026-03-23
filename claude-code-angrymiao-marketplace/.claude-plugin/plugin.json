@@ -1,0 +1,5 @@
+{
+  "name": "angrymiao-system-control-plugin",
+  "description": "Desktop system control for Claude Code via a bundled MCP server and a reusable skill",
+  "version": "1.0.0"
+}

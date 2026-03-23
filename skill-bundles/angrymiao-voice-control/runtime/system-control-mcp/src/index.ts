@@ -161,7 +161,7 @@ server.registerTool(
       browser: z
         .enum(['chrome', 'firefox', 'safari', 'edge'])
         .optional()
-        .describe('指定浏览器：chrome / firefox / safari / edge，不填则使用系统默认浏览器'),
+        .describe('指定浏览器：chrome / firefox / edge；safari 仅 macOS 支持。不填则使用系统默认浏览器'),
     }),
   },
   async ({ url, browser }) => {
