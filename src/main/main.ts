@@ -306,7 +306,10 @@ function isValidShortcut(shortcut: string): boolean {
   return hasNonModifier
 }
 
-function registerShortcuts(shortcutSetting?: ShortcutSetting, voiceShortcutOverride?: string) {
+function registerShortcuts(
+  shortcutSetting?: ShortcutSetting,
+  voiceOverride?: { enabled?: boolean; shortcut?: string }
+) {
   log.info('registerShortcuts called')
   if (!shortcutSetting) {
     shortcutSetting = getSettings().shortcuts
@@ -327,27 +330,28 @@ function registerShortcuts(shortcutSetting?: ShortcutSetting, voiceShortcutOverr
   // 注册语音控制快捷键
   try {
     const allSettings = getSettings()
-    log.info('All settings keys:', Object.keys(allSettings))
     const voiceSettings = allSettings.voice
-    log.info('Voice settings:', JSON.stringify(voiceSettings))
 
-    // 使用传入的 override 值或从设置中读取
-    const toggleVoiceRaw = voiceShortcutOverride || voiceSettings?.shortcuts?.toggleVoice
+    const voiceEnabled = voiceOverride?.enabled ?? voiceSettings?.enabled
+    const toggleVoiceRaw = voiceOverride?.shortcut || voiceSettings?.shortcuts?.toggleVoice
+    const DEFAULT_VOICE_SHORTCUT = 'Ctrl+Shift+V'
 
-    if (voiceSettings?.enabled && toggleVoiceRaw) {
-      const toggleVoice = normalizeShortcut(toggleVoiceRaw)
-      log.info('Registering voice shortcut:', toggleVoice, voiceShortcutOverride ? '(override)' : '(from settings)')
-      if (isValidShortcut(toggleVoice)) {
-        const success = globalShortcut.register(toggleVoice, () => {
-          log.info('Voice shortcut triggered!')
-          if (mainWindow) {
-            mainWindow.webContents.send('voice:toggle')
-          }
-        })
-        log.info('Voice shortcut registration result:', success)
-      } else {
-        log.warn('Invalid voice shortcut:', toggleVoice)
+    log.info('Voice registration:', { voiceEnabled, toggleVoiceRaw, hasOverride: !!voiceOverride })
+
+    if (voiceEnabled && toggleVoiceRaw) {
+      let toggleVoice = normalizeShortcut(toggleVoiceRaw)
+      if (!isValidShortcut(toggleVoice)) {
+        log.warn('Invalid voice shortcut:', toggleVoice, '- falling back to default:', DEFAULT_VOICE_SHORTCUT)
+        toggleVoice = normalizeShortcut(DEFAULT_VOICE_SHORTCUT)
       }
+      log.info('Registering voice shortcut:', toggleVoice)
+      const success = globalShortcut.register(toggleVoice, () => {
+        log.info('Voice shortcut triggered!')
+        if (mainWindow) {
+          mainWindow.webContents.send('voice:toggle')
+        }
+      })
+      log.info('Voice shortcut registration result:', success)
     } else {
       log.info('Voice control not enabled or shortcut not configured')
     }
@@ -876,11 +880,10 @@ ipcMain.handle('ensureShortcutConfig', (event, json) => {
   registerShortcuts(config)
 })
 
-ipcMain.handle('ensureVoiceShortcut', (event, newShortcut?: string) => {
-  log.info('ensureVoiceShortcut called with:', newShortcut)
-  // 重新注册所有快捷键（包括语音快捷键）
+ipcMain.handle('ensureVoiceShortcut', (event, voiceOverride?: { enabled?: boolean; shortcut?: string }) => {
+  log.info('ensureVoiceShortcut called with:', voiceOverride)
   unregisterShortcuts()
-  registerShortcuts(undefined, newShortcut)
+  registerShortcuts(undefined, voiceOverride)
 })
 
 ipcMain.handle('ensureFunASRService', () => {

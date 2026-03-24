@@ -79,12 +79,18 @@ export function listInstalledSkillBundles(): SkillBundleManifest[] {
     return []
   }
 
-  return fs.readdirSync(baseDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => {
-      const raw = fs.readFileSync(path.join(baseDir, entry.name, 'manifest.json'), 'utf8')
-      return SkillBundleManifestSchema.parse(JSON.parse(raw))
-    })
+  const results: SkillBundleManifest[] = []
+  for (const entry of fs.readdirSync(baseDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const manifestPath = path.join(baseDir, entry.name, 'manifest.json')
+    try {
+      const raw = fs.readFileSync(manifestPath, 'utf8')
+      results.push(SkillBundleManifestSchema.parse(JSON.parse(raw)))
+    } catch {
+      // skip bundles with missing or invalid manifests
+    }
+  }
+  return results
 }
 
 export function getSkillBundleManifest(bundleId: string): SkillBundleManifest {

@@ -66,8 +66,12 @@ async function autoBackup() {
 }
 
 export function getSettings(): Settings {
-  const settings = store.get<'settings'>('settings', defaults.settings())
-  return settings
+  const stored = store.get<'settings'>('settings')
+  if (!stored) {
+    return defaults.settings()
+  }
+  const defaultSettings = defaults.settings()
+  return { ...defaultSettings, ...stored, voice: { ...defaultSettings.voice, ...stored.voice } }
 }
 
 export function getConfig(): Config {

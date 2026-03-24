@@ -1496,6 +1496,13 @@ function HotkeyPicker({ value, onChange }: { value: string; onChange: (v: string
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
 
   useEffect(() => {
+    const externalKeys = value ? value.split('+').filter(Boolean) : []
+    if (externalKeys.join('+') !== selectedKeys.join('+')) {
+      setSelectedKeys(externalKeys)
+    }
+  }, [value])
+
+  useEffect(() => {
     if (!showPicker) return
     const handler = (e: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {

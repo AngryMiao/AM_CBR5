@@ -13,6 +13,7 @@ export function useVoiceSettings() {
   const setSettings = useSettingsStore((state) => state.setSettings)
 
   const setVoiceSettings = async (settings: Partial<VoiceSettings>) => {
+    const merged = { ...currentSettings, ...settings }
     setSettings((draft) => {
       draft.voice = {
         ...draft.voice,
@@ -20,24 +21,24 @@ export function useVoiceSettings() {
       } as any
     })
 
-    // 通知主进程重新注册快捷键
     if (platform.type === 'desktop') {
       try {
-        // 如果修改了 toggleVoice 快捷键，直接传递新值给主进程
-        const newShortcut = settings.shortcuts?.toggleVoice
-        await window.electronAPI?.invoke('ensureVoiceShortcut', newShortcut)
+        await window.electronAPI?.invoke('ensureVoiceShortcut', {
+          enabled: merged.enabled,
+          shortcut: merged.shortcuts?.toggleVoice,
+        })
         await window.electronAPI?.invoke('ensureFunASRService')
-        console.log('Voice shortcut updated:', newShortcut || 'default')
+        console.log('Voice shortcut updated:', merged.shortcuts?.toggleVoice || 'default', 'enabled:', merged.enabled)
       } catch (error) {
         console.error('Failed to update voice shortcut:', error)
       }
     }
   }
 
-  // Return default settings if voice is undefined
   const defaultSettings: VoiceSettings = defaultVoiceSettings()
-
-  const currentSettings = voiceSettings || defaultSettings
+  const currentSettings = voiceSettings
+    ? { ...defaultSettings, ...voiceSettings }
+    : defaultSettings
 
   // Auto-fill keyboard shortcuts when empty
   const initRef = useRef(false)

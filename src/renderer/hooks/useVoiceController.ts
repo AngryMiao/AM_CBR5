@@ -527,7 +527,11 @@ export function useVoiceController() {
   }, [setIsSpeaking, setSpeakingText, setVoiceMode])
 
   const activateVoiceInput = useCallback(async () => {
-    await ensureAngrymiaoSkillRuntime({ voice: settings })
+    try {
+      await ensureAngrymiaoSkillRuntime({ voice: settings })
+    } catch (e) {
+      console.error('Failed to start Angrymiao skill runtime (non-blocking):', e)
+    }
     try {
       const granted = await window.electronAPI?.invoke('ensureAccessibilityPermission')
       if (!granted) {
@@ -543,7 +547,7 @@ export function useVoiceController() {
       console.error('Failed to switch to voice session:', e)
     }
     await startRecording()
-  }, [settings.keyboardDriverPath, settings.keyboardShortcuts, startRecording])
+  }, [settings, startRecording])
 
   // 切换语音模式
   const toggleVoice = useCallback(async () => {
