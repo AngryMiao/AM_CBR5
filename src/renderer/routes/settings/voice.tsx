@@ -1486,6 +1486,10 @@ function getHotkeyLabel(key: string, isMac: boolean): string {
   return key
 }
 
+function isValidHotkeyCombo(keys: string[]): boolean {
+  return keys.length > 0 && keys.some((k) => !HOTKEY_MODIFIERS.has(k))
+}
+
 function HotkeyPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [selectedKeys, setSelectedKeys] = useState<string[]>(() =>
     value ? value.split('+').filter(Boolean) : []
@@ -1494,10 +1498,12 @@ function HotkeyPicker({ value, onChange }: { value: string; onChange: (v: string
   const [activeCategory, setActiveCategory] = useState<string>('modifiers')
   const pickerRef = useRef<HTMLDivElement>(null)
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
+  const selectedKeysRef = useRef(selectedKeys)
+  selectedKeysRef.current = selectedKeys
 
   useEffect(() => {
     const externalKeys = value ? value.split('+').filter(Boolean) : []
-    if (externalKeys.join('+') !== selectedKeys.join('+')) {
+    if (externalKeys.join('+') !== selectedKeysRef.current.join('+')) {
       setSelectedKeys(externalKeys)
     }
   }, [value])
@@ -1507,11 +1513,22 @@ function HotkeyPicker({ value, onChange }: { value: string; onChange: (v: string
     const handler = (e: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
         setShowPicker(false)
+        if (!isValidHotkeyCombo(selectedKeysRef.current)) {
+          const stored = value ? value.split('+').filter(Boolean) : []
+          setSelectedKeys(stored)
+        }
       }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [showPicker])
+  }, [showPicker, value])
+
+  const applyIfValid = (keys: string[]) => {
+    setSelectedKeys(keys)
+    if (isValidHotkeyCombo(keys)) {
+      onChange(keys.join('+'))
+    }
+  }
 
   const toggleKey = (key: string) => {
     let newKeys: string[]
@@ -1523,14 +1540,12 @@ function HotkeyPicker({ value, onChange }: { value: string; onChange: (v: string
       const mods = selectedKeys.filter((k) => HOTKEY_MODIFIERS.has(k))
       newKeys = selectedKeys.includes(key) ? mods : [...mods, key]
     }
-    setSelectedKeys(newKeys)
-    onChange(newKeys.join('+'))
+    applyIfValid(newKeys)
   }
 
   const removeKey = (key: string) => {
     const newKeys = selectedKeys.filter((k) => k !== key)
-    setSelectedKeys(newKeys)
-    onChange(newKeys.join('+'))
+    applyIfValid(newKeys)
   }
 
   const reset = () => {
@@ -1539,13 +1554,19 @@ function HotkeyPicker({ value, onChange }: { value: string; onChange: (v: string
     onChange(defaultKeys.join('+'))
   }
 
+  const valid = isValidHotkeyCombo(selectedKeys)
+
   return (
     <div className="relative space-y-1.5">
       <div className="flex flex-wrap gap-1 items-center">
         {selectedKeys.map((key) => (
           <span
             key={key}
-            className="inline-flex items-center gap-0.5 px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded border border-blue-300 dark:border-blue-700"
+            className={`inline-flex items-center gap-0.5 px-2 py-0.5 text-xs rounded border ${
+              valid
+                ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 border-blue-300 dark:border-blue-700'
+                : 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-700'
+            }`}
           >
             {getHotkeyLabel(key, isMac)}
             <button
@@ -1572,7 +1593,12 @@ function HotkeyPicker({ value, onChange }: { value: string; onChange: (v: string
           重置
         </button>
       </div>
-      {selectedKeys.length > 0 && (
+      {selectedKeys.length > 0 && !valid && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          不能仅使用修饰键（Ctrl/Shift/Alt/Meta），请添加一个普通键
+        </p>
+      )}
+      {selectedKeys.length > 0 && valid && (
         <p className="text-xs text-gray-500">{selectedKeys.join('+')}</p>
       )}
       {showPicker && (

@@ -277,33 +277,17 @@ function normalizeShortcut(shortcut: string) {
   return keys.join('+')
 }
 
-/**
- * 检查快捷键是否有效
- * @param shortcut 快捷键字符串
- * @returns 是否为有效的快捷键
- */
+const MODIFIER_KEYS = new Set([
+  'mod', 'command', 'cmd', 'control', 'ctrl', 'commandorcontrol', 'cmdorctrl',
+  'option', 'alt', 'altgr', 'shift', 'super', 'meta',
+])
+
 function isValidShortcut(shortcut: string): boolean {
   if (!shortcut) {
     return false
   }
-  const keys = shortcut.split('+')
-  // 检查是否至少包含一个非修饰键
-  const hasNonModifier = keys.some((key) => {
-    const normalizedKey = key.trim().toLowerCase()
-    return ![
-      'mod',
-      'command',
-      'cmd',
-      'control',
-      'ctrl',
-      'commandorcontrol',
-      'option',
-      'alt',
-      'shift',
-      'super',
-    ].includes(normalizedKey)
-  })
-  return hasNonModifier
+  const keys = shortcut.split('+').map((k) => k.trim().toLowerCase())
+  return keys.some((k) => !MODIFIER_KEYS.has(k))
 }
 
 function registerShortcuts(
