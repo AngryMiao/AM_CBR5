@@ -15,7 +15,6 @@ import type {
   OnStatusChange,
 } from '../../../shared/models/types'
 import {
-  type KnowledgeBase,
   type Message,
   type MessageInfoPart,
   type MessageToolCallPart,
@@ -28,68 +27,7 @@ import { resolveAgentSkillPrompt } from '../agent-skills'
 import * as chatStore from '@/stores/chatStore'
 import { convertToModelMessages, injectModelSystemPrompt, injectPrompt } from './message-utils'
 import { imageOCR } from './preprocess'
-import {
-  combinedSearchByPromptEngineering,
-  constructMessagesWithKnowledgeBaseResults,
-  constructMessagesWithSearchResults,
-  knowledgeBaseSearchByPromptEngineering,
-  searchByPromptEngineering,
-} from './tools'
 import fileToolSet from './toolsets/file'
-import { getToolSet } from './toolsets/knowledge-base'
-import websearchToolSet, { parseLinkTool, webSearchTool } from './toolsets/web-search'
-
-/**
- * 处理搜索结果并返回模型响应的通用函数
- */
-async function handleSearchResult(
-  result: { query: string; searchResults: any[]; type?: 'knowledge_base' | 'web' | 'none' },
-  toolName: string,
-  model: ModelInterface,
-  messages: Message[],
-  coreMessages: ModelMessage[],
-  controller: AbortController,
-  onResultChange: OnResultChange,
-  params: { providerOptions?: ProviderOptions; onStatusChange?: OnStatusChange }
-) {
-  if (!result?.searchResults?.length || result.type === 'none') {
-    const chatResult = await model.chat(coreMessages, {
-      signal: controller.signal,
-      onResultChange,
-      onStatusChange: params.onStatusChange,
-    })
-    return { result: chatResult, coreMessages }
-  }
-
-  const toolCallPart: MessageToolCallPart = {
-    type: 'tool-call',
-    state: 'result',
-    toolCallId: `${result.type || toolName.replace('_', '')}_search_${uniqueId()}`,
-    toolName,
-    args: { query: result.query },
-    result,
-  }
-  onResultChange({ contentParts: [toolCallPart] })
-
-  const messagesWithResults =
-    result.type === 'knowledge_base' || toolName === 'query_knowledge_base'
-      ? constructMessagesWithKnowledgeBaseResults(messages, result.searchResults)
-      : constructMessagesWithSearchResults(messages, result.searchResults)
-
-  const chatResult = await model.chat(await convertToModelMessages(messagesWithResults), {
-    signal: controller.signal,
-    onResultChange: (data) => {
-      if (data.contentParts) {
-        onResultChange({ ...data, contentParts: [toolCallPart, ...data.contentParts] })
-      } else {
-        onResultChange(data)
-      }
-    },
-    onStatusChange: params.onStatusChange,
-    providerOptions: params.providerOptions,
-  })
-  return { result: chatResult, coreMessages }
-}
 
 async function ocrMessages(messages: Message[]) {
   const settings = settingsStore.getState().getSettings()
@@ -111,9 +49,6 @@ async function ocrMessages(messages: Message[]) {
   }
 }
 
-/**
- * 这里是供UI层调用，集中处理了模型的联网搜索、工具调用、系统消息等逻辑
- */
 export async function streamText(
   model: ModelInterface,
   params: {
@@ -122,12 +57,10 @@ export async function streamText(
     onResultChangeWithCancel: OnResultChangeWithCancel
     onStatusChange?: OnStatusChange
     providerOptions?: ProviderOptions
-    knowledgeBase?: Pick<KnowledgeBase, 'id' | 'name'>
-    webBrowsing?: boolean
   },
   signal?: AbortSignal
 ): Promise<{ result: StreamTextResult; coreMessages: ModelMessage[] }> {
-  const { knowledgeBase, webBrowsing, sessionId } = params
+  const { sessionId } = params
   const hasFileOrLink = params.messages.some((m) => m.files?.length || m.links?.length)
 
   const controller = new AbortController()
@@ -141,30 +74,11 @@ export async function streamText(
   }
   let coreMessages: ModelMessage[] = []
 
-  // for model not support tool use, use prompt engineering to handle knowledge base and web search
   const needFileToolSet = hasFileOrLink && model.isSupportToolUse()
-  const kbNotSupported = knowledgeBase && !model.isSupportToolUse('knowledge-base')
-  const webNotSupported = webBrowsing && !model.isSupportToolUse('web-browsing')
 
-  // 1. inject system prompt for tool use
   let toolSetInstructions = ''
-  // 预加载知识库工具集（异步获取文件列表）
-  let kbToolSet = null
-  if (knowledgeBase) {
-    try {
-      kbToolSet = await getToolSet(knowledgeBase.id, knowledgeBase.name)
-    } catch (err) {
-      console.error('Failed to load knowledge base toolset:', err)
-    }
-  }
-  if (kbToolSet && !kbNotSupported) {
-    toolSetInstructions += kbToolSet.description
-  }
   if (needFileToolSet) {
     toolSetInstructions += fileToolSet.description
-  }
-  if (webBrowsing && !webNotSupported) {
-    toolSetInstructions += websearchToolSet.description
   }
 
   let skillPrompt = ''
@@ -182,7 +96,6 @@ export async function streamText(
   params.messages = injectModelSystemPrompt(
     model.modelId,
     params.messages,
-    // 在系统提示中添加知识库名称，方便模型理解
     toolSetInstructions,
     injectionRole
   )
@@ -191,11 +104,10 @@ export async function streamText(
     params.messages = params.messages.map((m) => ({ ...m, role: m.role === 'system' ? 'user' : m.role }))
   }
 
-  // 2. sequence messages to fix the order, prevent model API 400 errors
   const messages = sequenceMessages(params.messages)
   const infoParts: MessageInfoPart[] = []
   try {
-    params.onResultChangeWithCancel({ cancel }) // 这里先传递 cancel 方法
+    params.onResultChangeWithCancel({ cancel })
     const onResultChange: OnResultChange = (data) => {
       if (data.contentParts) {
         result = { ...result, ...data, contentParts: [...infoParts, ...data.contentParts] }
@@ -219,95 +131,8 @@ export async function streamText(
 
     coreMessages = await convertToModelMessages(messages, { modelSupportVision: model.isSupportVision() })
 
-    // 3. handle model not support tool use scenarios
-    if (kbNotSupported || webNotSupported) {
-      // 当两个功能都启用且都不支持工具调用时，使用组合搜索
-      if (kbNotSupported && webNotSupported) {
-        // infoParts.push({
-        //   type: 'info',
-        //   text: t(
-        //     'Current model {{modelName}} does not support tool use, using prompt for knowledge base and web search',
-        //     {
-        //       modelName: model.modelId,
-        //     }
-        //   ),
-        // })
-
-        const callResult = await combinedSearchByPromptEngineering(
-          model,
-          params.messages,
-          knowledgeBase.id,
-          controller.signal
-        )
-        const toolName = callResult.type === 'knowledge_base' ? 'query_knowledge_base' : 'web_search'
-        return handleSearchResult(
-          callResult,
-          toolName,
-          model,
-          messages,
-          coreMessages,
-          controller,
-          onResultChange,
-          params
-        )
-      }
-      // 只有知识库不支持工具调用
-      else if (kbNotSupported) {
-        // infoParts.push({
-        //   type: 'info',
-        //   text: t('Current model {{modelName}} does not support tool use, using prompt for knowledge base', {
-        //     modelName: model.modelId,
-        //   }),
-        // })
-
-        const callResult = await knowledgeBaseSearchByPromptEngineering(model, params.messages, knowledgeBase.id)
-
-        return handleSearchResult(
-          callResult || { query: '', searchResults: [] },
-          'query_knowledge_base',
-          model,
-          messages,
-          coreMessages,
-          controller,
-          onResultChange,
-          params
-        )
-      }
-      // 只有网络搜索不支持工具调用
-      else if (webNotSupported) {
-        // infoParts.push({
-        //   type: 'info',
-        //   text: t('Current model {{modelName}} does not support tool use, using prompt for web search', {
-        //     modelName: model.modelId,
-        //   }),
-        // })
-
-        const callResult = await searchByPromptEngineering(model, params.messages, controller.signal)
-        return handleSearchResult(
-          callResult || { query: '', searchResults: [] },
-          'web_search',
-          model,
-          messages,
-          coreMessages,
-          controller,
-          onResultChange,
-          params
-        )
-      }
-    }
-
-    // 4. construct tool set
     let tools: ToolSet = {
       ...mcpController.getAvailableTools({ skillBundleId }),
-    }
-    if (webBrowsing) {
-      tools.web_search = webSearchTool
-    }
-    if (kbToolSet) {
-      tools = {
-        ...tools,
-        ...kbToolSet.tools,
-      }
     }
 
     if (needFileToolSet) {
@@ -331,7 +156,6 @@ export async function streamText(
     return { result, coreMessages }
   } catch (err) {
     console.error(err)
-    // if a cancellation is performed, do not throw an exception, otherwise the content will be overwritten.
     if (controller.signal.aborted) {
       return { result, coreMessages }
     }

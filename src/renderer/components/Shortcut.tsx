@@ -114,11 +114,6 @@ export function ShortcutConfig(props: {
       keys: shortcuts.inputBoxFocus,
     },
     {
-      label: t('Focus on the Input Box and Enter Web Browsing Mode'),
-      name: 'inputBoxWebBrowsingMode',
-      keys: shortcuts.inputBoxWebBrowsingMode,
-    },
-    {
       label: t('Send'),
       name: 'inputBoxSendMessage',
       keys: shortcuts.inputBoxSendMessage,

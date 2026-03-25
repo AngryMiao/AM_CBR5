@@ -1,13 +1,13 @@
 {
-  "name": "xyz.chatboxapp.ce",
-  "productName": "xyz.chatboxapp.ce",
+  "name": "angrymiao-voice-control",
+  "productName": "Angrymiao-Voice-Control",
   "version": "0.0.1",
   "engines": {
     "node": ">=20.0.0 <23.0.0",
     "pnpm": ">=10.0.0"
   },
   "private": true,
-  "description": "A desktop client for multiple cutting-edge AI models",
+  "description": "A desktop AI client for voice control and conversational assistants",
   "main": "out/main/main.js",
   "scripts": {
     "build": "pnpm run build:skill-bundles && node ./scripts/run-local-bin.cjs electron-vite build",

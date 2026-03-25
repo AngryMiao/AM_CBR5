@@ -32,10 +32,10 @@ const AppStoreRating = NiceModal.create(() => {
       <Stack align="center">
         <ScalableIcon icon={IconThumbUpFilled} size={64} color="var(--chatbox-tint-success)" />
         <Text size="xl" fw={600} className="text-center">
-          {t('Enjoying Chatbox?')}
+          {t('Enjoying Angrymiao-Voice-Control?')}
         </Text>
         <Text size="md" c="chatbox-secondary" className="text-center">
-          {t('Your rating on the App Store would help make Chatbox even better!')}
+          {t('Your rating on the App Store would help make Angrymiao-Voice-Control even better!')}
         </Text>
         <Text size="sm" c="chatbox-tertiary" className="text-center">
           {t('It only takes a few seconds and helps a lot.')}

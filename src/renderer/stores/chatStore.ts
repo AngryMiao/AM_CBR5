@@ -22,8 +22,6 @@ import { StorageKeyGenerator } from '@/storage/StoreStorage'
 import * as defaults from '../../shared/defaults'
 import { getLogger } from '../lib/utils'
 import { migrateSession, sortSessions } from '../utils/session-utils'
-import { uiStore } from './uiStore'
-
 const log = getLogger('chat-store')
 
 import { clearScrollPositionCache } from '@/components/chat/MessageList'
@@ -243,9 +241,6 @@ export async function deleteSession(id: string) {
     }
     return sessions.filter((session) => session.id !== id)
   })
-  // Clean up UI state and caches to prevent memory leaks
-  uiStore.getState().clearSessionWebBrowsing(id)
-  uiStore.getState().removeSessionKnowledgeBase(id)
   cleanupSessionAtomCache(id)
   clearScrollPositionCache(id)
   delete sessionUpdateQueues[id]

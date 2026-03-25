@@ -1,7 +1,6 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: <any> */
 import type { Config, Language, Settings, ShortcutSetting } from '@shared/types'
 import type { ImageGenerationStorage } from '@/storage/ImageGenerationStorage'
-import type { KnowledgeBaseController } from './knowledge-base/interface'
 
 export type PlatformType = 'web' | 'desktop' | 'mobile'
 
@@ -66,23 +65,8 @@ export interface Platform extends Storage {
 
   ensureAutoLaunch(enable: boolean): Promise<void>
 
-  parseFileLocally(file: File): Promise<{ key?: string; isSupported: boolean }>
-
-  // Parse file using MinerU service (Desktop only)
-  parseFileWithMineru?(
-    file: File,
-    apiToken: string
-  ): Promise<{ success: boolean; content?: string; error?: string; cancelled?: boolean }>
-
-  // Cancel MinerU parsing task (Desktop only)
-  cancelMineruParse?(filePath: string): Promise<{ success: boolean; error?: string }>
-
-  // parseUrl(url: string): Promise<{ key: string, title: string }>
-
   isFullscreen(): Promise<boolean>
   setFullscreen(enabled: boolean): Promise<void>
-
-  getKnowledgeBaseController(): KnowledgeBaseController
 
   getImageGenerationStorage(): ImageGenerationStorage
 

@@ -165,7 +165,7 @@ function Copilots() {
             {/* Chatbox Featured Section */}
             <Box>
               <Text size="md" fw={700} mb={2} c="chatbox-primary">
-                {t('Chatbox Featured')}
+                {t('Angrymiao-Voice-Control Featured')}
               </Text>
 
               <Box
@@ -450,7 +450,7 @@ function CopilotForm(props: CopilotFormProps) {
         <FormGroup row>
           <FormControlLabel
             control={<Switch />}
-            label={t('Share with Chatbox')}
+            label={t('Share with Angrymiao-Voice-Control')}
             checked={copilotEdit.shared}
             onChange={(_e, checked) => setCopilotEdit({ ...copilotEdit, shared: checked })}
           />

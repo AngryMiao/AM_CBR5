@@ -4,7 +4,6 @@ import {
   AIProviderNoImplementedPaintError,
   ApiError,
   BaseError,
-  ChatboxAIAPIError,
   NetworkError,
 } from '@shared/models/errors'
 import { createMessage, type Message, ModelProviderEnum } from '@shared/types'
@@ -17,19 +16,6 @@ import platform from '@/platform'
 import * as chatStore from '../chatStore'
 import * as settingActions from '../settingActions'
 import { settingsStore } from '../settingsStore'
-import { uiStore } from '../uiStore'
-
-/**
- * Get session-level web browsing setting
- * Returns user's explicit setting if set, otherwise returns default based on provider
- */
-function getSessionWebBrowsing(sessionId: string, provider: string | undefined): boolean {
-  const sessionValue = uiStore.getState().sessionWebBrowsingMap[sessionId]
-  if (sessionValue !== undefined) {
-    return sessionValue
-  }
-  return false
-}
 
 /**
  * 在当前主题的最后插入一条消息。
@@ -135,7 +121,6 @@ export async function submitNewUserMessage(
   params.onUserMessageReady?.()
 
   const { newUserMsg, needGenerating } = params
-  const webBrowsing = getSessionWebBrowsing(sessionId, settings.provider)
 
   // 先在聊天列表中插入发送的用户消息
   await insertMessage(sessionId, newUserMsg)
@@ -169,14 +154,6 @@ export async function submitNewUserMessage(
   }
 
   try {
-    // 如果本次消息开启了联网问答，需要检查当前模型是否支持
-    // 桌面版&手机端总是支持联网问答，不再需要检查模型是否支持
-    const dependencies = await createModelDependencies()
-    const model = getModel(settings, globalSettings, { uuid: '' }, dependencies)
-    if (webBrowsing && platform.type === 'web' && !model.isSupportToolUse()) {
-      throw ChatboxAIAPIError.fromCodeName('model_not_support_web_browsing_2', 'model_not_support_web_browsing_2')
-    }
-
     // Files and links are now preprocessed in InputBox with storage keys, so no need to process them here
     // Just verify they have storage keys
     if (newUserMsg.files?.length) {

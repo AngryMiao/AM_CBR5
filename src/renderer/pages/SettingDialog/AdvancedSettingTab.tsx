@@ -293,7 +293,7 @@ export function AnalyticsSetting() {
       <div>
         <p className="opacity-70">
           {t(
-            'Chatbox respects your privacy and only uploads anonymous error data and events when necessary. You can change your preferences at any time in the settings.'
+            'Angrymiao-Voice-Control respects your privacy and only uploads anonymous error data and events when necessary. You can change your preferences at any time in the settings.'
           )}
         </p>
       </div>

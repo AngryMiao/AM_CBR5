@@ -34,7 +34,6 @@ import { getDefaultFunASRLaunchCommand } from 'src/shared/types/voice'
 import * as analystic from './analystic-node'
 import * as autoLauncher from './autoLauncher'
 import { handleDeepLink } from './deeplinks'
-import { parseFile } from './file-parser'
 import Locale from './locales'
 import * as mcpIpc from './mcp/ipc-stdio-transport'
 import MenuBuilder from './menu'
@@ -55,13 +54,7 @@ import {
 } from './store-node'
 import * as windowState from './window_state'
 
-const knowledgeBaseInitPromise = import('./knowledge-base/index.js')
-  .then((mod) => mod.getInitPromise())
-  .catch((error) => {
-    log.error('[KB] Failed to initialize knowledge base during bootstrap:', error)
-  })
-
-// 这行代码是解决 Windows 通知的标题和图标不正确的问题，标题会错误显示成 electron.app.Chatbox
+// 这行代码是解决 Windows 通知的标题和图标不正确的问题，标题会错误显示成 electron.app.Angrymiao-Voice-Control
 // 参考：https://stackoverflow.com/questions/65859634/notification-from-electron-shows-electron-app-electron
 if (process.platform === 'win32') {
   app.setAppUserModelId(app.name)
@@ -75,8 +68,8 @@ const getAssetPath = (...paths: string[]): string => {
   return path.join(RESOURCES_PATH, ...paths)
 }
 
-// 开发环境使用 chatbox-dev:// 协议，避免和正式版冲突
-const PROTOCOL_SCHEME = process.defaultApp ? 'chatbox-dev' : 'chatbox'
+// 开发环境使用 angrymiao-voice-control-dev:// 协议，避免和正式版冲突
+const PROTOCOL_SCHEME = process.defaultApp ? 'angrymiao-voice-control-dev' : 'angrymiao-voice-control'
 
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
@@ -383,7 +376,7 @@ function createTray() {
       accelerator: quitAccelerator,
     },
   ])
-  tray.setToolTip('Chatbox')
+  tray.setToolTip('Angrymiao-Voice-Control')
   tray.setContextMenu(contextMenu)
   tray.on('double-click', showOrHideWindow)
   return tray
@@ -609,7 +602,9 @@ if (!gotTheLock) {
 } else {
   app.on('second-instance', async (event, commandLine, workingDirectory) => {
     // on windows and linux, the deep link is passed in the command line
-    const url = commandLine.find((arg) => arg.startsWith('chatbox://') || arg.startsWith('chatbox-dev://'))
+    const url = commandLine.find(
+      (arg) => arg.startsWith('angrymiao-voice-control://') || arg.startsWith('angrymiao-voice-control-dev://'),
+    )
 
     if (url) {
       // Deep Link 场景：总是显示并聚焦窗口
@@ -653,14 +648,15 @@ if (!gotTheLock) {
   app
     .whenReady()
     .then(async () => {
-      await knowledgeBaseInitPromise
       await createWindow()
       ensureTray()
 
       // 处理启动时的 Deep Link (Windows/Linux)
       // macOS 会通过 open-url 事件处理，不需要在这里处理
       if (process.platform !== 'darwin') {
-        const url = process.argv.find((arg) => arg.startsWith('chatbox://') || arg.startsWith('chatbox-dev://'))
+        const url = process.argv.find(
+          (arg) => arg.startsWith('angrymiao-voice-control://') || arg.startsWith('angrymiao-voice-control-dev://'),
+        )
         if (url && mainWindow) {
           // 确保窗口加载完成后再处理 Deep Link
           if (mainWindow.webContents.isLoading()) {
@@ -822,7 +818,7 @@ ipcMain.handle('ensureAccessibilityPermission', async () => {
       type: 'warning',
       title: '需要系统权限',
       message: '语音控制需要以下 macOS 权限才能正常工作：',
-      detail: missing.join('\n') + '\n\n请在系统设置中授权后重启 Chatbox。',
+      detail: missing.join('\n') + '\n\n请在系统设置中授权后重启 Angrymiao-Voice-Control。',
       buttons: ['打开系统设置', '稍后再说'],
       defaultId: 0,
     })
@@ -988,16 +984,6 @@ ipcMain.handle('ensureAutoLaunch', (event, enable: boolean) => {
     return
   }
   return autoLauncher.ensure(enable)
-})
-
-ipcMain.handle('parseFileLocally', async (event, dataJSON: string) => {
-  const params: { filePath: string } = JSON.parse(dataJSON)
-  try {
-    const data = await parseFile(params.filePath)
-    return JSON.stringify({ text: data, isSupported: true })
-  } catch (e) {
-    return JSON.stringify({ isSupported: false })
-  }
 })
 
 ipcMain.handle('parseUrl', async (event, url: string) => {

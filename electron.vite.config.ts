@@ -72,7 +72,7 @@ export default defineConfig(({ mode }) => {
           ? sentryVitePlugin({
               authToken: process.env.SENTRY_AUTH_TOKEN,
               org: 'sentry',
-              project: 'chatbox',
+              project: 'angrymiao-voice-control',
               url: 'https://sentry.midway.run/',
               release: {
                 name: inferredRelease,
@@ -164,7 +164,7 @@ export default defineConfig(({ mode }) => {
           ? sentryVitePlugin({
               authToken: process.env.SENTRY_AUTH_TOKEN,
               org: 'sentry',
-              project: 'chatbox',
+              project: 'angrymiao-voice-control',
               url: 'https://sentry.midway.run/',
               release: {
                 name: inferredRelease,

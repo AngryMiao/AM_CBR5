@@ -97,7 +97,3 @@ export const pictureSessionSettingsAtom = atomWithStorage<SessionSettings>(
   {},
   storage
 )
-
-export const knowledgeBaseSettingsAtom = focusAtom(settingsAtom, (optic) =>
-  optic.prop('extension').prop('knowledgeBase')
-)

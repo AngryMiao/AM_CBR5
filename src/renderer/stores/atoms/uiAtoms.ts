@@ -4,7 +4,7 @@ import type React from 'react'
 import type { RefObject } from 'react'
 import type { VirtuosoHandle } from 'react-virtuoso'
 import platform from '@/platform'
-import type { KnowledgeBase, MessagePicture, Toast } from '../../../shared/types'
+import type { MessagePicture, Toast } from '../../../shared/types'
 import type { PreConstructedMessageState } from '../../types/input-box'
 
 // Input box related state

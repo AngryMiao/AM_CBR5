@@ -145,7 +145,7 @@ export default function Sidebar() {
             >
               <Image src={icon} w={20} h={20} />
               <Text span c="chatbox-secondary" size="xl" lh={1.2} fw="700">
-                Chatbox
+                Angrymiao-Voice-Control
               </Text>
             </Flex>
             {FORCE_ENABLE_DEV_PAGES && <ThemeSwitchButton size="xs" />}

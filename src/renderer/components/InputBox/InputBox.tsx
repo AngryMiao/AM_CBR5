@@ -13,12 +13,6 @@ import {
   UnstyledButton,
 } from '@mantine/core'
 import { useViewportSize } from '@mantine/hooks'
-import {
-  getFileAcceptConfig,
-  getFileAcceptString,
-  getUnsupportedFileType,
-  isSupportedFile,
-} from '@shared/file-extensions'
 import { getModel } from '@shared/providers'
 import { formatNumber } from '@shared/utils'
 import {
@@ -27,17 +21,13 @@ import {
   IconArrowBackUp,
   IconArrowUp,
   IconChevronRight,
-  IconCirclePlus,
   IconFilePencil,
-  IconFolder,
   IconHammer,
   IconLink,
   IconPhoto,
   IconPlayerStopFilled,
   IconPlus,
   IconSettings,
-  IconVocabulary,
-  IconWorldWww,
 } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -45,11 +35,9 @@ import { useAtom, useAtomValue } from 'jotai'
 import _, { pick } from 'lodash'
 import type React from 'react'
 import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
-import { useDropzone } from 'react-dropzone'
 import { useTranslation } from 'react-i18next'
 import { createModelDependencies } from '@/adapters'
 import useInputBoxHistory from '@/hooks/useInputBoxHistory'
-import { useKnowledgeBase } from '@/hooks/useKnowledgeBase'
 import { useMessageInput } from '@/hooks/useMessageInput'
 import { useProviders } from '@/hooks/useProviders'
 import { useIsSmallScreen } from '@/hooks/useScreenChange'
@@ -76,7 +64,6 @@ import { delay } from '@/utils'
 import { featureFlags } from '@/utils/feature-flags'
 import { trackEvent } from '@/utils/track'
 import {
-  type KnowledgeBase,
   type Message,
   ModelProviderEnum,
   type SessionType,
@@ -88,21 +75,15 @@ import * as toastActions from '../../stores/toastActions'
 import { CompactionStatus } from '../chat/CompactionStatus'
 import { CompressionModal } from '../common/CompressionModal'
 import { ScalableIcon } from '../common/ScalableIcon'
-import Disclaimer from '../Disclaimer'
 import ProviderImageIcon from '../icons/ProviderImageIcon'
-import KnowledgeBaseMenu from '../knowledge-base/KnowledgeBaseMenu'
 import ModelSelector from '../ModelSelector'
 import MCPMenu from '../mcp/MCPMenu'
-import { FileMiniCard, ImageMiniCard, LinkMiniCard } from './Attachments'
+import { ImageMiniCard, LinkMiniCard } from './Attachments'
 import { ImageUploadInput } from './ImageUploadInput'
 import {
-  cleanupFile,
   cleanupLink,
-  markFileProcessing,
   markLinkProcessing,
-  onFileProcessed,
   onLinkProcessed,
-  storeFilePromise,
   storeLinkPromise,
 } from './preprocessState'
 import TokenCountMenu from './TokenCountMenu'
@@ -156,60 +137,28 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     const isSmallScreen = useIsSmallScreen()
     const toolbarIconSize = isSmallScreen ? 22 : 18
     const { height: viewportHeight } = useViewportSize()
-    const pasteLongTextAsAFile = useSettingsStore((state) => state.pasteLongTextAsAFile)
     const shortcuts = useSettingsStore((state) => state.shortcuts)
     const widthFull = useUIStore((s) => s.widthFull) || fullWidth
 
     const currentSessionId = sessionId
     const isNewSession = currentSessionId === 'new'
 
-    // Session-level web browsing mode
-    const sessionWebBrowsingMap = useUIStore((s) => s.sessionWebBrowsingMap)
-    const setSessionWebBrowsing = useUIStore((s) => s.setSessionWebBrowsing)
-    const updateCurrentWebBrowsingDisplay = useUIStore((s) => s.updateCurrentWebBrowsingDisplay)
-    // Get session-specific value, or use default based on provider (ChatboxAI defaults to true)
-    const webBrowsingMode = useMemo(() => {
-      const sessionValue = sessionWebBrowsingMap[currentSessionId || 'new']
-      if (sessionValue !== undefined) {
-        return sessionValue
-      }
-      return false
-    }, [sessionWebBrowsingMap, currentSessionId, model?.provider])
-
-    // this is used for keyboard shortcut. if we don't provide this, kbd wont know what to set when it's a new session(it doesnt have provider info)
-    useEffect(() => {
-      updateCurrentWebBrowsingDisplay(currentSessionId || 'new', webBrowsingMode)
-    }, [currentSessionId, webBrowsingMode, updateCurrentWebBrowsingDisplay])
-
-    const setWebBrowsingMode = useCallback(
-      (enabled: boolean) => {
-        setSessionWebBrowsing(currentSessionId || 'new', enabled)
-      },
-      [currentSessionId, setSessionWebBrowsing]
-    )
-
     const { messageInput, setMessageInput, clearDraft } = useMessageInput('', { isNewSession })
 
-    // Pre-constructed message state (scoped by session)
     const [preConstructedMessage, setPreConstructedMessage] = useAtom(
       atoms.inputBoxPreConstructedMessageFamily(currentSessionId || 'new')
     )
     const pictureKeys = preConstructedMessage.pictureKeys || []
-    const attachments = preConstructedMessage.attachments || []
 
     const { session: currentSession } = useSession(sessionId || null)
     const { sessionSettings: currentSessionMergedSettings } = useSessionSettings(sessionId || null)
 
-    // Get current messages for token counting - will only recalculate when stable messages actually change
-    // Uses getContextMessageIds to respect compaction points
     const currentContextMessageIds = useMemo(() => {
       if (isNewSession) return null
       if (!currentSession?.messages.length) return null
 
       return getContextMessageIds(currentSession, currentSessionMergedSettings?.maxContextMessageCount)
     }, [isNewSession, currentSessionMergedSettings?.maxContextMessageCount, currentSession])
-
-    const { knowledgeBase, setKnowledgeBase } = useKnowledgeBase({ isNewSession })
 
     const [showCompressionModal, setShowCompressionModal] = useState(false)
 
@@ -227,14 +176,12 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
         ...prev,
         text: messageInput,
         pictureKeys,
-        attachments,
         links,
         message: constructedMessage,
       }))
     }, [
       messageInput,
       pictureKeys,
-      attachments,
       links,
       preConstructedMessage.preprocessedFiles,
       preConstructedMessage.preprocessedLinks,
@@ -242,33 +189,24 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     ])
 
     const pictureInputRef = useRef<HTMLInputElement | null>(null)
-    const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-    // Check if any preprocessing is in progress
     const isPreprocessing = useMemo(() => {
-      const hasProcessingFiles = Object.values(preConstructedMessage.preprocessingStatus.files || {}).some(
-        (status) => status === 'processing'
-      )
       const hasProcessingLinks = Object.values(preConstructedMessage.preprocessingStatus.links || {}).some(
         (status) => status === 'processing'
       )
-      return hasProcessingFiles || hasProcessingLinks
+      return hasProcessingLinks
     }, [preConstructedMessage.preprocessingStatus])
 
-    // Check if any preprocessing has errors
     const hasPreprocessErrors = useMemo(() => {
-      const hasErrorFiles = Object.values(preConstructedMessage.preprocessingStatus.files || {}).some(
-        (status) => status === 'error'
-      )
       const hasErrorLinks = Object.values(preConstructedMessage.preprocessingStatus.links || {}).some(
         (status) => status === 'error'
       )
-      return hasErrorFiles || hasErrorLinks
+      return hasErrorLinks
     }, [preConstructedMessage.preprocessingStatus])
 
     const disableSubmit = useMemo(
-      () => !(messageInput.trim() || links?.length || attachments?.length || pictureKeys?.length),
-      [messageInput, links, attachments, pictureKeys]
+      () => !(messageInput.trim() || links?.length || pictureKeys?.length),
+      [messageInput, links, pictureKeys]
     )
 
     const { providers } = useProviders()
@@ -284,14 +222,12 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
       return `${modelInfo?.nickname || model.modelId}`
     }, [providers, model, t])
 
-    // Get model info for context window
     const modelInfo = useMemo(() => {
       if (!model) return null
       const providerInfo = providers.find((p) => p.id === model.provider)
       return (providerInfo?.models || providerInfo?.defaultSettings?.models)?.find((m) => m.modelId === model.modelId)
     }, [providers, model])
 
-    // Check if model supports tool use for files
     const { data: modelSupportToolUseForFile = false } = useQuery({
       queryKey: ['model-tool-capability', model?.provider, model?.modelId],
       queryFn: async () => {
@@ -322,7 +258,6 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
       gcTime: 10 * 60 * 1000,
     })
 
-    // Calculate token counts using unified cache layer
     const { contextTokens, currentInputTokens, totalTokens, isCalculating, pendingTasks, messageCount } =
       useContextTokens({
         sessionId: currentSessionId || null,
@@ -352,14 +287,12 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
       return !!modelInfo?.contextWindow || getModelContextWindowSync(model.modelId) !== null
     }, [model?.modelId, modelInfo?.contextWindow])
 
-    // Use model setting contextWindow if available, otherwise fallback to models.dev data
     const effectiveContextWindow = useMemo(() => {
       if (modelInfo?.contextWindow) return modelInfo.contextWindow
       if (model?.modelId) return getModelContextWindowSync(model.modelId)
       return null
     }, [modelInfo?.contextWindow, model?.modelId])
 
-    // Calculate token usage percentage
     const tokenPercentage = useMemo(() => {
       if (!effectiveContextWindow || effectiveContextWindow <= 0) return null
       return Math.round((totalTokens / effectiveContextWindow) * 100)
@@ -428,7 +361,6 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     useImperativeHandle(
       ref,
       () => ({
-        // 暂时并没有用到，还是使用了之前atom的方案
         setQuote: (data) => {
           setMessageInput((prev) => `${prev}\n\n${data}`)
           dom.focusMessageInput()
@@ -446,15 +378,12 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
         return
       }
 
-      // 有解析失败的文件或链接时，阻止发送并显示 toast
       if (hasPreprocessErrors) {
         toastActions.add(t('Some files failed to parse. Please remove them and try again.'))
         return
       }
 
-      // 未选择模型时 显示error tip
       if (!model) {
-        // 如果不延时执行，会导致error tip 立即消失
         await delay(100)
         if (closeSelectModelErrorTipCb.current) {
           clearTimeout(closeSelectModelErrorTipCb.current)
@@ -466,7 +395,6 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
 
       setIsSubmitting(true)
       try {
-        // Use the already constructed message
         if (!preConstructedMessage.message) {
           console.error('No constructed message available')
           return
@@ -536,10 +464,8 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
         'Ctrl+Shift+Enter': event.keyCode === 13 && event.ctrlKey && event.shiftKey,
       }
 
-      // 发送消息
       if (isPressedHash[shortcuts.inputBoxSendMessage]) {
         if (platform.type === 'mobile' && isSmallScreen && shortcuts.inputBoxSendMessage === 'Enter') {
-          // 移动端点击回车不会发送消息
           return
         }
         event.preventDefault()
@@ -547,19 +473,17 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
         return
       }
 
-      // 发送消息但不生成回复
       if (isPressedHash[shortcuts.inputBoxSendMessageWithoutResponse]) {
         event.preventDefault()
         handleSubmit(false)
         return
       }
 
-      // 向上向下键翻阅历史消息
       if (
         (event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
         inputRef.current &&
-        inputRef.current === document.activeElement && // 聚焦在输入框
-        (messageInput.length === 0 || window.getSelection()?.toString() === messageInput) // 要么为空，要么输入框全选
+        inputRef.current === document.activeElement &&
+        (messageInput.length === 0 || window.getSelection()?.toString() === messageInput)
       ) {
         event.preventDefault()
         if (event.key === 'ArrowUp') {
@@ -592,12 +516,9 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
       }
     }
 
-    // ----- Preprocessing helpers -----
     const startLinkPreprocessing = (url: string) => {
-      // 设置为处理中状态
       setPreConstructedMessage((prev) => markLinkProcessing(prev, url))
 
-      // 异步预处理链接，失败时标记为 error，并吞掉异常避免 Promise.all reject
       const preprocessPromise = sessionHelpers
         .preprocessLink(url, { provider: model?.provider || '', modelId: model?.modelId || '' })
         .then((preprocessedLink) => {
@@ -620,41 +541,15 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
           )
         })
 
-      // Store the promise
       setPreConstructedMessage((prev) => storeLinkPromise(prev, url, preprocessPromise))
-    }
-
-    const startFilePreprocessing = (file: File) => {
-      // 异步预处理文件，失败时标记为 error，并吞掉异常避免 Promise.all reject
-      return sessionHelpers
-        .preprocessFile(file, { provider: model?.provider || '', modelId: model?.modelId || '' })
-        .then((preprocessedFile) => {
-          setPreConstructedMessage((prev) => onFileProcessed(prev, file, preprocessedFile, 20))
-        })
-        .catch((error) => {
-          setPreConstructedMessage((prev) =>
-            onFileProcessed(
-              prev,
-              file,
-              {
-                file,
-                content: '',
-                storageKey: '',
-                error: (error as Error)?.message || 'Failed to preprocess the file.',
-              },
-              20
-            )
-          )
-        })
     }
 
     const insertLinks = (urls: string[]) => {
       let newLinks = [...(links || []), ...urls.map((u) => ({ url: u }))]
       newLinks = _.uniqBy(newLinks, 'url')
-      newLinks = newLinks.slice(-6) // 最多插入 6 个链接
+      newLinks = newLinks.slice(-6)
       setLinks(newLinks)
 
-      // 预处理链接（只处理前6个）
       for (let i = 0; i < Math.min(urls.length, 6); i++) {
         const url = urls[i]
         const linkIndex = newLinks.findIndex((l) => l.url === url)
@@ -665,80 +560,29 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
       }
     }
 
-    const insertFiles = async (files: File[]) => {
-      for (const file of files) {
-        // 文件和图片插入方法复用，会导致 svg、gif 这类不支持的图片也被插入，但暂时没看到有什么问题
-        if (file.type.startsWith('image/')) {
-          const base64 = await picUtils.getImageBase64AndResize(file)
-          const key = StorageKeyGenerator.picture('input-box')
-          await storage.setBlob(key, base64)
-          setPreConstructedMessage((prev) => ({
-            ...prev,
-            pictureKeys: [...(prev.pictureKeys || []), key].slice(-8),
-          })) // Maximum 8 images
-        } else {
-          // Check if file type is supported
-          if (!isSupportedFile(file.name)) {
-            const unsupportedType = getUnsupportedFileType(file.name)
-            let errorMsg = t('Unsupported file type: {{fileName}}', { fileName: file.name })
-            if (unsupportedType === 'iwork') {
-              errorMsg = t('iWork files (Pages, Keynote) are not supported. Please export to PDF or Office format.')
-            } else if (unsupportedType === 'audio') {
-              errorMsg = t('Audio files are not supported')
-            } else if (unsupportedType === 'video') {
-              errorMsg = t('Video files are not supported')
-            } else if (unsupportedType === 'binary') {
-              errorMsg = t('Binary/executable files are not supported')
-            } else if (unsupportedType === 'archive') {
-              errorMsg = t('Archive files are not supported. Please extract and upload individual files.')
-            } else if (unsupportedType === 'image') {
-              errorMsg = t('Advanced image formats are not supported. Please convert to JPG or PNG.')
-            }
-            toastActions.add(errorMsg)
-            continue
-          }
-          setPreConstructedMessage((prev) => {
-            const newAttachments = prev.attachments.find(
-              (f) => StorageKeyGenerator.fileUniqKey(f) === StorageKeyGenerator.fileUniqKey(file)
-            )
-              ? prev.attachments
-              : [...(prev.attachments || []), file].slice(-20) // Maximum 20 attachments
-
-            // Only preprocess first 20 files to avoid wasting resources
-            const fileIndex = newAttachments.findIndex(
-              (f) => f.name === file.name && f.lastModified === file.lastModified
-            )
-            if (fileIndex < 20) {
-              const preprocessPromise = startFilePreprocessing(file)
-              return {
-                ...storeFilePromise(markFileProcessing(prev, file), file, preprocessPromise),
-                attachments: newAttachments,
-              }
-            }
-
-            return {
-              ...prev,
-              attachments: newAttachments,
-            }
-          })
-        }
-      }
-    }
-
-    const onFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      if (!event.target.files) {
-        return
-      }
-      insertFiles(Array.from(event.target.files))
-      event.target.value = ''
-      dom.focusMessageInput()
-    }
-
     const onImageUploadClick = () => {
       pictureInputRef.current?.click()
     }
-    const onFileUploadClick = () => {
-      fileInputRef.current?.click()
+
+    const onImageInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (!event.target.files) {
+        return
+      }
+      const files = Array.from(event.target.files)
+      for (const file of files) {
+        if (file.type.startsWith('image/')) {
+          picUtils.getImageBase64AndResize(file).then(async (base64) => {
+            const key = StorageKeyGenerator.picture('input-box')
+            await storage.setBlob(key, base64)
+            setPreConstructedMessage((prev) => ({
+              ...prev,
+              pictureKeys: [...(prev.pictureKeys || []), key].slice(-8),
+            }))
+          })
+        }
+      }
+      event.target.value = ''
+      dom.focusMessageInput()
     }
 
     const onImageDeleteClick = async (picKey: string) => {
@@ -746,8 +590,6 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
         ...prev,
         pictureKeys: (prev.pictureKeys || []).filter((k) => k !== picKey),
       }))
-      // 不删除图片数据，因为可能在其他地方引用，比如通过上下键盘的历史消息快捷输入、发送的消息中引用
-      // await storage.delBlob(picKey)
     }
 
     const onPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -755,24 +597,25 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
         return
       }
       if (event.clipboardData?.items) {
-        // 对于 Doc/PPT/XLS 等文件中的内容，粘贴时一般会有 4 个 items，分别是 text 文本、html、某格式和图片
-        // 因为 getAsString 为异步操作，无法根据 items 中的内容来定制不同的粘贴行为，因此这里选择了最简单的做法：
-        // 保持默认的粘贴行为，这时候会粘贴从文档中复制的文本和图片。我认为应该保留图片，因为文档中的表格、图表等图片信息也很重要，很难通过文本格式来表述。
-        // 仅在只粘贴图片或文件时阻止默认行为，防止插入文件或图片的名字
         let hasText = false
         for (let i = 0; i < event.clipboardData.items.length; i++) {
           const item = event.clipboardData.items[i]
           if (item.kind === 'file') {
-            // Insert files and images
             const file = item.getAsFile()
-            if (file) {
-              insertFiles([file])
+            if (file && file.type.startsWith('image/')) {
+              picUtils.getImageBase64AndResize(file).then(async (base64) => {
+                const key = StorageKeyGenerator.picture('input-box')
+                await storage.setBlob(key, base64)
+                setPreConstructedMessage((prev) => ({
+                  ...prev,
+                  pictureKeys: [...(prev.pictureKeys || []), key].slice(-8),
+                }))
+              })
             }
             continue
           }
           hasText = true
           if (item.kind === 'string' && item.type === 'text/plain') {
-            // 插入链接：如果复制的是链接，则插入链接
             item.getAsString((text) => {
               const raw = text.trim()
               if (raw.startsWith('http://') || raw.startsWith('https://')) {
@@ -782,17 +625,9 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                   .filter((url) => url.startsWith('http://') || url.startsWith('https://'))
                 insertLinks(urls)
               }
-              if (pasteLongTextAsAFile && raw.length > 3000) {
-                const file = new File([text], `pasted_text_${attachments?.length || 0}.txt`, {
-                  type: 'text/plain',
-                })
-                insertFiles([file])
-                setMessageInput(messageInput) // 删除掉默认粘贴进去的长文本
-              }
             })
           }
         }
-        // 如果没有任何文本，则说明只是复制了图片或文件。这里阻止默认行为，防止插入文件或图片的名字
         if (!hasText) {
           event.preventDefault()
         }
@@ -806,30 +641,11 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
       }
     }
 
-    // 拖拽上传
-    const { getRootProps, getInputProps } = useDropzone({
-      onDrop: (acceptedFiles: File[], fileRejections) => {
-        insertFiles(acceptedFiles)
-        // Show toast for rejected files
-        if (fileRejections.length > 0) {
-          const rejectedNames = fileRejections.map((r) => r.file.name).join(', ')
-          toastActions.add(t('Unsupported file type: {{fileName}}', { fileName: rejectedNames }))
-        }
-      },
-      accept: getFileAcceptConfig(),
-      noClick: true,
-      noKeyboard: true,
-    })
-
-    // 引用消息
     const quote = useUIStore((state) => state.quote)
     const setQuote = useUIStore((state) => state.setQuote)
-    // const [quote, setQuote] = useUIStore(state => [state]) useAtom(atoms.quoteAtom)
     // biome-ignore lint/correctness/useExhaustiveDependencies: todo
     useEffect(() => {
       if (quote !== '') {
-        // TODO: 支持引用消息中的图片
-        // TODO: 支持引用消息中的文件
         setQuote('')
         setMessageInput((val) => {
           const newValue = !val
@@ -837,26 +653,11 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
             : val + '\n'.repeat(Math.max(0, 2 - (val.match(/(\n)+$/)?.[0].length || 0))) + quote
           return newValue
         })
-        // setPreviousMessageQuickInputMark('')
         dom.focusMessageInput()
         dom.setMessageInputCursorToEnd()
       }
     }, [quote])
 
-    const handleKnowledgeBaseSelect = useCallback(
-      (kb: KnowledgeBase | null) => {
-        if (!kb || kb.id === knowledgeBase?.id) {
-          setKnowledgeBase(undefined)
-          trackEvent('knowledge_base_disabled', { knowledge_base_name: knowledgeBase?.name })
-        } else {
-          setKnowledgeBase(pick(kb, 'id', 'name'))
-          trackEvent('knowledge_base_enabled', { knowledge_base_name: kb.name })
-        }
-      },
-      [knowledgeBase, setKnowledgeBase]
-    )
-
-    // Show deprecated notice for legacy picture sessions
     if (sessionType === 'picture') {
       return (
         <Box pt={0} pb={isSmallScreen ? 'md' : 'sm'} px="sm" id={dom.InputBoxID}>
@@ -878,8 +679,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     }
 
     return (
-      <Box pt={0} pb={isSmallScreen ? 'md' : 'sm'} px="sm" id={dom.InputBoxID} {...getRootProps()}>
-        <input className="hidden" {...getInputProps()} />
+      <Box pt={0} pb={isSmallScreen ? 'md' : 'sm'} px="sm" id={dom.InputBoxID}>
         <Stack className={cn(widthFull ? 'w-full' : 'max-w-4xl mx-auto')} gap="xs">
           {currentSessionId && <CompactionStatus sessionId={currentSessionId} />}
           <Stack
@@ -944,49 +744,11 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
               </ActionIcon>
             </Flex>
 
-            {(!!pictureKeys.length || !!attachments.length || !!links.length) && (
+            {(!!pictureKeys.length || !!links.length) && (
               <Flex align="center" wrap="wrap" onClick={() => dom.focusMessageInput()}>
                 {pictureKeys?.map((picKey) => (
                   <ImageMiniCard key={picKey} storageKey={picKey} onDelete={() => onImageDeleteClick(picKey)} />
                 ))}
-                {attachments?.map((file) => {
-                  const fileKey = StorageKeyGenerator.fileUniqKey(file)
-                  const status = preConstructedMessage.preprocessingStatus.files[fileKey]
-                  const preprocessedFile = preConstructedMessage.preprocessedFiles.find(
-                    (f) => StorageKeyGenerator.fileUniqKey(f.file) === fileKey
-                  )
-                  return (
-                    <FileMiniCard
-                      key={fileKey}
-                      name={file.name}
-                      fileType={file.type}
-                      status={status}
-                      errorMessage={preprocessedFile?.error}
-                      onErrorClick={() => {
-                        if (preprocessedFile?.error) {
-                          void NiceModal.show('file-parse-error', {
-                            errorCode: preprocessedFile.error,
-                            fileName: file.name,
-                          })
-                        }
-                      }}
-                      onDelete={() => {
-                        // Cancel any ongoing MinerU parsing for this file
-                        if (file.path && platform.cancelMineruParse) {
-                          platform.cancelMineruParse(file.path).catch(() => {
-                            // Ignore cancellation errors
-                          })
-                        }
-                        setPreConstructedMessage((prev) => ({
-                          ...cleanupFile(prev, file),
-                          attachments: (prev.attachments || []).filter(
-                            (f) => StorageKeyGenerator.fileUniqKey(f) !== fileKey
-                          ),
-                        }))
-                      }}
-                    />
-                  )
-                })}
                 {links?.map((link) => {
                   const linkKey = StorageKeyGenerator.linkUniqKey(link.url)
                   const status = preConstructedMessage.preprocessingStatus.links[linkKey]
@@ -1019,25 +781,27 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
 
             {/* Toolbar Row */}
             <Flex align="center" gap={0} className="shrink-0 w-full" justify="space-between">
-              {/* Hidden file inputs */}
-              <ImageUploadInput ref={pictureInputRef} onChange={onFileInputChange} />
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                onChange={onFileInputChange}
-                multiple
-                accept={getFileAcceptString()}
-              />
+              <ImageUploadInput ref={pictureInputRef} onChange={onImageInputChange} />
 
               {/* Left Group: Tool Buttons */}
               <Flex align="center" gap={0}>
-                <AttachmentMenu
-                  onImageUploadClick={onImageUploadClick}
-                  onFileUploadClick={onFileUploadClick}
-                  handleAttachLink={handleAttachLink}
-                  t={t}
-                />
+                <Tooltip label={t('Attach Image')} position="top" withArrow disabled={isSmallScreen}>
+                  <UnstyledButton
+                    onClick={onImageUploadClick}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors"
+                  >
+                    <IconPhoto size={toolbarIconSize} strokeWidth={1.8} className="text-[var(--chatbox-tint-secondary)]" />
+                  </UnstyledButton>
+                </Tooltip>
+
+                <Tooltip label={t('Attach Link')} position="top" withArrow disabled={isSmallScreen}>
+                  <UnstyledButton
+                    onClick={handleAttachLink}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors"
+                  >
+                    <IconLink size={toolbarIconSize} strokeWidth={1.8} className="text-[var(--chatbox-tint-secondary)]" />
+                  </UnstyledButton>
+                </Tooltip>
 
                 {featureFlags.mcp && (
                   <MCPMenu>
@@ -1061,38 +825,6 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                     )}
                   </MCPMenu>
                 )}
-
-                {featureFlags.knowledgeBase && !isSmallScreen && (
-                  <KnowledgeBaseMenu currentKnowledgeBaseId={knowledgeBase?.id} onSelect={handleKnowledgeBaseSelect}>
-                    <UnstyledButton className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors">
-                      <IconVocabulary
-                        size={toolbarIconSize}
-                        strokeWidth={1.8}
-                        className={
-                          knowledgeBase ? 'text-[var(--chatbox-tint-brand)]' : 'text-[var(--chatbox-tint-secondary)]'
-                        }
-                      />
-                    </UnstyledButton>
-                  </KnowledgeBaseMenu>
-                )}
-
-                <Tooltip label={t('Web Search')} position="top" withArrow disabled={isSmallScreen}>
-                  <UnstyledButton
-                    onClick={() => {
-                      setWebBrowsingMode(!webBrowsingMode)
-                      dom.focusMessageInput()
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors"
-                  >
-                    <IconWorldWww
-                      size={toolbarIconSize}
-                      strokeWidth={1.8}
-                      className={
-                        webBrowsingMode ? 'text-[var(--chatbox-tint-brand)]' : 'text-[var(--chatbox-tint-secondary)]'
-                      }
-                    />
-                  </UnstyledButton>
-                </Tooltip>
 
                 {!isSmallScreen &&
                   (showRollbackThreadButton && onRollbackThread ? (
@@ -1139,7 +871,6 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                   </Tooltip>
                 )}
 
-                {/* Mobile: Settings menu */}
                 {isSmallScreen && (onStartNewThread || onClickSessionSettings) && (
                   <Menu
                     trigger="click"
@@ -1272,47 +1003,4 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
   }
 )
 
-// Reusable attachment menu component with lightweight style
-const AttachmentMenu: React.FC<{
-  onImageUploadClick: () => void
-  onFileUploadClick: () => void
-  handleAttachLink: () => void
-  t: (key: string) => string
-}> = ({ onImageUploadClick, onFileUploadClick, handleAttachLink, t }) => {
-  const isSmallScreen = useIsSmallScreen()
-  const toolbarIconSize = isSmallScreen ? 22 : 18
-  return (
-    <Menu
-      shadow="md"
-      trigger={isSmallScreen ? 'click' : 'hover'}
-      position="top-start"
-      openDelay={100}
-      closeDelay={100}
-      keepMounted
-      transitionProps={{
-        transition: 'pop',
-        duration: 200,
-      }}
-    >
-      <Menu.Target>
-        <UnstyledButton className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors">
-          <IconCirclePlus size={toolbarIconSize} strokeWidth={1.8} className="text-[var(--chatbox-tint-secondary)]" />
-        </UnstyledButton>
-      </Menu.Target>
-      <Menu.Dropdown>
-        <Menu.Item leftSection={<IconPhoto size={16} />} onClick={onImageUploadClick}>
-          {t('Attach Image')}
-        </Menu.Item>
-        <Menu.Item leftSection={<IconFolder size={16} />} onClick={onFileUploadClick}>
-          {t('Select File')}
-        </Menu.Item>
-        <Menu.Item leftSection={<IconLink size={16} />} onClick={handleAttachLink}>
-          {t('Attach Link')}
-        </Menu.Item>
-      </Menu.Dropdown>
-    </Menu>
-  )
-}
-
-// Memoize the InputBox component to prevent unnecessary re-renders during streaming
 export default memo(InputBox)

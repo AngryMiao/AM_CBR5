@@ -33,21 +33,8 @@ import { StorageKeyGenerator } from '@/storage/StoreStorage'
 import { trackEvent } from '@/utils/track'
 import * as chatStore from '../chatStore'
 import { settingsStore } from '../settingsStore'
-import { uiStore } from '../uiStore'
 import { createNewFork, findMessageLocation } from './forks'
 import { insertMessageAfter, modifyMessage } from './messages'
-
-/**
- * Get session-level web browsing setting
- * Returns user's explicit setting if set, otherwise returns default based on provider
- */
-export function getSessionWebBrowsing(sessionId: string, provider: string | undefined): boolean {
-  const sessionValue = uiStore.getState().sessionWebBrowsingMap[sessionId]
-  if (sessionValue !== undefined) {
-    return sessionValue
-  }
-  return false
-}
 
 /**
  * Track generation event
@@ -59,10 +46,8 @@ function trackGenerateEvent(
   sessionType: SessionType | undefined,
   options?: { operationType?: 'send_message' | 'regenerate' }
 ) {
-  // Get a more meaningful provider identifier
   let providerIdentifier = settings.provider
   if (settings.provider?.startsWith('custom-provider-')) {
-    // For custom providers, use apiHost as identifier
     const providerSettings = globalSettings.providers?.[settings.provider]
     if (providerSettings?.apiHost) {
       try {
@@ -76,13 +61,10 @@ function trackGenerateEvent(
     }
   }
 
-  const webBrowsing = getSessionWebBrowsing(sessionId, settings.provider)
-
   trackEvent('generate', {
     provider: providerIdentifier,
     model: settings.modelId || 'unknown',
     operation_type: options?.operationType || 'unknown',
-    web_browsing_enabled: webBrowsing ? 'true' : 'false',
     session_type: sessionType || 'chat',
   })
 }
@@ -169,9 +151,6 @@ export async function generate(
   try {
     const dependencies = await createModelDependencies()
     const model = getModel(settings, globalSettings, configs, dependencies)
-    const sessionKnowledgeBaseMap = uiStore.getState().sessionKnowledgeBaseMap
-    const knowledgeBase = sessionKnowledgeBaseMap[sessionId]
-    const webBrowsing = getSessionWebBrowsing(sessionId, settings.provider)
     switch (session.type) {
       // Chat message generation
       case 'chat':
@@ -217,8 +196,6 @@ export async function generate(
             void modifyMessage(sessionId, targetMsg, false, true)
           },
           providerOptions: settings.providerOptions,
-          knowledgeBase,
-          webBrowsing,
         })
         targetMsg = {
           ...targetMsg,

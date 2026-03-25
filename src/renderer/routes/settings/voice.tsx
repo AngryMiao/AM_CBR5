@@ -1243,7 +1243,7 @@ export function RouteComponent() {
           </select>
           <p className="text-xs text-gray-500 mt-1">
             {settings.triggerMode === 'hold'
-              ? t('长按模式依赖 Chatbox 窗口内的按下/抬起事件，使用时请保持窗口处于激活状态。')
+              ? t('长按模式依赖 Angrymiao-Voice-Control 窗口内的按下/抬起事件，使用时请保持窗口处于激活状态。')
               : t('切换模式下，首次按下开始录音，再按一次结束录音。')}
           </p>
         </div>

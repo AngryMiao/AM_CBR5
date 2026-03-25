@@ -63,11 +63,7 @@ export default class DeepSeek extends AbstractAISDKModel {
   }
 
   isSupportToolUse(scope?: ToolUseScope) {
-    if (
-      scope &&
-      ['web-browsing', 'read-file'].includes(scope) &&
-      /deepseek-(v3|r1)$/.test(this.options.model.modelId.toLowerCase())
-    ) {
+    if (scope === 'read-file' && /deepseek-(v3|r1)$/.test(this.options.model.modelId.toLowerCase())) {
       return false
     }
     return super.isSupportToolUse()

@@ -17,7 +17,6 @@ export default function useShortcut() {
       keyboardShortcut(e)
     }
     const focusMessageInput = () => {
-      // 大屏幕下，窗口显示时自动聚焦输入框
       if (!isSmallScreen) {
         dom.focusMessageInput()
       }
@@ -33,7 +32,6 @@ export default function useShortcut() {
   }, [isSmallScreen])
 
   function keyboardShortcut(e: KeyboardEvent) {
-    // 这里不用 e.key 是因为 alt、 option、shift 都会改变 e.key 的值
     const ctrlOrCmd = e.ctrlKey || e.metaKey
     const shift = e.shiftKey
     const altOrOption = e.altKey
@@ -44,15 +42,7 @@ export default function useShortcut() {
       dom.focusMessageInput()
       return
     }
-    if (e.key === 'e' && ctrlKey) {
-      dom.focusMessageInput()
-      // Toggle session-level web browsing mode using cached display value
-      const sessionId = getDefaultStore().get(currentSessionIdAtom) || 'new'
-      uiStore.getState().toggleSessionWebBrowsing(sessionId)
-      return
-    }
 
-    // 清空当前单例语音会话。
     if (e.key === 'r' && ctrlKey) {
       e.preventDefault()
       const sid = getDefaultStore().get(currentSessionIdAtom)

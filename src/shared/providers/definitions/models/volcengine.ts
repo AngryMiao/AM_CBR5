@@ -52,9 +52,6 @@ export default class VolcEngine extends AbstractAISDKModel {
   }
 
   isSupportToolUse(scope?: ToolUseScope) {
-    if (scope === 'web-browsing' && /deepseek-(v3|r1)$/.test(this.options.model.modelId.toLowerCase())) {
-      return false
-    }
     return super.isSupportToolUse()
   }
 }

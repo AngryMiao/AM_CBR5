@@ -12,7 +12,6 @@ import clsx from 'clsx'
 import { type FC, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Toaster } from 'sonner'
-import SettingsKnowledgeBaseRouteComponent from '@/components/knowledge-base/KnowledgeBase'
 import { Modal } from '@/components/layout/Overlay'
 import { ScalableIcon } from '@/components/common/ScalableIcon'
 import { getThemeDesign } from '@/hooks/useAppTheme'
@@ -20,7 +19,6 @@ import useNeedRoomForWinControls from '@/hooks/useNeedRoomForWinControls'
 import { router } from '@/router'
 import { RouteComponent as SettingsChatRouteComponent } from '@/routes/settings/chat'
 import { RouteComponent as SettingsDefaultModelsRouteComponent } from '@/routes/settings/default-models'
-import { RouteComponent as SettingsDocumentParserRouteComponent } from '@/routes/settings/document-parser'
 import { RouteComponent as SettingsGeneralRouteComponent } from '@/routes/settings/general'
 import { RouteComponent as SettingsHotkeysRouteComponent } from '@/routes/settings/hotkeys'
 import { RouteComponent as SettingsIndexRouteComponent } from '@/routes/settings/index'
@@ -29,7 +27,6 @@ import { RouteComponent as SettingsProviderProviderIdRouteComponent } from '@/ro
 import { RouteComponent as SettingsProviderIndexRouteComponent } from '@/routes/settings/provider/index'
 import { RouteComponent as SettingsProviderRouteRouteComponent } from '@/routes/settings/provider/route'
 import { SettingsRoot } from '@/routes/settings/route'
-import { RouteComponent as SettingsWebSearchRouteComponent } from '@/routes/settings/web-search'
 import { RouteComponent as SettingsVoiceRouteComponent } from '@/routes/settings/voice'
 
 export type SettingsModalProps = {}
@@ -146,27 +143,9 @@ const SettingsChatRoute = createRoute({
   getParentRoute: () => RootRoute,
 })
 
-const SettingsWebSearchRoute = createRoute({
-  component: SettingsWebSearchRouteComponent,
-  path: '/settings/web-search',
-  getParentRoute: () => RootRoute,
-})
-
 const SettingsMcpRoute = createRoute({
   component: SettingsMcpRouteComponent,
   path: '/settings/mcp',
-  getParentRoute: () => RootRoute,
-})
-
-const SettingsKnowledgeBaseRoute = createRoute({
-  component: SettingsKnowledgeBaseRouteComponent,
-  path: '/settings/knowledge-base',
-  getParentRoute: () => RootRoute,
-})
-
-const SettingsDocumentParserRoute = createRoute({
-  component: SettingsDocumentParserRouteComponent,
-  path: '/settings/document-parser',
   getParentRoute: () => RootRoute,
 })
 
@@ -215,10 +194,7 @@ const routeTree = RootRoute.addChildren([
   SettingsIndexRoute,
   SettingsGeneralRoute,
   SettingsChatRoute,
-  SettingsWebSearchRoute,
   SettingsMcpRoute,
-  SettingsKnowledgeBaseRoute,
-  SettingsDocumentParserRoute,
   SettingsHotkeysRoute,
   SettingsDefaultModelsRoute,
   SettingsVoiceRoute,

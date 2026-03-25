@@ -1,17 +1,14 @@
 import { ActionIcon, Box, Flex, Stack, Text } from '@mantine/core'
 import {
   IconAdjustmentsHorizontal,
-  IconBook,
   IconBox,
   IconCategory,
   IconChevronLeft,
   IconChevronRight,
   IconCircleDottedLetterM,
-  IconFileText,
   IconKeyboard,
   IconMessages,
   IconMicrophone,
-  IconWorldWww,
 } from '@tabler/icons-react'
 import { createFileRoute, Link, Outlet, useCanGoBack, useRouter, useRouterState } from '@tanstack/react-router'
 import clsx from 'clsx'
@@ -26,6 +23,11 @@ import { featureFlags } from '@/utils/feature-flags'
 
 const ITEMS = [
   {
+    key: 'voice',
+    label: '语音控制',
+    icon: <IconMicrophone className="w-full h-full" />,
+  },
+  {
     key: 'provider',
     label: 'Model Provider',
     icon: <IconCategory className="w-full h-full" />,
@@ -34,11 +36,6 @@ const ITEMS = [
     key: 'default-models',
     label: 'Default Models',
     icon: <IconBox className="w-full h-full" />,
-  },
-  {
-    key: 'web-search',
-    label: 'Web Search',
-    icon: <IconWorldWww className="w-full h-full" />,
   },
   ...(featureFlags.mcp
     ? [
@@ -49,29 +46,10 @@ const ITEMS = [
         },
       ]
     : []),
-  ...(featureFlags.knowledgeBase
-    ? [
-        {
-          key: 'knowledge-base',
-          label: 'Knowledge Base',
-          icon: <IconBook className="w-full h-full" />,
-        },
-      ]
-    : []),
-  {
-    key: 'document-parser',
-    label: 'Document Parser',
-    icon: <IconFileText className="w-full h-full" />,
-  },
   {
     key: 'chat',
     label: 'Chat Settings',
     icon: <IconMessages className="w-full h-full" />,
-  },
-  {
-    key: 'voice',
-    label: 'Voice Control',
-    icon: <IconMicrophone className="w-full h-full" />,
   },
   ...(platform.type === 'mobile'
     ? []

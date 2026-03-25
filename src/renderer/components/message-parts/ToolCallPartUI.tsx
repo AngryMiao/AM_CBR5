@@ -1,9 +1,8 @@
-import { ActionIcon, alpha, Box, Code, Collapse, Group, Paper, SimpleGrid, Space, Stack, Text } from '@mantine/core'
+import { ActionIcon, alpha, Box, Code, Collapse, Group, Paper, Space, Stack, Text } from '@mantine/core'
 import {
   type Message,
   type MessageReasoningPart,
   type MessageToolCallPart,
-  MessageToolCallPartSchema,
 } from '@shared/types'
 import {
   IconArrowRight,
@@ -19,11 +18,9 @@ import {
 import clsx from 'clsx'
 import { type FC, type ReactNode, useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import z from 'zod'
 import { formatElapsedTime, useThinkingTimer } from '@/hooks/useThinkingTimer'
 import { cn } from '@/lib/utils'
 import { getToolName } from '@/packages/tools'
-import type { SearchResultItem } from '@/packages/web-search'
 import { ScalableIcon } from '../common/ScalableIcon'
 
 const ToolCallHeader: FC<{ part: MessageToolCallPart; action: ReactNode; onClick: () => void }> = (props) => {
@@ -45,119 +42,6 @@ const ToolCallHeader: FC<{ part: MessageToolCallPart; action: ReactNode; onClick
         {props.action}
       </Group>
     </Paper>
-  )
-}
-
-const WebBrowsingToolCallPartSchema = MessageToolCallPartSchema.extend({
-  toolName: z.literal('web_search'),
-  args: z.object({
-    query: z.string(),
-  }),
-  result: z
-    .object({
-      query: z.string(),
-      searchResults: z.array(
-        z.object({
-          title: z.string(),
-          snippet: z.string(),
-          link: z.string(),
-        })
-      ),
-    })
-    .optional(),
-})
-
-type WebBrowsingToolCallPart = MessageToolCallPart<
-  { query: string },
-  { query: string; searchResults: SearchResultItem[] }
->
-
-const getSafeExternalHref = (raw: string): string | null => {
-  const trimmed = raw.trim()
-  if (!trimmed) return null
-
-  if (!/^https?:\/\//i.test(trimmed)) {
-    return null
-  }
-
-  try {
-    return new URL(trimmed).toString()
-  } catch (_error) {
-    const encoded = trimmed.replace(/%(?![0-9A-Fa-f]{2})/g, '%25')
-    try {
-      return new URL(encoded).toString()
-    } catch (_innerError) {
-      return null
-    }
-  }
-}
-
-const SearchResultCard: FC<{ index: number; result: SearchResultItem }> = ({ index, result }) => {
-  const href = getSafeExternalHref(result.link)
-
-  const content = (
-    <Paper radius="md" p={8} bg={'var(--chatbox-background-gray-secondary)'} maw={200} title={result.title}>
-      <Text size="sm" truncate="end" m={0}>
-        <b>{index + 1}.</b> {result.title}
-      </Text>
-      <Text size="xs" truncate="end" c="chatbox-tertiary" m={0} mt={4}>
-        {result.link}
-      </Text>
-    </Paper>
-  )
-
-  if (!href) {
-    return content
-  }
-
-  return (
-    <Box component="a" href={href} target="_blank" rel="noopener noreferrer" className="no-underline">
-      {content}
-    </Box>
-  )
-}
-
-const WebSearchToolCallUI: FC<{ part: WebBrowsingToolCallPart }> = ({ part }) => {
-  const { t } = useTranslation()
-  const [expaned, setExpand] = useState(false)
-  return (
-    <Stack gap="xs" mb="xs">
-      <ToolCallHeader
-        part={part}
-        onClick={() => setExpand((prev) => !prev)}
-        action={
-          <ScalableIcon icon={IconChevronRight} className={clsx('transition-transform', expaned ? 'rotate-90' : '')} />
-        }
-      />
-      <Collapse in={expaned}>
-        <Stack gap="xs">
-          <Group gap="xs" my={2}>
-            <Text c="chatbox-tertiary" m={0}>
-              {t('Search query')}:
-            </Text>
-            <Text fw={600} size="sm" m={0} fs="italic">
-              {part.args.query}
-            </Text>
-          </Group>
-          {part.result && (
-            <SimpleGrid cols={{ sm: 3, md: 4 }} spacing="xs">
-              {part.result.searchResults.map((result, index) => (
-                <SearchResultCard key={result.link} index={index} result={result} />
-              ))}
-            </SimpleGrid>
-          )}
-        </Stack>
-      </Collapse>
-      <Collapse in={!expaned}>
-        {part.result && (
-          <Group gap="xs" wrap="nowrap" className="overflow-x-auto" pb="xs">
-            {part.result.searchResults.map((result, index) => (
-              <SearchResultCard key={result.link} index={index} result={result} />
-            ))}
-          </Group>
-        )}
-      </Collapse>
-    </Stack>
   )
 }
 
@@ -207,12 +91,6 @@ const GeneralToolCallUI: FC<{ part: MessageToolCallPart }> = ({ part }) => {
 }
 
 export const ToolCallPartUI: FC<{ part: MessageToolCallPart }> = ({ part }) => {
-  if (part.toolName === 'web_search') {
-    const parsedPart = WebBrowsingToolCallPartSchema.safeParse(part)
-    if (parsedPart.success) {
-      return <WebSearchToolCallUI part={parsedPart.data as WebBrowsingToolCallPart} />
-    }
-  }
   return <GeneralToolCallUI part={part} />
 }
 

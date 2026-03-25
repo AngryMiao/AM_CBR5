@@ -1,16 +1,13 @@
 import * as defaults from '@shared/defaults'
 import type { Config, Settings, ShortcutSetting } from '@shared/types'
 import localforage from 'localforage'
-import { v4 as uuidv4 } from 'uuid'
 import { parseLocale } from '@/i18n/parser'
 import { type ImageGenerationStorage, IndexedDBImageGenerationStorage } from '@/storage/ImageGenerationStorage'
 import { getBrowser, getOS } from '../packages/navigator'
 import type { Platform, PlatformType } from './interfaces'
-import type { KnowledgeBaseController } from './knowledge-base/interface'
 import { IndexedDBStorage } from './storages'
 import WebExporter from './web_exporter'
 import webLogger from './web_logger'
-import { parseTextFileLocally } from './web_platform_utils'
 
 export default class WebPlatform extends IndexedDBStorage implements Platform {
   public type: PlatformType = 'web'
@@ -146,16 +143,6 @@ export default class WebPlatform extends IndexedDBStorage implements Platform {
     return
   }
 
-  async parseFileLocally(file: File): Promise<{ key?: string; isSupported: boolean }> {
-    const result = await parseTextFileLocally(file)
-    if (!result.isSupported) {
-      return { isSupported: false }
-    }
-    const key = `parseFile-` + uuidv4()
-    await this.setStoreBlob(key, result.text)
-    return { key, isSupported: true }
-  }
-
   public async parseUrl(url: string): Promise<{ key: string; title: string }> {
     throw new Error('Not implemented')
   }
@@ -166,10 +153,6 @@ export default class WebPlatform extends IndexedDBStorage implements Platform {
 
   public async setFullscreen(enabled: boolean): Promise<void> {
     return
-  }
-
-  public getKnowledgeBaseController(): KnowledgeBaseController {
-    throw new Error('Method not implemented.')
   }
 
   public getImageGenerationStorage(): ImageGenerationStorage {

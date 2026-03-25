@@ -1,5 +1,5 @@
-productName: Chatbox
-appId: xyz.chatboxapp.app
+productName: Angrymiao-Voice-Control
+appId: xyz.angrymiao.voicecontrol
 asar: true
 asarUnpack:
   - "**\\*.{node,dll}"

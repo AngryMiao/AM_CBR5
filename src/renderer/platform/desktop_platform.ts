@@ -4,14 +4,11 @@ import type { ElectronIPC } from '@shared/electron-types'
 import type { Config, Settings, ShortcutSetting } from '@shared/types'
 import { cache } from '@shared/utils/cache'
 import localforage from 'localforage'
-import { v4 as uuidv4 } from 'uuid'
 import { parseLocale } from '@/i18n/parser'
 import { type ImageGenerationStorage, IndexedDBImageGenerationStorage } from '@/storage/ImageGenerationStorage'
 import { getOS } from '../packages/navigator'
 import type { Platform, PlatformType } from './interfaces'
-import DesktopKnowledgeBaseController from './knowledge-base/desktop-controller'
 import WebExporter from './web_exporter'
-import { parseTextFileLocally } from './web_platform_utils'
 
 const store = localforage.createInstance({ name: 'chatboxstore' })
 
@@ -20,7 +17,6 @@ export default class DesktopPlatform implements Platform {
 
   public exporter = new WebExporter()
 
-  private _kbController?: DesktopKnowledgeBaseController
   private _imageGenerationStorage: ImageGenerationStorage | null = null
 
   public ipc: ElectronIPC
@@ -200,44 +196,6 @@ export default class DesktopPlatform implements Platform {
     return this.ipc.invoke('ensureAutoLaunch', enable)
   }
 
-  async parseFileLocally(file: File): Promise<{ key?: string; isSupported: boolean }> {
-    let result: { text: string; isSupported: boolean }
-    if (!file.path) {
-      // 复制长文本粘贴的文件是没有 path 的
-      result = await parseTextFileLocally(file)
-    } else {
-      const resultJSON = await this.ipc.invoke('parseFileLocally', JSON.stringify({ filePath: file.path }))
-      result = JSON.parse(resultJSON)
-    }
-    if (!result.isSupported) {
-      return { isSupported: false }
-    }
-    const key = `parseFile-` + uuidv4()
-    await this.setStoreBlob(key, result.text)
-    return { key, isSupported: true }
-  }
-
-  async parseFileWithMineru(
-    file: File,
-    apiToken: string
-  ): Promise<{ success: boolean; content?: string; error?: string; cancelled?: boolean }> {
-    if (!file.path) {
-      // Files without path (e.g., pasted files) are not supported for MinerU parsing
-      return { success: false, error: 'File path is required for MinerU parsing' }
-    }
-
-    return this.ipc.invoke('parser:parse-file-with-mineru', {
-      filePath: file.path,
-      filename: file.name,
-      mimeType: file.type,
-      apiToken,
-    })
-  }
-
-  async cancelMineruParse(filePath: string): Promise<{ success: boolean; error?: string }> {
-    return this.ipc.invoke('parser:cancel-mineru-parse', filePath)
-  }
-
   public async parseUrl(url: string): Promise<{ key: string; title: string }> {
     const json = await this.ipc.invoke('parseUrl', url)
     return JSON.parse(json)
@@ -253,13 +211,6 @@ export default class DesktopPlatform implements Platform {
 
   public async switchTheme(theme: 'dark' | 'light') {
     return this.ipc.invoke('switch-theme', theme)
-  }
-
-  public getKnowledgeBaseController() {
-    if (!this._kbController) {
-      this._kbController = new DesktopKnowledgeBaseController(this.ipc)
-    }
-    return this._kbController
   }
 
   public getImageGenerationStorage(): ImageGenerationStorage {

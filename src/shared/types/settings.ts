@@ -4,32 +4,6 @@ import { ModelProviderEnum, ModelProviderType } from './provider'
 // Re-export for backward compatibility
 export { ModelProviderType } from './provider'
 
-// ===== Document Parser Types =====
-
-/**
- * Document parser service type
- * - none: No parsing service, only supports basic text files (mobile/web default)
- * - local: Local parsing using built-in libraries (desktop default)
- * - chatbox-ai: Chatbox cloud parsing service (requires login, consumes compute points)
- * - mineru: Third-party MinerU parsing service (desktop only)
- */
-export type DocumentParserType = 'none' | 'local' | 'chatbox-ai' | 'mineru'
-
-export const DocumentParserConfigSchema = z.object({
-  type: z.enum(['none', 'local', 'chatbox-ai', 'mineru']),
-  mineru: z
-    .object({
-      apiToken: z.string(),
-    })
-    .optional(),
-})
-
-export type DocumentParserConfig = z.infer<typeof DocumentParserConfigSchema>
-
-export const DEFAULT_DOCUMENT_PARSER_CONFIG: DocumentParserConfig = {
-  type: 'local',
-}
-
 export const ProviderModelInfoSchema = z.object({
   modelId: z.string(),
   type: z.enum(['chat', 'embedding', 'rerank']).optional().catch(undefined),
@@ -182,7 +156,6 @@ const ShortcutToggleWindowValueSchema = z.enum(shortcutToggleWindowValues as [st
 const ShortcutSettingSchema = z.object({
   quickToggle: ShortcutToggleWindowValueSchema,
   inputBoxFocus: z.string(),
-  inputBoxWebBrowsingMode: z.string(),
   newChat: z.string(),
   newPictureChat: z.string(),
   sessionListNavNext: z.string(),
@@ -197,38 +170,7 @@ const ShortcutSettingSchema = z.object({
   inputBoxSendMessageWithoutResponse: ShortcutSendValueSchema,
 })
 
-const ExtensionSettingsSchema = z.object({
-  webSearch: z.object({
-    provider: z.enum(['build-in', 'bing', 'tavily']),
-    tavilyApiKey: z.string().optional(),
-    tavilySearchDepth: z.string().optional(),
-    tavilyMaxResults: z.number().optional(),
-    tavilyTimeRange: z.string().optional(),
-    tavilyIncludeRawContent: z.string().optional(),
-  }),
-  knowledgeBase: z
-    .object({
-      models: z.object({
-        embedding: z
-          .object({
-            modelId: z.string(),
-            providerId: z.string(),
-          })
-          .nullable()
-          .optional(),
-        rerank: z
-          .object({
-            modelId: z.string(),
-            providerId: z.string(),
-          })
-          .nullable()
-          .optional(),
-      }),
-    })
-    .optional(),
-  // Document parser configuration for global default
-  documentParser: DocumentParserConfigSchema.optional(),
-})
+const ExtensionSettingsSchema = z.object({})
 
 const MCPTransportConfigSchema = z.discriminatedUnion('type', [
   z.object({

@@ -18,7 +18,7 @@ if (platform.type !== 'desktop') {
 
 export async function tickStorageTask() {
   const allBlobKeys = await storage.getBlobKeys()
-  const prefixes = ['picture:', 'file:', 'parseUrl-', 'parseFile-']
+  const prefixes = ['picture:', 'file:', 'parseUrl-']
   const storageKeys = allBlobKeys.filter((key) => prefixes.some((prefix) => key.startsWith(prefix)))
   if (storageKeys.length === 0) {
     return

@@ -1,4 +1,3 @@
-import { isTextFilePath } from '@shared/file-extensions'
 import type {
   ExportChatFormat,
   ExportChatScope,
@@ -9,14 +8,12 @@ import type {
   SessionThreadBrief,
   Settings,
 } from '@shared/types'
-import type { DocumentParserConfig } from '@shared/types/settings'
 import { getMessageText, migrateMessage } from '@shared/utils/message'
 import { pick } from 'lodash'
 import i18n from '@/i18n'
 import { formatChatAsHtml, formatChatAsMarkdown, formatChatAsTxt } from '@/lib/format-chat'
 import { getLogger } from '@/lib/utils'
 import { PREVIEW_LINES } from '@/packages/context-management/attachment-payload'
-import * as localParser from '@/packages/local-parser'
 import * as remote from '@/packages/remote'
 import { estimateTokens, getTokenizerType } from '@/packages/token'
 import platform from '@/platform'
@@ -27,7 +24,7 @@ import * as defaults from '../../shared/defaults'
 import { createMessage, type Message, SessionSettingsSchema, TOKEN_CACHE_KEYS } from '../../shared/types'
 import { lastUsedModelStore } from './lastUsedModelStore'
 import * as settingActions from './settingActions'
-import { getPlatformDefaultDocumentParser, settingsStore } from './settingsStore'
+import { settingsStore } from './settingsStore'
 
 const log = getLogger('session-helpers')
 
@@ -76,97 +73,9 @@ export function computePreviewMetadata(
   return { lineCount, byteLength, tokenCountMap, tokenCalculatedAt }
 }
 
-function getEffectiveDocumentParserConfig(): DocumentParserConfig {
-  const globalConfig = settingsStore.getState().extension?.documentParser
-  return globalConfig ?? getPlatformDefaultDocumentParser()
-}
-
-/**
- * Parse file using local parser (desktop only)
- */
-async function parseFileWithLocalParser(
-  file: File,
-  uniqKey: string
-): Promise<{ content: string; storageKey: string; tokenCountMap: Record<string, number> }> {
-  const result = await platform.parseFileLocally(file)
-
-  if (!result.isSupported || !result.key) {
-    throw new Error('local_parser_failed')
-  }
-
-  // Get content from temporary storage
-  const content = (await storage.getBlob(result.key).catch(() => '')) || ''
-
-  // Store content to unique key
-  if (content) {
-    await storage.setBlob(uniqKey, content)
-  }
-
-  // Calculate token counts
-  const tokenCountMap: Record<string, number> = content
-    ? {
-        [TOKEN_CACHE_KEYS.default]: estimateTokens(content),
-        [TOKEN_CACHE_KEYS.deepseek]: estimateTokens(content, { provider: '', modelId: 'deepseek' }),
-      }
-    : {}
-
-  if (content) {
-    await storage.setItem(`${uniqKey}_tokenMap`, tokenCountMap)
-  }
-
-  return { content, storageKey: uniqKey, tokenCountMap }
-}
-
-/**
- * Parse file using MinerU service (Desktop only)
- */
-async function parseFileWithMineruService(
-  file: File,
-  uniqKey: string,
-  apiToken: string
-): Promise<{ content: string; storageKey: string; tokenCountMap: Record<string, number> }> {
-  // Check if platform supports MinerU parsing
-  if (!platform.parseFileWithMineru) {
-    throw new Error('third_party_parser_not_supported_in_chat')
-  }
-
-  // Call platform method to parse file
-  const result = await platform.parseFileWithMineru(file, apiToken)
-
-  // Handle cancellation - throw a special error that will be caught silently
-  if (result.cancelled) {
-    throw new Error('parsing_cancelled')
-  }
-
-  if (!result.success || !result.content) {
-    throw new Error('third_party_parser_failed')
-  }
-
-  const content = result.content
-
-  // Store content to unique key
-  await storage.setBlob(uniqKey, content)
-
-  // Calculate token counts
-  const tokenCountMap: Record<string, number> = {
-    [TOKEN_CACHE_KEYS.default]: estimateTokens(content),
-    [TOKEN_CACHE_KEYS.deepseek]: estimateTokens(content, { provider: '', modelId: 'deepseek' }),
-  }
-
-  await storage.setItem(`${uniqKey}_tokenMap`, tokenCountMap)
-
-  return { content, storageKey: uniqKey, tokenCountMap }
-}
-
-/**
- * 预处理文件以获取内容和存储键
- * @param file 文件对象
- * @param settings 会话设置
- * @returns 预处理后的文件信息
- */
 export async function preprocessFile(
-  file: File,
-  settings: SessionSettings
+  _file: File,
+  _settings: SessionSettings
 ): Promise<{
   file: File
   content: string
@@ -176,122 +85,11 @@ export async function preprocessFile(
   byteLength?: number
   error?: string
 }> {
-  try {
-    const uniqKey = StorageKeyGenerator.fileUniqKey(file)
-
-    // Check if file has already been processed (cache hit)
-    const existingContent = await storage.getBlob(uniqKey).catch(() => null)
-    if (existingContent) {
-      log.debug(`File already preprocessed: ${file.name}, using cached content.`)
-      const existingTokenMap: Record<string, number> = (await storage.getItem(`${uniqKey}_tokenMap`, {})) as Record<
-        string,
-        number
-      >
-
-      const tokenizerType = getCurrentTokenizerType()
-      const { lineCount, byteLength, tokenCountMap } = computePreviewMetadata(
-        existingContent,
-        tokenizerType,
-        existingTokenMap
-      )
-
-      await storage.setItem(`${uniqKey}_tokenMap`, tokenCountMap)
-
-      return {
-        file,
-        content: existingContent,
-        storageKey: uniqKey,
-        tokenCountMap,
-        lineCount,
-        byteLength,
-      }
-    }
-
-    // Get document parser configuration from global settings
-    const parserConfig = getEffectiveDocumentParserConfig()
-    log.debug(`Using document parser: ${parserConfig.type} for file: ${file.name}`)
-
-    let result: { content: string; storageKey: string; tokenCountMap: Record<string, number> }
-
-    // Text files always use local parsing for efficiency (same as Knowledge Base behavior)
-    // This applies to all platforms (desktop/web/mobile)
-    if (isTextFilePath(file.name)) {
-      log.debug(`Text file detected, using local parser: ${file.name}`)
-      try {
-        result = await parseFileWithLocalParser(file, uniqKey)
-      } catch (error) {
-        throw new Error('local_parser_failed')
-      }
-    } else {
-      // Non-text files use the configured parser
-      switch (parserConfig.type) {
-        case 'none': {
-          // No parser configured - non-text files are not supported
-          // Prompt user to enable a parser in settings
-          throw new Error('document_parser_not_configured')
-        }
-
-        case 'local': {
-          // Local parsing - only available on desktop
-          // On mobile/web, this will fail and throw local_parser_failed
-          try {
-            result = await parseFileWithLocalParser(file, uniqKey)
-          } catch (error) {
-            // Local parsing failed, throw appropriate error
-            throw new Error('local_parser_failed')
-          }
-          break
-        }
-
-        case 'mineru': {
-          // MinerU parsing - available on desktop only
-          const apiToken = parserConfig.mineru?.apiToken
-          if (!apiToken) {
-            throw new Error('mineru_api_token_required')
-          }
-          try {
-            result = await parseFileWithMineruService(file, uniqKey, apiToken)
-          } catch (error) {
-            // Re-throw known errors, wrap unknown ones
-            if (error instanceof Error && error.message.startsWith('third_party_parser')) {
-              throw error
-            }
-            throw new Error('third_party_parser_failed')
-          }
-          break
-        }
-
-        default: {
-          // Unknown parser type, fall back to error
-          throw new Error('document_parser_not_configured')
-        }
-      }
-    }
-
-    const tokenizerType = getCurrentTokenizerType()
-    const { lineCount, byteLength, tokenCountMap } = computePreviewMetadata(
-      result.content,
-      tokenizerType,
-      result.tokenCountMap
-    )
-    await storage.setItem(`${result.storageKey}_tokenMap`, tokenCountMap)
-
-    return {
-      file,
-      content: result.content,
-      storageKey: result.storageKey,
-      tokenCountMap,
-      lineCount,
-      byteLength,
-    }
-  } catch (error) {
-    log.error('Failed to preprocess file:', error)
-    return {
-      file,
-      content: '',
-      storageKey: '',
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }
+  return {
+    file: _file,
+    content: '',
+    storageKey: '',
+    error: 'File attachments are not supported',
   }
 }
 
@@ -350,8 +148,11 @@ export async function preprocessLink(
       }
     }
 
-    const { key, title } = await localParser.parseUrl(url)
-    const content = (await storage.getBlob(key).catch(() => '')) || ''
+    const fetchResult = await remote.parseUserLinkFree({ url })
+    const tempKey = `parseUrl-${Date.now()}`
+    await platform.setStoreBlob(tempKey, fetchResult.text)
+    const title = fetchResult.title
+    const content = fetchResult.text || ''
 
     if (content) {
       await storage.setBlob(uniqKey, content)

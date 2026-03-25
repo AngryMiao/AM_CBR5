@@ -56,17 +56,17 @@ export default class MenuBuilder {
 
   buildDarwinTemplate(): MenuItemConstructorOptions[] {
     const subMenuAbout: DarwinMenuItemConstructorOptions = {
-      label: 'Chatbox',
+      label: 'Angrymiao-Voice-Control',
       submenu: [
         {
-          label: 'About Chatbox',
+          label: 'About Angrymiao-Voice-Control',
           selector: 'orderFrontStandardAboutPanel:',
         },
         { type: 'separator' },
         { label: 'Services', submenu: [] },
         { type: 'separator' },
         {
-          label: 'Hide Chatbox',
+          label: 'Hide Angrymiao-Voice-Control',
           accelerator: 'Command+H',
           selector: 'hide:',
         },

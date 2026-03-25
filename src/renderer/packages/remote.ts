@@ -415,39 +415,6 @@ export async function parseUserLinkFree(params: { url: string }) {
   return json
 }
 
-export async function webBrowsing(params: { licenseKey: string; query: string }) {
-  type Response = {
-    data: {
-      uuid?: string
-      query: string
-      links: {
-        title: string
-        url: string
-        content: string
-      }[]
-    }
-  }
-  const afetch = await getAfetch()
-  const res = await afetch(
-    `${getAPIOrigin()}/api/tool/web-search`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: params.licenseKey,
-        'Content-Type': 'application/json',
-        ...(await getChatboxHeaders()),
-      },
-      body: JSON.stringify(params),
-    },
-    {
-      parseChatboxRemoteError: true,
-      retry: 2,
-    }
-  )
-  const json: Response = await res.json()
-  return json['data']
-}
-
 export async function activateLicense(params: { licenseKey: string; instanceName: string }) {
   type Response = {
     data: {

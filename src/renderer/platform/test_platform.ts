@@ -9,10 +9,8 @@
 
 import * as defaults from '@shared/defaults'
 import type { Config, Language, Settings, ShortcutSetting } from '@shared/types'
-import { v4 as uuidv4 } from 'uuid'
 import { type ImageGenerationStorage, IndexedDBImageGenerationStorage } from '@/storage/ImageGenerationStorage'
 import type { Exporter, Platform, PlatformType, Storage } from './interfaces'
-import type { KnowledgeBaseController } from './knowledge-base/interface'
 
 /**
  * 内存存储类，用于测试环境
@@ -279,28 +277,12 @@ export default class TestPlatform implements Platform {
     // no-op
   }
 
-  public async parseFileLocally(file: File): Promise<{ key?: string; isSupported: boolean }> {
-    // 简单实现：读取文件内容
-    try {
-      const text = await file.text()
-      const key = `parseFile-${uuidv4()}`
-      await this.setStoreBlob(key, text)
-      return { key, isSupported: true }
-    } catch {
-      return { isSupported: false }
-    }
-  }
-
   public async isFullscreen(): Promise<boolean> {
     return false
   }
 
   public async setFullscreen(enabled: boolean): Promise<void> {
     // no-op
-  }
-
-  public getKnowledgeBaseController(): KnowledgeBaseController {
-    throw new Error('Knowledge base not implemented in test platform.')
   }
 
   public getImageGenerationStorage(): ImageGenerationStorage {

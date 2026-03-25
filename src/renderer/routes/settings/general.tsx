@@ -174,7 +174,7 @@ export function RouteComponent() {
           <Title order={5}>{t('Error Reporting')}</Title>
           <Text c="chatbox-tertiary">
             {t(
-              'Chatbox respects your privacy and only uploads anonymous error data and events when necessary. You can change your preferences at any time in the settings.'
+              'Angrymiao-Voice-Control respects your privacy and only uploads anonymous error data and events when necessary. You can change your preferences at any time in the settings.'
             )}
           </Text>
         </Stack>

@@ -41,8 +41,8 @@ function RouteComponent() {
             <Image h={100} w={100} mah={'20vw'} maw={'20vw'} src={iconPNG} />
             <Stack flex={1} gap="xxs">
               <Flex justify="space-between" align="center" wrap="wrap" gap={isSmallScreen ? 'xs' : 'sm'} rowGap="xs">
-                <Title order={5} lh={1.5} lineClamp={1} title={`Chatbox v${version.version}`}>
-                  Chatbox {/\d/.test(version.version) ? `(v${version.version})` : ''}
+                <Title order={5} lh={1.5} lineClamp={1} title={`Angrymiao-Voice-Control v${version.version}`}>
+                  Angrymiao-Voice-Control {/\d/.test(version.version) ? `(v${version.version})` : ''}
                 </Title>
               </Flex>
               <Text>{t('about-slogan')}</Text>
@@ -78,8 +78,8 @@ function RouteComponent() {
                 <Title order={5}>正版提示</Title>
               </Flex>
               <Text>
-                近期出现了附带 Chatbox 的所谓一键本地部署 DeepSeek 的付费捆绑软件安装包。
-                Chatbox客户端本身是开源免费软件，只在官网(chatboxai.app)销售托管AI服务。
+                近期出现了附带 Angrymiao-Voice-Control 的所谓一键本地部署 DeepSeek 的付费捆绑软件安装包。
+                Angrymiao-Voice-Control客户端本身是开源免费软件，只在官网(chatboxai.app)销售托管AI服务。
                 如果发现上当受骗，请尽快在对应支付平台如微信、支付宝申请退款。
               </Text>
             </Stack>
@@ -90,7 +90,7 @@ function RouteComponent() {
               icon={<BrandGithub className="w-full h-full" />}
               title={t('Github')}
               link="https://github.com/chatboxai/chatbox"
-              value="chatbox"
+              value="Angrymiao-Voice-Control"
             />
             {/* <ListItem
               icon={<BrandX className="w-full h-full" />}
@@ -111,7 +111,7 @@ function RouteComponent() {
             <ListItem
               icon={<IconHome className="w-full h-full" />}
               title={t('Homepage')}
-              link={`https://chatboxai.app/redirect_app/homepage/${language}`}
+              link={`https://chatboxai.app/redirect_app/homepage/${_i18n.language}`}
             />
             <ListItem
               icon={<IconClipboard className="w-full h-full" />}
@@ -121,12 +121,12 @@ function RouteComponent() {
             <ListItem
               icon={<IconPencil className="w-full h-full" />}
               title={t('Feedback')}
-              link={`https://chatboxai.app/redirect_app/feedback/${language}`}
+              link={`https://chatboxai.app/redirect_app/feedback/${_i18n.language}`}
             />
             <ListItem
               icon={<IconFileText className="w-full h-full" />}
               title={t('Changelog')}
-              link={`https://chatboxai.app/${language.split('-')[0] || 'en'}/help-center/changelog`}
+              link={`https://chatboxai.app/${_i18n.language.split('-')[0] || 'en'}/help-center/changelog`}
             />
             <ListItem
               icon={<IconMail className="w-full h-full" />}
@@ -137,7 +137,7 @@ function RouteComponent() {
             <ListItem
               icon={<IconMessage2 className="w-full h-full" />}
               title={t('FAQs')}
-              link={`https://chatboxai.app/${language.split('-')[0] || 'en'}/help-center/chatbox-ai-service-faqs`}
+              link={`https://chatboxai.app/${_i18n.language.split('-')[0] || 'en'}/help-center/chatbox-ai-service-faqs`}
             />
           </List>
         </Stack>

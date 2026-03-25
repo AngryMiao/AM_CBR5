@@ -149,7 +149,6 @@ export function settings(): Settings {
     shortcuts: {
       quickToggle: 'Alt+`', // 快速切换窗口显隐的快捷键
       inputBoxFocus: 'mod+i', // 聚焦输入框的快捷键
-      inputBoxWebBrowsingMode: 'mod+e', // 切换输入框的 web 浏览模式的快捷键
       newChat: 'mod+n', // 新建聊天的快捷键
       newPictureChat: 'mod+shift+n', // 新建图片会话的快捷键
       sessionListNavNext: 'mod+tab', // 切换到下一个会话的快捷键
@@ -163,22 +162,7 @@ export function settings(): Settings {
       optionNavDown: 'down', // 选项导航的快捷键
       optionSelect: 'enter', // 选项导航的快捷键
     },
-    extension: {
-      webSearch: {
-        provider: 'build-in',
-        tavilyApiKey: '',
-      },
-      knowledgeBase: {
-        models: {
-          embedding: undefined,
-          rerank: undefined,
-        },
-      },
-      // documentParser is NOT set here - it uses platform-specific defaults
-      // Desktop: 'local', Mobile/Web: 'chatbox-ai'
-      // See settingsStore.ts for the platform-aware initialization logic
-      documentParser: undefined,
-    },
+    extension: {},
     mcp: {
       servers: [],
       enabledBuiltinServers: [],

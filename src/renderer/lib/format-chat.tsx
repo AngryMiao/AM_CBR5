@@ -191,7 +191,7 @@ export function formatChatAsMarkdown(sessionName: string, threads: SessionThread
   content += `
 <a href="https://chatboxai.app" style="display: flex; align-items: center;">
 <img src='https://chatboxai.app/icon.png' style='width: 40px; height: 40px; padding-right: 6px'>
-<b style='font-size:30px'>Chatbox AI</b>
+<b style='font-size:30px'>Angrymiao-Voice-Control</b>
 </a>
 `
   return content
@@ -258,7 +258,7 @@ export function formatChatAsTxt(sessionName: string, threads: SessionThread[]) {
     content += '\n\n\n\n'
   }
   content += `========================================================================\n\n`
-  content += `Chatbox AI (https://chatboxai.app)`
+  content += `Angrymiao-Voice-Control (https://chatboxai.app)`
   return content
 }
 
@@ -362,7 +362,7 @@ export async function formatChatAsHtml(sessionName: string, threads: SessionThre
         <hr />
         <a href="https://chatboxai.app" style="display: flex; align-items: center;" class="text-sky-500" target="_blank">
             <img src='https://chatboxai.app/icon.png' class="w-12 pr-2">
-            <b style='font-size:30px'>Chatbox AI</b>
+            <b style='font-size:30px'>Angrymiao-Voice-Control</b>
         </a>
         <p><a a href="https://chatboxai.app" target="_blank">https://chatboxai.app</a></p>
     </div>

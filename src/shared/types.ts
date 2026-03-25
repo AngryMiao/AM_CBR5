@@ -8,8 +8,6 @@ import {
   type SessionThread,
   type TokenCountMap,
 } from './types/session'
-import type { DocumentParserConfig, DocumentParserType } from './types/settings'
-
 export type Updater<T extends object> = Partial<T> | UpdaterFn<T>
 export type UpdaterFn<T extends object> = (data: T | null | undefined) => T
 
@@ -93,11 +91,6 @@ export interface RemoteConfig {
   setting_chatboxai_first: boolean
   current_version: string
   product_ids: number[]
-  knowledge_base_models?: {
-    embedding: string
-    vision: string
-    rerank: string
-  }
 }
 
 export type ChatboxAIModel = 'chatboxai-3.5' | 'chatboxai-4' | string
@@ -161,46 +154,6 @@ export function copyThreads(source?: SessionThread[], idMapping?: Map<string, st
       compactionPoints: newCompactionPoints?.length ? newCompactionPoints : thread.compactionPoints ? [] : undefined,
     }
   })
-}
-
-// RAG related types
-export type KnowledgeBaseProviderMode = 'chatbox-ai' | 'custom'
-
-export interface KnowledgeBase {
-  id: number
-  name: string
-  embeddingModel: string
-  rerankModel: string
-  visionModel?: string
-  providerMode?: KnowledgeBaseProviderMode
-  documentParser?: DocumentParserConfig
-  createdAt: number
-}
-
-export interface KnowledgeBaseFile {
-  id: number
-  kb_id: number
-  filename: string
-  filepath: string
-  mime_type: string
-  file_size: number
-  chunk_count: number
-  total_chunks: number
-  status: string
-  error: string
-  createdAt: number
-  parsed_remotely: number
-  parser_type?: DocumentParserType
-}
-
-export interface KnowledgeBaseSearchResult {
-  id: number
-  score: number
-  text: string
-  fileId: number
-  filename: string
-  mimeType: string
-  chunkIndex: number
 }
 
 export type FileMeta = {

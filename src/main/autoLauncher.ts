@@ -6,7 +6,7 @@ let _autoLaunch: AutoLaunch | null = null
 
 export function get() {
   if (!_autoLaunch) {
-    _autoLaunch = new AutoLaunch({ name: 'Chatbox' })
+    _autoLaunch = new AutoLaunch({ name: 'Angrymiao-Voice-Control' })
   }
   return _autoLaunch
 }
