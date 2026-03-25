@@ -174,6 +174,42 @@ server.registerTool(
   }
 )
 
+server.registerTool(
+  'open_application',
+  {
+    description: 'Open a local application. macOS: use app name (e.g. "WeChat", "Visual Studio Code"); Windows: use program name (e.g. "notepad", "calc"); Linux: use command name.',
+    inputSchema: z.object({
+      appName: z.string().describe('Application name to open'),
+    }),
+  },
+  async ({ appName }) => {
+    const result = await executeSystemCommand('open-application', { appName })
+    assertExecutionSuccess(result)
+    return {
+      content: [{ type: 'text', text: result.message }],
+      isError: false,
+    }
+  }
+)
+
+server.registerTool(
+  'close_application',
+  {
+    description: 'Close a running application gracefully. macOS: use app name (e.g. "Google Chrome", "Safari"); Windows: use process name (e.g. "chrome.exe"); Linux: use process name.',
+    inputSchema: z.object({
+      appName: z.string().describe('Application name to close'),
+    }),
+  },
+  async ({ appName }) => {
+    const result = await executeSystemCommand('close-application', { appName })
+    assertExecutionSuccess(result)
+    return {
+      content: [{ type: 'text', text: result.message }],
+      isError: false,
+    }
+  }
+)
+
 async function main() {
   const transport = new StdioServerTransport()
   await server.connect(transport)

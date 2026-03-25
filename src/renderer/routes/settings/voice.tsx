@@ -1312,6 +1312,64 @@ export function RouteComponent() {
             />
             <span className="text-sm">{t('检测到静音后自动停止录音')}</span>
           </label>
+          {settings.autoStopRecording && (
+            <div className="ml-6 space-y-3">
+              <div>
+                <label className="text-sm text-gray-600 dark:text-gray-400">
+                  {t('静音判定时长')}: {(settings.silenceDuration / 1000).toFixed(1)}s
+                </label>
+                <input
+                  type="range"
+                  min={500}
+                  max={10000}
+                  step={500}
+                  value={settings.silenceDuration}
+                  onChange={(e) => setSettings({ ...settings, silenceDuration: Number(e.target.value) })}
+                  className="w-full mt-1"
+                />
+                <div className="flex justify-between text-xs text-gray-400">
+                  <span>0.5s</span>
+                  <span>10s</span>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 dark:text-gray-400">
+                  {t('静音灵敏度')}: {(settings.silenceThreshold * 100).toFixed(0)}%
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={0.2}
+                  step={0.005}
+                  value={settings.silenceThreshold}
+                  onChange={(e) => setSettings({ ...settings, silenceThreshold: Number(e.target.value) })}
+                  className="w-full mt-1"
+                />
+                <div className="flex justify-between text-xs text-gray-400">
+                  <span>{t('低（更易停止）')}</span>
+                  <span>{t('高（更难停止）')}</span>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 dark:text-gray-400">
+                  {t('最大录音时长')}: {(settings.maxRecordingDuration / 1000).toFixed(0)}s
+                </label>
+                <input
+                  type="range"
+                  min={10000}
+                  max={300000}
+                  step={10000}
+                  value={settings.maxRecordingDuration}
+                  onChange={(e) => setSettings({ ...settings, maxRecordingDuration: Number(e.target.value) })}
+                  className="w-full mt-1"
+                />
+                <div className="flex justify-between text-xs text-gray-400">
+                  <span>10s</span>
+                  <span>300s</span>
+                </div>
+              </div>
+            </div>
+          )}
           <label className="flex items-center gap-2">
             <input
               type="checkbox"

@@ -9,7 +9,7 @@ import {
   getSleepCommand,
 } from '../utils/platform'
 
-export type SystemCommandType = 'shutdown' | 'restart' | 'sleep' | 'lock-screen' | 'open-browser'
+export type SystemCommandType = 'shutdown' | 'restart' | 'sleep' | 'lock-screen' | 'open-browser' | 'open-application' | 'close-application'
 
 const PLATFORM_LABELS = {
   darwin: 'macOS',
@@ -69,9 +69,33 @@ export function resolveBrowserLaunchTarget(
   }
 }
 
+function getOpenApplicationCommand(appName: string, platform = getPlatform()): string {
+  switch (platform) {
+    case 'darwin':
+      return `open -a "${appName}"`
+    case 'win32':
+      return `start "" "${appName}"`
+    case 'linux':
+      return appName.toLowerCase()
+  }
+}
+
+function getCloseApplicationCommand(appName: string, platform = getPlatform()): string {
+  switch (platform) {
+    case 'darwin':
+      return `osascript -e 'tell application "${appName}" to quit'`
+    case 'win32': {
+      const processName = appName.toLowerCase().endsWith('.exe') ? appName : `${appName}.exe`
+      return `taskkill /IM "${processName}"`
+    }
+    case 'linux':
+      return `killall "${appName}"`
+  }
+}
+
 export async function executeSystemCommand(
   command: SystemCommandType,
-  options?: { url?: string; browser?: string }
+  options?: { url?: string; browser?: string; appName?: string }
 ): Promise<{ success: boolean; message: string }> {
   try {
     switch (command) {
@@ -118,6 +142,24 @@ export async function executeSystemCommand(
         }
         await open(url)
         return { success: true, message: `已在浏览器中打开: ${url}` }
+      }
+      case 'open-application': {
+        const appName = options?.appName
+        if (!appName) {
+          return { success: false, message: '未指定应用名称' }
+        }
+        const cmd = getOpenApplicationCommand(appName)
+        execSync(cmd, { timeout: 10000 })
+        return { success: true, message: `已打开应用: ${appName}` }
+      }
+      case 'close-application': {
+        const appName = options?.appName
+        if (!appName) {
+          return { success: false, message: '未指定应用名称' }
+        }
+        const cmd = getCloseApplicationCommand(appName)
+        execSync(cmd, { timeout: 10000 })
+        return { success: true, message: `已关闭应用: ${appName}` }
       }
       default:
         return { success: false, message: `未知命令: ${command}` }

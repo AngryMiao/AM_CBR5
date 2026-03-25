@@ -169,8 +169,8 @@ export const VoiceSettingsSchema = z.object({
   keyboardDriverPath: z.string().optional(), // driver.exe 的完整路径
   keyboardShortcuts: z.array(KeyboardShortcutSchema).default([]), // 键盘快捷键映射表
   autoStopRecording: z.boolean().default(true), // 检测到静音后自动停止录音
-  silenceThreshold: z.number().min(0).max(1).default(0.01), // 静音阈值
-  silenceDuration: z.number().min(500).max(5000).default(1500), // 静音持续时间（毫秒）
+  silenceThreshold: z.number().min(0).max(0.2).default(0.02), // 静音阈值
+  silenceDuration: z.number().min(500).max(10000).default(3000), // 静音持续时间（毫秒）
   maxRecordingDuration: z.number().min(10000).max(300000).default(60000), // 最大录音时长（毫秒）
   autoPlayResponse: z.boolean().default(true), // 自动播放 LLM 响应
   showTranscript: z.boolean().default(true), // 显示实时转录文本

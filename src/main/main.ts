@@ -342,6 +342,13 @@ function registerShortcuts(shortcutSetting?: ShortcutSetting, voiceShortcutOverr
           log.info('Voice shortcut triggered!')
           if (mainWindow) {
             mainWindow.webContents.send('voice:toggle')
+            if (!mainWindow.isFocused()) {
+              if (mainWindow.isMinimized()) {
+                mainWindow.restore()
+              }
+              mainWindow.show()
+              mainWindow.focus()
+            }
           }
         })
         log.info('Voice shortcut registration result:', success)

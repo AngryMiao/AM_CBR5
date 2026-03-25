@@ -566,6 +566,30 @@ export function useVoiceController() {
     console.log('Setting up voice toggle listener')
 
     const handleVoiceToggle = () => {
+      console.log('Voice toggle event received! triggerMode:', settings.triggerMode)
+
+      if (settings.triggerMode === 'hold') {
+        void (async () => {
+          if (voiceModeRef.current === 'inactive') {
+            holdShortcutActiveRef.current = true
+            holdActivationPendingRef.current = true
+            try {
+              await activateVoiceInput()
+              if (!holdShortcutActiveRef.current && recorderRef.current) {
+                await stopRecording()
+              }
+            } finally {
+              holdActivationPendingRef.current = false
+            }
+          } else if (voiceModeRef.current === 'listening' && recorderRef.current) {
+            await stopRecording()
+          } else if (voiceModeRef.current === 'speaking' && isSpeakingRef.current) {
+            stopSpeaking()
+          }
+        })()
+        return
+      }
+
       if (settings.triggerMode !== 'toggle') {
         return
       }

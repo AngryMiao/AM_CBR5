@@ -174,6 +174,42 @@ server.registerTool(
   }
 )
 
+server.registerTool(
+  'open_application',
+  {
+    description: '打开本地应用程序。适用于：用户要求打开某个软件，如微信、QQ、VSCode、Finder、计算器等场景。macOS 上使用应用名（如 "WeChat"、"Visual Studio Code"），Windows 上使用程序名（如 "notepad"、"calc"）。',
+    inputSchema: z.object({
+      appName: z.string().describe('应用程序名称。macOS: 应用名如 "WeChat"、"Safari"；Windows: 程序名如 "notepad"、"calc"；Linux: 命令名如 "firefox"'),
+    }),
+  },
+  async ({ appName }) => {
+    const result = await executeSystemCommand('open-application', { appName })
+    assertExecutionSuccess(result)
+    return {
+      content: [{ type: 'text', text: result.message }],
+      isError: false,
+    }
+  }
+)
+
+server.registerTool(
+  'close_application',
+  {
+    description: '关闭正在运行的应用程序。适用于：用户要求关闭某个软件或浏览器等场景。会向应用发送退出请求（非强制终止）。macOS 上使用应用名（如 "Google Chrome"、"WeChat"），Windows 上使用进程名（如 "chrome.exe"、"notepad.exe"）。',
+    inputSchema: z.object({
+      appName: z.string().describe('要关闭的应用程序名称。macOS: 应用名如 "Google Chrome"、"Safari"；Windows: 进程名如 "chrome.exe"；Linux: 进程名如 "firefox"'),
+    }),
+  },
+  async ({ appName }) => {
+    const result = await executeSystemCommand('close-application', { appName })
+    assertExecutionSuccess(result)
+    return {
+      content: [{ type: 'text', text: result.message }],
+      isError: false,
+    }
+  }
+)
+
 async function main() {
   const transport = new StdioServerTransport()
   await server.connect(transport)
