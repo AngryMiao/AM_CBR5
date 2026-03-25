@@ -49,6 +49,16 @@ function canUseDirectPath(filePath) {
   return fs.existsSync(filePath)
 }
 
+function resolveDirectExecutable(basePath) {
+  if (process.platform === 'win32') {
+    const cmdPath = `${basePath}.cmd`
+    if (canUseDirectPath(cmdPath)) {
+      return cmdPath
+    }
+  }
+  return canUseDirectPath(basePath) ? basePath : null
+}
+
 function findInPnpmStore() {
   if (!fs.existsSync(pnpmStoreDir)) return null
 
@@ -65,8 +75,9 @@ function findInPnpmStore() {
   return null
 }
 
-const usingDirectPath = canUseDirectPath(config.directPath)
-const resolvedPath = usingDirectPath ? config.directPath : findInPnpmStore()
+const directResolved = resolveDirectExecutable(config.directPath)
+const usingDirectPath = !!directResolved
+const resolvedPath = usingDirectPath ? directResolved : findInPnpmStore()
 
 if (!resolvedPath) {
   console.error(`[run-local-bin] Unable to resolve binary for ${tool}`)
@@ -76,9 +87,15 @@ if (!resolvedPath) {
 const command = config.useNode && !usingDirectPath ? process.execPath : resolvedPath
 const commandArgs = config.useNode && !usingDirectPath ? [resolvedPath, ...args] : args
 
+const useShell =
+  process.platform === 'win32' &&
+  typeof command === 'string' &&
+  (command.endsWith('.cmd') || command.endsWith('.CMD'))
+
 const result = spawnSync(command, commandArgs, {
   cwd: rootDir,
   stdio: 'inherit',
+  shell: useShell,
 })
 
 if (result.error) {
