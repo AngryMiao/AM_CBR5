@@ -7,4 +7,7 @@ export interface ElectronIPC {
   addMcpStdioTransportEventListener: (transportId: string, event: string, callback?: (...args: any[]) => void) => void
   onNavigate: (callback: (path: string) => void) => () => void
   onVoiceToggle: (callback: () => void) => () => void
+  // 文字插入相关
+  insertText: (text: string) => Promise<{ success: boolean; error?: string }>
+  isTextInsertionSupported: () => Promise<boolean>
 }

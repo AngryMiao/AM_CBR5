@@ -58,6 +58,8 @@ const electronHandler: ElectronIPC = {
     ipcRenderer.on('voice:toggle', callback)
     return () => ipcRenderer.off('voice:toggle', callback)
   },
+  insertText: (text: string) => ipcRenderer.invoke('text:insert', text),
+  isTextInsertionSupported: () => ipcRenderer.invoke('text:isInsertionSupported'),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronHandler)
