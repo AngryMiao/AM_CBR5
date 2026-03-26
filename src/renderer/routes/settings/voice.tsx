@@ -1,26 +1,27 @@
+import { buildKeyCodes, getDefaultKeyboardShortcuts, KEY_CATEGORIES } from '@shared/defaults/keyboard-shortcuts'
+import {
+  type ASRProvider,
+  getDefaultFunASRLaunchCommand,
+  type KeyboardShortcut,
+  type TTSProvider,
+  type VoiceTriggerMode,
+  type VoiceWorkMode,
+  type WhisperModelSize,
+} from '@shared/types/voice'
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useVoiceSettings } from '@/hooks/useVoiceSettings'
 import {
-  getDefaultFunASRLaunchCommand,
-  type ASRProvider,
-  type TTSProvider,
-  type WhisperModelSize,
-  type KeyboardShortcut,
-  type VoiceTriggerMode,
-} from '@shared/types/voice'
-import {
-  WhisperLocalProvider,
-  FunASRLocalProvider,
-  OpenAIASRProvider,
   AliyunASRProvider,
   AzureASRProvider,
+  FunASRLocalProvider,
   GoogleASRProvider,
+  OpenAIASRProvider,
+  WhisperLocalProvider,
 } from '@/packages/voice/asr'
 import type { WhisperDownloadProgress } from '@/packages/voice/asr/whisper-local'
-import { BrowserTTSProvider, OpenAITTSProvider, AzureTTSProvider, ElevenLabsTTSProvider } from '@/packages/voice/tts'
-import { getDefaultKeyboardShortcuts, buildKeyCodes, KEY_CATEGORIES } from '@shared/defaults/keyboard-shortcuts'
+import { AzureTTSProvider, BrowserTTSProvider, ElevenLabsTTSProvider, OpenAITTSProvider } from '@/packages/voice/tts'
 import platform from '@/platform'
 
 export const Route = createFileRoute('/settings/voice')({
@@ -223,13 +224,17 @@ export function RouteComponent() {
         return
       }
 
-      alert(t('ASR 提供商配置正确！\n\n请使用快捷键 {{shortcut}} 开始语音输入测试。', {
-        shortcut: settings.shortcuts.toggleVoice
-      }))
+      alert(
+        t('ASR 提供商配置正确！\n\n请使用快捷键 {{shortcut}} 开始语音输入测试。', {
+          shortcut: settings.shortcuts.toggleVoice,
+        })
+      )
     } catch (error) {
-      alert(t('ASR 测试失败: {{error}}', {
-        error: error instanceof Error ? error.message : String(error)
-      }))
+      alert(
+        t('ASR 测试失败: {{error}}', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      )
     } finally {
       setTestingASR(false)
     }
@@ -278,9 +283,11 @@ export function RouteComponent() {
       await ttsProvider.speak(t('你好，这是语音合成测试。'))
       alert(t('TTS 测试成功！'))
     } catch (error) {
-      alert(t('TTS 测试失败: {{error}}', {
-        error: error instanceof Error ? error.message : String(error)
-      }))
+      alert(
+        t('TTS 测试失败: {{error}}', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      )
     } finally {
       setTestingTTS(false)
     }
@@ -305,6 +312,24 @@ export function RouteComponent() {
           onChange={(e) => setSettings({ ...settings, enabled: e.target.checked })}
           className="w-5 h-5"
         />
+      </div>
+
+      {/* 工作模式 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <label className="font-medium">{t('工作模式')}</label>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {t('Chat 模式：语音发送到 AI 对话；Typeless 模式：语音转文字直接插入到当前应用')}
+          </p>
+        </div>
+        <select
+          value={settings.workMode}
+          onChange={(e) => setSettings({ ...settings, workMode: e.target.value as VoiceWorkMode })}
+          className="w-36 p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700"
+        >
+          <option value="chat">{t('Chat 模式')}</option>
+          <option value="typeless">{t('Typeless 模式')}</option>
+        </select>
       </div>
 
       {/* ASR 提供商 */}
@@ -355,11 +380,11 @@ export function RouteComponent() {
                 </span>
               </div>
               {funasrServiceStatus?.pid && (
-                <div className="text-xs text-gray-500">{t('PID')}: {funasrServiceStatus.pid}</div>
+                <div className="text-xs text-gray-500">
+                  {t('PID')}: {funasrServiceStatus.pid}
+                </div>
               )}
-              {funasrServiceStatus?.error && (
-                <div className="text-xs text-red-600">{funasrServiceStatus.error}</div>
-              )}
+              {funasrServiceStatus?.error && <div className="text-xs text-red-600">{funasrServiceStatus.error}</div>}
               <div className="flex gap-2">
                 <button
                   onClick={refreshFunASRServiceStatus}
@@ -548,7 +573,9 @@ export function RouteComponent() {
               <label className="text-sm font-medium">{t('返回文本字段路径模板（逗号分隔）')}</label>
               <input
                 type="text"
-                value={joinCsv(settings.asrConfig.funasrLocal?.responseTextPaths || ['text', 'result', 'data.text', 'data.result'])}
+                value={joinCsv(
+                  settings.asrConfig.funasrLocal?.responseTextPaths || ['text', 'result', 'data.text', 'data.result']
+                )}
                 onChange={(e) =>
                   setSettings({
                     ...settings,
@@ -811,7 +838,9 @@ export function RouteComponent() {
                 placeholder="https://hf-mirror.com（国内可用）"
                 className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
               />
-              <p className="text-xs text-gray-500 mt-1">{t('留空使用 huggingface.co，国内网络可填 https://hf-mirror.com')}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {t('留空使用 huggingface.co，国内网络可填 https://hf-mirror.com')}
+              </p>
             </div>
             <div>
               <label className="text-sm font-medium">{t('本地模型路径（可选）')}</label>
@@ -859,7 +888,9 @@ export function RouteComponent() {
                     <p className="text-green-600">✓ {t('模型已就绪')}</p>
                   ) : whisperProgress.status === 'progress' && whisperProgress.progress !== undefined ? (
                     <div>
-                      <p className="text-gray-600">{whisperProgress.file} — {whisperProgress.progress.toFixed(1)}%</p>
+                      <p className="text-gray-600">
+                        {whisperProgress.file} — {whisperProgress.progress.toFixed(1)}%
+                      </p>
                       <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
                         <div
                           className="bg-blue-600 h-1.5 rounded-full transition-all"
@@ -1397,19 +1428,48 @@ export function RouteComponent() {
 // ─── Key display helpers ──────────────────────────────────────────────────────
 
 const HID_KEY_DISPLAY: Record<string, string> = {
-  CtrlLeft: 'Ctrl', CmdLeft: 'Cmd/Win', ShiftLeft: 'Shift', AltLeft: 'Alt',
-  Num0: '0', Num1: '1', Num2: '2', Num3: '3', Num4: '4',
-  Num5: '5', Num6: '6', Num7: '7', Num8: '8', Num9: '9',
-  Up: '↑', Down: '↓', Left: '←', Right: '→',
-  PageUp: 'PgUp', PageDown: 'PgDn', PrintScreen: 'PrtScr',
-  BracketLeft: '[', BracketRight: ']', Backslash: '\\',
-  Semicolon: ';', Apostrophe: "'", Grave: '`',
-  Comma: ',', Period: '.', Slash: '/', Minus: '-', Equal: '=',
+  CtrlLeft: 'Ctrl',
+  CmdLeft: 'Cmd/Win',
+  ShiftLeft: 'Shift',
+  AltLeft: 'Alt',
+  Num0: '0',
+  Num1: '1',
+  Num2: '2',
+  Num3: '3',
+  Num4: '4',
+  Num5: '5',
+  Num6: '6',
+  Num7: '7',
+  Num8: '8',
+  Num9: '9',
+  Up: '↑',
+  Down: '↓',
+  Left: '←',
+  Right: '→',
+  PageUp: 'PgUp',
+  PageDown: 'PgDn',
+  PrintScreen: 'PrtScr',
+  BracketLeft: '[',
+  BracketRight: ']',
+  Backslash: '\\',
+  Semicolon: ';',
+  Apostrophe: "'",
+  Grave: '`',
+  Comma: ',',
+  Period: '.',
+  Slash: '/',
+  Minus: '-',
+  Equal: '=',
 }
 
 const HID_CATEGORY_NAMES: Record<string, string> = {
-  modifiers: '修饰键', letters: '字母', numbers: '数字',
-  function: 'F键', arrows: '方向', special: '特殊', punctuation: '标点',
+  modifiers: '修饰键',
+  letters: '字母',
+  numbers: '数字',
+  function: 'F键',
+  arrows: '方向',
+  special: '特殊',
+  punctuation: '标点',
 }
 
 function getHIDKeyLabel(key: string): string {
@@ -1470,13 +1530,9 @@ function KeyComboBuilder({ slots, onChange }: { slots: string[]; onChange: (s: s
         >
           + 添加键
         </button>
-        {slots.length >= MAX_COMBO_KEYS && (
-          <span className="text-xs text-gray-400">最多 {MAX_COMBO_KEYS} 个键</span>
-        )}
+        {slots.length >= MAX_COMBO_KEYS && <span className="text-xs text-gray-400">最多 {MAX_COMBO_KEYS} 个键</span>}
       </div>
-      {slots.length > 0 && (
-        <p className="text-xs text-gray-400">{buildKeyCodes(slots).join(', ')}</p>
-      )}
+      {slots.length > 0 && <p className="text-xs text-gray-400">{buildKeyCodes(slots).join(', ')}</p>}
       {showPicker && (
         <div
           ref={pickerRef}
@@ -1523,15 +1579,47 @@ const HOTKEY_MODIFIERS = new Set(['Ctrl', 'Shift', 'Alt', 'Meta'])
 
 const HOTKEY_CATEGORIES = {
   modifiers: ['Ctrl', 'Shift', 'Alt', 'Meta'],
-  letters: ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'],
-  numbers: ['0','1','2','3','4','5','6','7','8','9'],
-  function: ['F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'],
-  special: ['Return','Tab','Escape','Space','Backspace','Delete','Up','Down','Left','Right'],
-  punctuation: ['-','=','[',']','\\',';',"'",'`',',','.','/'],
+  letters: [
+    'A',
+    'B',
+    'C',
+    'D',
+    'E',
+    'F',
+    'G',
+    'H',
+    'I',
+    'J',
+    'K',
+    'L',
+    'M',
+    'N',
+    'O',
+    'P',
+    'Q',
+    'R',
+    'S',
+    'T',
+    'U',
+    'V',
+    'W',
+    'X',
+    'Y',
+    'Z',
+  ],
+  numbers: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+  function: ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'],
+  special: ['Return', 'Tab', 'Escape', 'Space', 'Backspace', 'Delete', 'Up', 'Down', 'Left', 'Right'],
+  punctuation: ['-', '=', '[', ']', '\\', ';', "'", '`', ',', '.', '/'],
 } as const
 
 const HOTKEY_CATEGORY_NAMES: Record<string, string> = {
-  modifiers: '修饰键', letters: '字母', numbers: '数字', function: 'F键', special: '特殊键', punctuation: '标点',
+  modifiers: '修饰键',
+  letters: '字母',
+  numbers: '数字',
+  function: 'F键',
+  special: '特殊键',
+  punctuation: '标点',
 }
 
 function getHotkeyLabel(key: string, isMac: boolean): string {
@@ -1549,9 +1637,7 @@ function isValidHotkeyCombo(keys: string[]): boolean {
 }
 
 function HotkeyPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [selectedKeys, setSelectedKeys] = useState<string[]>(() =>
-    value ? value.split('+').filter(Boolean) : []
-  )
+  const [selectedKeys, setSelectedKeys] = useState<string[]>(() => (value ? value.split('+').filter(Boolean) : []))
   const [showPicker, setShowPicker] = useState(false)
   const [activeCategory, setActiveCategory] = useState<string>('modifiers')
   const pickerRef = useRef<HTMLDivElement>(null)
@@ -1591,9 +1677,7 @@ function HotkeyPicker({ value, onChange }: { value: string; onChange: (v: string
   const toggleKey = (key: string) => {
     let newKeys: string[]
     if (HOTKEY_MODIFIERS.has(key)) {
-      newKeys = selectedKeys.includes(key)
-        ? selectedKeys.filter((k) => k !== key)
-        : [...selectedKeys, key]
+      newKeys = selectedKeys.includes(key) ? selectedKeys.filter((k) => k !== key) : [...selectedKeys, key]
     } else {
       const mods = selectedKeys.filter((k) => HOTKEY_MODIFIERS.has(k))
       newKeys = selectedKeys.includes(key) ? mods : [...mods, key]
@@ -1627,11 +1711,7 @@ function HotkeyPicker({ value, onChange }: { value: string; onChange: (v: string
             }`}
           >
             {getHotkeyLabel(key, isMac)}
-            <button
-              type="button"
-              onClick={() => removeKey(key)}
-              className="ml-0.5 hover:text-red-600"
-            >
+            <button type="button" onClick={() => removeKey(key)} className="ml-0.5 hover:text-red-600">
               ×
             </button>
           </span>
@@ -1656,9 +1736,7 @@ function HotkeyPicker({ value, onChange }: { value: string; onChange: (v: string
           不能仅使用修饰键（Ctrl/Shift/Alt/Meta），请添加一个普通键
         </p>
       )}
-      {selectedKeys.length > 0 && valid && (
-        <p className="text-xs text-gray-500">{selectedKeys.join('+')}</p>
-      )}
+      {selectedKeys.length > 0 && valid && <p className="text-xs text-gray-500">{selectedKeys.join('+')}</p>}
       {showPicker && (
         <div
           ref={pickerRef}
@@ -1738,7 +1816,10 @@ function KeyboardShortcutsSection({
     const entry: KeyboardShortcut = {
       id: `ks_custom_${Date.now()}`,
       name: newName.trim(),
-      triggerWords: newTriggerWords.split(/[,，]/).map((w) => w.trim()).filter(Boolean),
+      triggerWords: newTriggerWords
+        .split(/[,，]/)
+        .map((w) => w.trim())
+        .filter(Boolean),
       keyCodes,
       enabled: true,
     }
@@ -1817,7 +1898,10 @@ function KeyboardShortcutsSection({
                     value={shortcut.triggerWords.join(', ')}
                     onChange={(e) =>
                       updateShortcut(shortcut.id, {
-                        triggerWords: e.target.value.split(/[,，]/).map((w) => w.trim()).filter(Boolean),
+                        triggerWords: e.target.value
+                          .split(/[,，]/)
+                          .map((w) => w.trim())
+                          .filter(Boolean),
                       })
                     }
                     className="w-full p-1.5 text-sm border rounded dark:bg-gray-800 dark:border-gray-700"
