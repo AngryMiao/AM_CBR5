@@ -1,14 +1,17 @@
 import { type RemoteConfig, Theme } from '@shared/types'
+import { useAtomValue } from 'jotai'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import Toasts from '@/components/common/Toasts'
 import ExitFullscreenButton from '@/components/layout/ExitFullscreenButton'
+import { TypelessPanel } from '@/components/voice/TypelessPanel'
+import { VoicePanel } from '@/components/voice/VoicePanel'
 import useAppTheme from '@/hooks/useAppTheme'
 import { useSystemLanguageWhenInit } from '@/hooks/useDefaultSystemLanguage'
 import { useI18nEffect } from '@/hooks/useI18nEffect'
 import useNeedRoomForWinControls from '@/hooks/useNeedRoomForWinControls'
 import useShortcut from '@/hooks/useShortcut'
 import { useVoiceController } from '@/hooks/useVoiceController'
-import { VoicePanel } from '@/components/voice/VoicePanel'
+import { useVoiceSettings } from '@/hooks/useVoiceSettings'
 import '@/modals'
 import NiceModal from '@ebay/nice-modal-react'
 import {
@@ -44,11 +47,11 @@ import { createRootRoute, Outlet, useLocation, useNavigate } from '@tanstack/rea
 import { useEffect, useMemo, useRef } from 'react'
 import SettingsModal, { navigateToSettings } from '@/modals/Settings'
 import { getOS } from '@/packages/navigator'
+import { ensureAngrymiaoSession } from '@/packages/voice/angrymiao-session'
 import PictureDialog from '@/pages/PictureDialog'
 import RemoteDialogWindow from '@/pages/RemoteDialogWindow'
 import SearchDialog from '@/pages/SearchDialog'
 import platform from '@/platform'
-import { ensureAngrymiaoSession } from '@/packages/voice/angrymiao-session'
 import * as settingActions from '@/stores/settingActions'
 import { useLanguage, useSettingsStore, useTheme } from '@/stores/settingsStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -65,13 +68,15 @@ function Root() {
   // 初始化语音控制
   useVoiceController()
 
+  const { settings: voiceSettings } = useVoiceSettings()
+
   useEffect(() => {
     const pathname = location.pathname
     const isAllowedPath =
-      pathname === '/'
-      || pathname.startsWith('/session/')
-      || pathname === '/settings'
-      || pathname.startsWith('/settings/')
+      pathname === '/' ||
+      pathname.startsWith('/session/') ||
+      pathname === '/settings' ||
+      pathname.startsWith('/settings/')
 
     if (isAllowedPath) {
       return
@@ -185,7 +190,7 @@ function Root() {
       {/* <WelcomeDialog /> */}
       <Toasts /> {/* mui */}
       <SettingsModal />
-      <VoicePanel />
+      {voiceSettings.workMode === 'typeless' ? <TypelessPanel /> : <VoicePanel />}
     </Box>
   )
 }
