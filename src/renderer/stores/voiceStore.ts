@@ -1,5 +1,5 @@
-import { atom } from 'jotai'
 import type { VoiceMode } from '@shared/types/voice'
+import { atom } from 'jotai'
 
 // 语音模式状态（运行时状态，不持久化）
 export const voiceModeAtom = atom<VoiceMode>('inactive')
@@ -50,3 +50,26 @@ export const voiceStatusTextAtom = atom((get) => {
   return ''
 })
 
+// ==================== Typeless Mode ====================
+
+// 流式识别文本（实时显示）
+export const streamingTextAtom = atom<string>('')
+
+// Typeless 状态
+export interface TypelessStatus {
+  type: 'executing' | 'inserting' | 'thinking' | 'success' | 'error'
+  message: string
+}
+export const typelessStatusAtom = atom<TypelessStatus | null>(null)
+
+// Typeless Chat 结果
+export interface TypelessChatResult {
+  sessionId: string
+  userText: string
+}
+export const typelessChatResultAtom = atom<TypelessChatResult | null>(null)
+
+// 关闭结果窗口的 action
+export const closeTypelessChatResult = atom(null, (_get, set) => {
+  set(typelessChatResultAtom, null)
+})
