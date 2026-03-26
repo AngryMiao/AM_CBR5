@@ -1,4 +1,5 @@
 import { createMessage, type Settings } from '@shared/types'
+import type { KeyboardShortcut } from '@shared/types/voice'
 import { getMessageText } from '@shared/utils/message'
 import { useAtom, useSetAtom } from 'jotai'
 import { useCallback, useEffect, useRef } from 'react'
@@ -16,6 +17,7 @@ import {
   OpenAIASRProvider,
   WhisperLocalProvider,
 } from '@/packages/voice/asr'
+import { determineIntent } from '@/packages/voice/intent-detector'
 import { VoiceRecorder } from '@/packages/voice/recorder'
 import type { TTSProvider } from '@/packages/voice/tts'
 import { AzureTTSProvider, BrowserTTSProvider, ElevenLabsTTSProvider, OpenAITTSProvider } from '@/packages/voice/tts'
@@ -29,6 +31,8 @@ import {
   isSpeakingAtom,
   speakingTextAtom,
   transcriptAtom,
+  typelessChatResultAtom,
+  typelessStatusAtom,
   voiceErrorAtom,
   voiceModeAtom,
   voicePanelVisibleAtom,
@@ -227,6 +231,8 @@ export function useVoiceController() {
   const setAudioLevel = useSetAtom(audioLevelAtom)
   const setError = useSetAtom(voiceErrorAtom)
   const setPanelVisible = useSetAtom(voicePanelVisibleAtom)
+  const setTypelessStatus = useSetAtom(typelessStatusAtom)
+  const setTypelessChatResult = useSetAtom(typelessChatResultAtom)
   const { settings } = useVoiceSettings()
 
   const recorderRef = useRef<VoiceRecorder | null>(null)
@@ -332,6 +338,81 @@ export function useVoiceController() {
     return ttsProviderRef.current
   }, [settings.ttsProvider, settings.ttsConfig])
 
+  // Typeless 模式：处理控制意图
+  const handleControlIntent = useCallback(
+    async (shortcut: KeyboardShortcut) => {
+      setTypelessStatus({ type: 'executing', message: `正在执行: ${shortcut.name}` })
+
+      try {
+        const tools = mcpController.getAvailableTools({ skillBundleId: ANGRYMIAO_SKILL_BUNDLE_ID })
+        const keyboardControlTool = tools['mcp__system-control__keyboard_control']
+
+        if (!keyboardControlTool?.execute) {
+          throw new Error('键盘控制工具不可用')
+        }
+
+        await (keyboardControlTool.execute as (args: { keyCodes: string[] }) => Promise<unknown>)({
+          keyCodes: shortcut.keyCodes,
+        })
+        setTypelessStatus({ type: 'success', message: '已完成' })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        setTypelessStatus({ type: 'error', message })
+        setError(message)
+      }
+    },
+    [setTypelessStatus, setError]
+  )
+
+  // Typeless 模式：处理输入意图
+  const handleInputIntent = useCallback(
+    async (text: string) => {
+      setTypelessStatus({ type: 'inserting', message: '正在插入...' })
+
+      try {
+        const result = await window.electronAPI?.insertText(text)
+        if (!result?.success) {
+          throw new Error(result?.error || '文字插入失败')
+        }
+        setTypelessStatus({ type: 'success', message: '已完成' })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        setTypelessStatus({ type: 'error', message })
+        setError(message)
+      }
+    },
+    [setTypelessStatus, setError]
+  )
+
+  // Typeless 模式：处理对话意图
+  const handleChatIntent = useCallback(
+    async (text: string) => {
+      setTypelessStatus({ type: 'thinking', message: '正在思考...' })
+
+      try {
+        const session = await ensureAngrymiaoSession({
+          keyboardShortcuts: settings.keyboardShortcuts,
+          purgeOthers: false,
+        })
+        const sessionId = session.id
+        const msg = createMessage('user', text)
+        await submitNewUserMessage(sessionId, {
+          newUserMsg: msg,
+          needGenerating: true,
+        })
+
+        // 设置结果，触发结果窗口显示
+        setTypelessChatResult({ sessionId, userText: text })
+        setTypelessStatus({ type: 'success', message: '已完成' })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        setTypelessStatus({ type: 'error', message })
+        setError(message)
+      }
+    },
+    [settings.keyboardShortcuts, setTypelessStatus, setTypelessChatResult, setError]
+  )
+
   // 开始录音
   const startRecording = useCallback(async () => {
     try {
@@ -402,16 +483,18 @@ export function useVoiceController() {
       // 根据工作模式决定输出目标
       if (text) {
         if (settings.workMode === 'typeless') {
-          // Typeless 模式：直接插入文字到活动应用
-          try {
-            const result = await window.electronAPI?.insertText(text)
-            if (!result?.success) {
-              console.error('文字插入失败:', result?.error)
-              setError(result?.error || '文字插入失败')
-            }
-          } catch (insertErr) {
-            console.error('文字插入错误:', insertErr)
-            setError(insertErr instanceof Error ? insertErr.message : String(insertErr))
+          const intent = determineIntent(text, settings.keyboardShortcuts || [])
+
+          switch (intent.type) {
+            case 'control':
+              await handleControlIntent(intent.shortcut!)
+              break
+            case 'input':
+              await handleInputIntent(text)
+              break
+            case 'chat':
+              await handleChatIntent(text)
+              break
           }
         } else {
           // Chat 模式：发送到 AI 对话
