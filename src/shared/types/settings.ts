@@ -321,8 +321,11 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
   voice: z
     .object({
       enabled: z.boolean().default(false),
+      workMode: z.enum(['chat', 'typeless']).default('chat'),
       triggerMode: z.enum(['toggle', 'hold']).default('toggle'),
-      asrProvider: z.enum(['whisper-local', 'funasr-local', 'openai', 'aliyun', 'azure', 'google']).default('whisper-local'),
+      asrProvider: z
+        .enum(['whisper-local', 'funasr-local', 'openai', 'aliyun', 'azure', 'google'])
+        .default('whisper-local'),
       ttsProvider: z.enum(['browser', 'openai', 'azure', 'elevenlabs']).default('browser'),
       asrConfig: z.record(z.string(), z.any()).default({}),
       ttsConfig: z.record(z.string(), z.any()).default({}),
@@ -332,13 +335,17 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
         })
         .default({ toggleVoice: 'Ctrl+Shift+V' }),
       keyboardDriverPath: z.string().optional(),
-      keyboardShortcuts: z.array(z.object({
-        id: z.string(),
-        name: z.string(),
-        triggerWords: z.array(z.string()),
-        keyCodes: z.array(z.string()),
-        enabled: z.boolean().default(true),
-      })).default([]),
+      keyboardShortcuts: z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            triggerWords: z.array(z.string()),
+            keyCodes: z.array(z.string()),
+            enabled: z.boolean().default(true),
+          })
+        )
+        .default([]),
       autoStopRecording: z.boolean().default(true),
       silenceThreshold: z.number().default(0.01),
       silenceDuration: z.number().default(1500),

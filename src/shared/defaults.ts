@@ -8,6 +8,7 @@ export const BUILT_IN_ALIYUN_ASR_BASE_URL = 'https://dashscope.aliyuncs.com/comp
 export function defaultVoiceSettings(): NonNullable<Settings['voice']> {
   return {
     enabled: true,
+    workMode: 'chat',
     triggerMode: 'toggle',
     asrProvider: 'aliyun',
     ttsProvider: 'browser',
