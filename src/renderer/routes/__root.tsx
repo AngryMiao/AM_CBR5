@@ -3,6 +3,7 @@ import { useAtomValue } from 'jotai'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import Toasts from '@/components/common/Toasts'
 import ExitFullscreenButton from '@/components/layout/ExitFullscreenButton'
+import { TypelessChatResult } from '@/components/voice/TypelessChatResult'
 import { TypelessPanel } from '@/components/voice/TypelessPanel'
 import { VoicePanel } from '@/components/voice/VoicePanel'
 import useAppTheme from '@/hooks/useAppTheme'
@@ -191,6 +192,7 @@ function Root() {
       <Toasts /> {/* mui */}
       <SettingsModal />
       {voiceSettings.workMode === 'typeless' ? <TypelessPanel /> : <VoicePanel />}
+      <TypelessChatResult />
     </Box>
   )
 }
