@@ -30,6 +30,7 @@ import {
   isRecordingAtom,
   isSpeakingAtom,
   speakingTextAtom,
+  streamingTextAtom,
   transcriptAtom,
   typelessChatResultAtom,
   typelessStatusAtom,
@@ -233,6 +234,7 @@ export function useVoiceController() {
   const setPanelVisible = useSetAtom(voicePanelVisibleAtom)
   const setTypelessStatus = useSetAtom(typelessStatusAtom)
   const setTypelessChatResult = useSetAtom(typelessChatResultAtom)
+  const setStreamingText = useSetAtom(streamingTextAtom)
   const { settings } = useVoiceSettings()
 
   const recorderRef = useRef<VoiceRecorder | null>(null)
@@ -338,6 +340,45 @@ export function useVoiceController() {
     return ttsProviderRef.current
   }, [settings.ttsProvider, settings.ttsConfig])
 
+  const streamingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const startStreamingRecognition = useCallback(
+    (recorder: VoiceRecorder) => {
+      if (streamingIntervalRef.current) {
+        clearInterval(streamingIntervalRef.current)
+      }
+
+      streamingIntervalRef.current = setInterval(async () => {
+        if (!recorderRef.current || recorderRef.current.getState() !== 'recording') {
+          return
+        }
+
+        const audioBlob = recorder.getCurrentAudioBlob()
+        if (!audioBlob || audioBlob.size < 1000) {
+          return
+        }
+
+        try {
+          const asrProvider = getASRProvider()
+          const text = await asrProvider.transcribe(audioBlob)
+          if (text && text.trim()) {
+            setStreamingText(text.trim())
+          }
+        } catch (err) {
+          // 静默处理流式识别错误，不影响主流程
+        }
+      }, 1500)
+    },
+    [getASRProvider, setStreamingText]
+  )
+
+  const stopStreamingRecognition = useCallback(() => {
+    if (streamingIntervalRef.current) {
+      clearInterval(streamingIntervalRef.current)
+      streamingIntervalRef.current = null
+    }
+  }, [])
+
   // Typeless 模式：处理控制意图
   const handleControlIntent = useCallback(
     async (shortcut: KeyboardShortcut) => {
@@ -421,6 +462,7 @@ export function useVoiceController() {
       setVoiceMode('listening')
       setPanelVisible(true)
       setIsRecording(true)
+      setStreamingText('')
 
       const recorder = new VoiceRecorder()
       recorderRef.current = recorder
@@ -435,6 +477,11 @@ export function useVoiceController() {
         silenceThreshold: settings.silenceThreshold,
         silenceDuration: settings.silenceDuration,
       })
+
+      // Typeless 模式下启动流式识别
+      if (settings.workMode === 'typeless') {
+        startStreamingRecognition(recorder)
+      }
 
       // 自动停止录音（最大时长）
       recordingTimeoutRef.current = setTimeout(() => {
@@ -453,12 +500,15 @@ export function useVoiceController() {
     settings.silenceThreshold,
     settings.silenceDuration,
     settings.maxRecordingDuration,
+    settings.workMode,
     setError,
     setVoiceMode,
     setPanelVisible,
     setIsRecording,
     setAudioLevel,
+    setStreamingText,
     clearRecordingTimeout,
+    startStreamingRecognition,
   ])
 
   // 停止录音并识别
@@ -467,6 +517,7 @@ export function useVoiceController() {
 
     try {
       clearRecordingTimeout()
+      stopStreamingRecognition()
       setIsRecording(false)
       setVoiceMode('processing')
 
@@ -478,6 +529,7 @@ export function useVoiceController() {
       const text = await asrProvider.transcribe(audioBlob)
 
       setTranscript(text)
+      setStreamingText('')
       setVoiceMode('inactive')
 
       // 根据工作模式决定输出目标
@@ -590,11 +642,16 @@ export function useVoiceController() {
     setSpeakingText,
     setVoiceMode,
     setTranscript,
+    setStreamingText,
     setError,
     settings.autoPlayResponse,
     settings.workMode,
     settings.keyboardShortcuts,
     clearRecordingTimeout,
+    stopStreamingRecognition,
+    handleControlIntent,
+    handleInputIntent,
+    handleChatIntent,
   ])
 
   // 播放语音

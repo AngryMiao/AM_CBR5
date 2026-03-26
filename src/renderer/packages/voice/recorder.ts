@@ -131,6 +131,18 @@ export class VoiceRecorder {
   }
 
   /**
+   * 获取当前累积的音频数据（用于流式识别）
+   * @returns 当前累积的音频 Blob，如果未在录音则返回 null
+   */
+  getCurrentAudioBlob(): Blob | null {
+    if (!this.mediaRecorder || this.audioChunks.length === 0) {
+      return null
+    }
+    const mimeType = this.mediaRecorder.mimeType || 'audio/webm'
+    return new Blob(this.audioChunks, { type: mimeType })
+  }
+
+  /**
    * 获取当前音频电平（0-1）
    */
   getAudioLevel(): number {
@@ -252,13 +264,7 @@ export class VoiceRecorder {
    * 获取支持的 MIME 类型
    */
   private getSupportedMimeType(): string {
-    const types = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/ogg;codecs=opus',
-      'audio/mp4',
-      'audio/mpeg',
-    ]
+    const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4', 'audio/mpeg']
 
     for (const type of types) {
       if (MediaRecorder.isTypeSupported(type)) {
