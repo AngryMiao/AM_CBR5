@@ -1,5 +1,28 @@
+import { createMessage, type Settings } from '@shared/types'
+import { getMessageText } from '@shared/utils/message'
 import { useAtom, useSetAtom } from 'jotai'
 import { useCallback, useEffect, useRef } from 'react'
+import { useVoiceSettings } from '@/hooks/useVoiceSettings'
+import { ANGRYMIAO_SKILL_BUNDLE_ID, ANGRYMIAO_SKILL_RUNTIME_ID } from '@/packages/agent-skills'
+import { mcpController } from '@/packages/mcp/controller'
+import { getInstalledSkillBundle, resolveSkillBundleRuntimeServerConfig } from '@/packages/skill-bundles'
+import { ensureAngrymiaoSession } from '@/packages/voice/angrymiao-session'
+import type { ASRProvider } from '@/packages/voice/asr'
+import {
+  AliyunASRProvider,
+  AzureASRProvider,
+  FunASRLocalProvider,
+  GoogleASRProvider,
+  OpenAIASRProvider,
+  WhisperLocalProvider,
+} from '@/packages/voice/asr'
+import { VoiceRecorder } from '@/packages/voice/recorder'
+import type { TTSProvider } from '@/packages/voice/tts'
+import { AzureTTSProvider, BrowserTTSProvider, ElevenLabsTTSProvider, OpenAITTSProvider } from '@/packages/voice/tts'
+import platform from '@/platform'
+import * as chatStore from '@/stores/chatStore'
+import { switchCurrentSession } from '@/stores/session/crud'
+import { submitNewUserMessage } from '@/stores/session/messages'
 import {
   audioLevelAtom,
   isRecordingAtom,
@@ -10,29 +33,6 @@ import {
   voiceModeAtom,
   voicePanelVisibleAtom,
 } from '@/stores/voiceStore'
-import { useVoiceSettings } from '@/hooks/useVoiceSettings'
-import { VoiceRecorder } from '@/packages/voice/recorder'
-import type { ASRProvider } from '@/packages/voice/asr'
-import type { TTSProvider } from '@/packages/voice/tts'
-import {
-  WhisperLocalProvider,
-  FunASRLocalProvider,
-  OpenAIASRProvider,
-  AliyunASRProvider,
-  AzureASRProvider,
-  GoogleASRProvider,
-} from '@/packages/voice/asr'
-import { BrowserTTSProvider, OpenAITTSProvider, AzureTTSProvider, ElevenLabsTTSProvider } from '@/packages/voice/tts'
-import * as chatStore from '@/stores/chatStore'
-import { switchCurrentSession } from '@/stores/session/crud'
-import { submitNewUserMessage } from '@/stores/session/messages'
-import { createMessage, type Settings } from '@shared/types'
-import { getMessageText } from '@shared/utils/message'
-import platform from '@/platform'
-import { ANGRYMIAO_SKILL_BUNDLE_ID, ANGRYMIAO_SKILL_RUNTIME_ID } from '@/packages/agent-skills'
-import { mcpController } from '@/packages/mcp/controller'
-import { getInstalledSkillBundle, resolveSkillBundleRuntimeServerConfig } from '@/packages/skill-bundles'
-import { ensureAngrymiaoSession } from '@/packages/voice/angrymiao-session'
 
 async function ensureAngrymiaoSkillRuntime(settings?: Partial<Settings>): Promise<void> {
   if (platform.type !== 'desktop') return
@@ -43,11 +43,7 @@ async function ensureAngrymiaoSkillRuntime(settings?: Partial<Settings>): Promis
   if (existing && existing.instance.status.state === 'running') return
 
   try {
-    const runtimeConfig = await resolveSkillBundleRuntimeServerConfig(
-      bundle.id,
-      ANGRYMIAO_SKILL_RUNTIME_ID,
-      settings
-    )
+    const runtimeConfig = await resolveSkillBundleRuntimeServerConfig(bundle.id, ANGRYMIAO_SKILL_RUNTIME_ID, settings)
     if (!runtimeConfig) return
     await mcpController.updateServer({
       ...runtimeConfig,
@@ -111,7 +107,13 @@ function parseShortcut(shortcut: string): ParsedShortcut {
 
   for (const part of shortcut.split('+').filter(Boolean)) {
     const normalized = normalizeShortcutToken(part)
-    if (normalized === 'ctrl' || normalized === 'meta' || normalized === 'alt' || normalized === 'shift' || normalized === 'mod') {
+    if (
+      normalized === 'ctrl' ||
+      normalized === 'meta' ||
+      normalized === 'alt' ||
+      normalized === 'shift' ||
+      normalized === 'mod'
+    ) {
       parsed.modifiers.add(normalized)
     } else {
       parsed.key = normalized
@@ -204,13 +206,13 @@ function releasesShortcut(event: KeyboardEvent, shortcut: string): boolean {
     return true
   }
   if (released === 'ctrl' || released === 'meta' || released === 'alt' || released === 'shift') {
-    return parsed.modifiers.has(released) || (parsed.modifiers.has('mod') && (released === 'ctrl' || released === 'meta'))
+    return (
+      parsed.modifiers.has(released) || (parsed.modifiers.has('mod') && (released === 'ctrl' || released === 'meta'))
+    )
   }
 
   return false
 }
-
-
 
 /**
  * 语音控制器 Hook
@@ -397,69 +399,92 @@ export function useVoiceController() {
       setTranscript(text)
       setVoiceMode('inactive')
 
-      // 将识别结果发送到 angrymiao 对话
+      // 根据工作模式决定输出目标
       if (text) {
-        const session = await ensureAngrymiaoSession({ keyboardShortcuts: settings.keyboardShortcuts, purgeOthers: true })
-        const sessionId = session.id
-        const msg = createMessage('user', text)
-        await submitNewUserMessage(sessionId, {
-          newUserMsg: msg,
-          needGenerating: true,
-        })
+        if (settings.workMode === 'typeless') {
+          // Typeless 模式：直接插入文字到活动应用
+          try {
+            const result = await window.electronAPI?.insertText(text)
+            if (!result?.success) {
+              console.error('文字插入失败:', result?.error)
+              setError(result?.error || '文字插入失败')
+            }
+          } catch (insertErr) {
+            console.error('文字插入错误:', insertErr)
+            setError(insertErr instanceof Error ? insertErr.message : String(insertErr))
+          }
+        } else {
+          // Chat 模式：发送到 AI 对话
+          const session = await ensureAngrymiaoSession({
+            keyboardShortcuts: settings.keyboardShortcuts,
+            purgeOthers: true,
+          })
+          const sessionId = session.id
+          const msg = createMessage('user', text)
+          await submitNewUserMessage(sessionId, {
+            newUserMsg: msg,
+            needGenerating: true,
+          })
 
-        // 生成完成后，自动播放 TTS
-        if (settings.autoPlayResponse) {
-          console.log('[Voice TTS] autoPlayResponse enabled, fetching session...')
-          const session = await chatStore.getSession(sessionId)
-          console.log('[Voice TTS] session messages count:', session?.messages.length)
-          if (session) {
-            const lastAssistantMsg = [...session.messages].reverse().find(
-              (m) => m.role === 'assistant' && !m.error && !m.generating
-            )
-            console.log('[Voice TTS] lastAssistantMsg:', lastAssistantMsg ? {
-              role: lastAssistantMsg.role,
-              error: lastAssistantMsg.error,
-              generating: lastAssistantMsg.generating,
-              contentParts: lastAssistantMsg.contentParts?.length,
-            } : null)
-            if (lastAssistantMsg) {
-              const responseText = getMessageText(lastAssistantMsg)
-              console.log('[Voice TTS] responseText:', responseText.substring(0, 100))
-              if (responseText.trim()) {
-                try {
-                  console.log('[Voice TTS] calling ttsProvider.speak...')
-                  setVoiceMode('speaking')
-                  setIsSpeaking(true)
-                  isSpeakingRef.current = true
-                  setSpeakingText(responseText)
-                  const ttsProvider = getTTSProvider()
-                  console.log('[Voice TTS] ttsProvider type:', settings.ttsProvider)
-                  await ttsProvider.speak(responseText, {
-                    onEnd: () => {
-                      console.log('[Voice TTS] speak onEnd')
-                      isSpeakingRef.current = false
-                      setIsSpeaking(false)
-                      setSpeakingText('')
-                      setVoiceMode('inactive')
-                    },
-                    onError: (error: Error) => {
-                      console.error('[Voice TTS] speak onError:', error.message)
-                      isSpeakingRef.current = false
-                      setError(error.message)
-                      setIsSpeaking(false)
-                      setSpeakingText('')
-                      setVoiceMode('inactive')
-                    },
-                  })
-                  console.log('[Voice TTS] speak() promise resolved')
-                } catch (ttsErr) {
-                  console.error('[Voice TTS] speak() threw:', ttsErr)
-                  const ttsMsg = ttsErr instanceof Error ? ttsErr.message : String(ttsErr)
-                  isSpeakingRef.current = false
-                  setError(ttsMsg)
-                  setIsSpeaking(false)
-                  setSpeakingText('')
-                  setVoiceMode('inactive')
+          // 生成完成后，自动播放 TTS (仅 Chat 模式)
+          if (settings.autoPlayResponse) {
+            console.log('[Voice TTS] autoPlayResponse enabled, fetching session...')
+            const session = await chatStore.getSession(sessionId)
+            console.log('[Voice TTS] session messages count:', session?.messages.length)
+            if (session) {
+              const lastAssistantMsg = [...session.messages]
+                .reverse()
+                .find((m) => m.role === 'assistant' && !m.error && !m.generating)
+              console.log(
+                '[Voice TTS] lastAssistantMsg:',
+                lastAssistantMsg
+                  ? {
+                      role: lastAssistantMsg.role,
+                      error: lastAssistantMsg.error,
+                      generating: lastAssistantMsg.generating,
+                      contentParts: lastAssistantMsg.contentParts?.length,
+                    }
+                  : null
+              )
+              if (lastAssistantMsg) {
+                const responseText = getMessageText(lastAssistantMsg)
+                console.log('[Voice TTS] responseText:', responseText.substring(0, 100))
+                if (responseText.trim()) {
+                  try {
+                    console.log('[Voice TTS] calling ttsProvider.speak...')
+                    setVoiceMode('speaking')
+                    setIsSpeaking(true)
+                    isSpeakingRef.current = true
+                    setSpeakingText(responseText)
+                    const ttsProvider = getTTSProvider()
+                    console.log('[Voice TTS] ttsProvider type:', settings.ttsProvider)
+                    await ttsProvider.speak(responseText, {
+                      onEnd: () => {
+                        console.log('[Voice TTS] speak onEnd')
+                        isSpeakingRef.current = false
+                        setIsSpeaking(false)
+                        setSpeakingText('')
+                        setVoiceMode('inactive')
+                      },
+                      onError: (error: Error) => {
+                        console.error('[Voice TTS] speak onError:', error.message)
+                        isSpeakingRef.current = false
+                        setError(error.message)
+                        setIsSpeaking(false)
+                        setSpeakingText('')
+                        setVoiceMode('inactive')
+                      },
+                    })
+                    console.log('[Voice TTS] speak() promise resolved')
+                  } catch (ttsErr) {
+                    console.error('[Voice TTS] speak() threw:', ttsErr)
+                    const ttsMsg = ttsErr instanceof Error ? ttsErr.message : String(ttsErr)
+                    isSpeakingRef.current = false
+                    setError(ttsMsg)
+                    setIsSpeaking(false)
+                    setSpeakingText('')
+                    setVoiceMode('inactive')
+                  }
                 }
               }
             }
@@ -474,7 +499,20 @@ export function useVoiceController() {
       setVoiceMode('inactive')
       return null
     }
-  }, [getASRProvider, getTTSProvider, setIsRecording, setIsSpeaking, setSpeakingText, setVoiceMode, setTranscript, setError, settings.autoPlayResponse, clearRecordingTimeout])
+  }, [
+    getASRProvider,
+    getTTSProvider,
+    setIsRecording,
+    setIsSpeaking,
+    setSpeakingText,
+    setVoiceMode,
+    setTranscript,
+    setError,
+    settings.autoPlayResponse,
+    settings.workMode,
+    settings.keyboardShortcuts,
+    clearRecordingTimeout,
+  ])
 
   // 播放语音
   const speak = useCallback(
@@ -613,7 +651,11 @@ export function useVoiceController() {
     const cleanup = window.electronAPI?.onVoiceToggle?.(handleVoiceToggle)
 
     const handleHoldShortcutKeyDown = (event: KeyboardEvent) => {
-      if (settings.triggerMode !== 'hold' || event.repeat || !matchesShortcutEvent(event, settings.shortcuts.toggleVoice)) {
+      if (
+        settings.triggerMode !== 'hold' ||
+        event.repeat ||
+        !matchesShortcutEvent(event, settings.shortcuts.toggleVoice)
+      ) {
         return
       }
 
@@ -691,7 +733,15 @@ export function useVoiceController() {
         ttsProviderRef.current.stop()
       }
     }
-  }, [settings.enabled, settings.triggerMode, settings.shortcuts.toggleVoice, activateVoiceInput, stopRecording, stopSpeaking, clearRecordingTimeout])
+  }, [
+    settings.enabled,
+    settings.triggerMode,
+    settings.shortcuts.toggleVoice,
+    activateVoiceInput,
+    stopRecording,
+    stopSpeaking,
+    clearRecordingTimeout,
+  ])
 
   return {
     voiceMode,
