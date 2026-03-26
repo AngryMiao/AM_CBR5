@@ -9,6 +9,7 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 
+import { type ChildProcess, spawn } from 'child_process'
 import {
   app,
   BrowserWindow,
@@ -26,7 +27,6 @@ import electronDebug from 'electron-debug'
 import log from 'electron-log/main'
 import os from 'os'
 import path from 'path'
-import { spawn, type ChildProcess } from 'child_process'
 // @ts-expect-error - source-map-support doesn't have type definitions
 import * as sourceMapSupport from 'source-map-support'
 import type { ShortcutSetting } from 'src/shared/types'
@@ -52,6 +52,7 @@ import {
   setStoreBlob,
   store,
 } from './store-node'
+import { insertTextToActiveApp, isTextInsertionSupported } from './text-inserter'
 import * as windowState from './window_state'
 
 // 这行代码是解决 Windows 通知的标题和图标不正确的问题，标题会错误显示成 electron.app.Angrymiao-Voice-Control
@@ -271,8 +272,19 @@ function normalizeShortcut(shortcut: string) {
 }
 
 const MODIFIER_KEYS = new Set([
-  'mod', 'command', 'cmd', 'control', 'ctrl', 'commandorcontrol', 'cmdorctrl',
-  'option', 'alt', 'altgr', 'shift', 'super', 'meta',
+  'mod',
+  'command',
+  'cmd',
+  'control',
+  'ctrl',
+  'commandorcontrol',
+  'cmdorctrl',
+  'option',
+  'alt',
+  'altgr',
+  'shift',
+  'super',
+  'meta',
 ])
 
 function isValidShortcut(shortcut: string): boolean {
@@ -603,7 +615,7 @@ if (!gotTheLock) {
   app.on('second-instance', async (event, commandLine, workingDirectory) => {
     // on windows and linux, the deep link is passed in the command line
     const url = commandLine.find(
-      (arg) => arg.startsWith('angrymiao-voice-control://') || arg.startsWith('angrymiao-voice-control-dev://'),
+      (arg) => arg.startsWith('angrymiao-voice-control://') || arg.startsWith('angrymiao-voice-control-dev://')
     )
 
     if (url) {
@@ -655,7 +667,7 @@ if (!gotTheLock) {
       // macOS 会通过 open-url 事件处理，不需要在这里处理
       if (process.platform !== 'darwin') {
         const url = process.argv.find(
-          (arg) => arg.startsWith('angrymiao-voice-control://') || arg.startsWith('angrymiao-voice-control-dev://'),
+          (arg) => arg.startsWith('angrymiao-voice-control://') || arg.startsWith('angrymiao-voice-control-dev://')
         )
         if (url && mainWindow) {
           // 确保窗口加载完成后再处理 Deep Link
@@ -1041,4 +1053,13 @@ ipcMain.handle('window:close', () => {
 
 ipcMain.handle('window:is-maximized', () => {
   return mainWindow?.isMaximized()
+})
+
+// 文字插入 IPC
+ipcMain.handle('text:insert', async (_event, text: string) => {
+  return insertTextToActiveApp(text)
+})
+
+ipcMain.handle('text:isInsertionSupported', async () => {
+  return isTextInsertionSupported()
 })
