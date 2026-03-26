@@ -14,6 +14,10 @@ export type VoiceMode = z.infer<typeof VoiceModeSchema>
 export const VoiceTriggerModeSchema = z.enum(['toggle', 'hold'])
 export type VoiceTriggerMode = z.infer<typeof VoiceTriggerModeSchema>
 
+// 语音工作模式
+export const VoiceWorkModeSchema = z.enum(['chat', 'typeless'])
+export type VoiceWorkMode = z.infer<typeof VoiceWorkModeSchema>
+
 // ASR (Automatic Speech Recognition) 提供商
 export const ASRProviderSchema = z.enum(['whisper-local', 'funasr-local', 'openai', 'aliyun', 'azure', 'google'])
 export type ASRProvider = z.infer<typeof ASRProviderSchema>
@@ -160,6 +164,7 @@ export type VoiceShortcuts = z.infer<typeof VoiceShortcutsSchema>
 // 语音设置
 export const VoiceSettingsSchema = z.object({
   enabled: z.boolean().default(false),
+  workMode: VoiceWorkModeSchema.default('chat'), // 工作模式：chat 或 typeless
   triggerMode: VoiceTriggerModeSchema.default('toggle'),
   asrProvider: ASRProviderSchema.default('whisper-local'),
   ttsProvider: TTSProviderSchema.default('browser'),
