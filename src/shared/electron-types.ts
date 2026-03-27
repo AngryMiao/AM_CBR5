@@ -10,4 +10,7 @@ export interface ElectronIPC {
   // 文字插入相关
   insertText: (text: string) => Promise<{ success: boolean; error?: string }>
   isTextInsertionSupported: () => Promise<boolean>
+  // 全局键盘钩子（用于 Typeless 模式长按录音）
+  onHotkeyDown: (callback: () => void) => () => void
+  onHotkeyUp: (callback: () => void) => () => void
 }

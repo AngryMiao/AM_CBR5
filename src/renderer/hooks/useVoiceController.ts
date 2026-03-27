@@ -1,7 +1,7 @@
 import { createMessage, type Settings } from '@shared/types'
 import type { KeyboardShortcut } from '@shared/types/voice'
 import { getMessageText } from '@shared/utils/message'
-import { useAtom, useSetAtom } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { useCallback, useEffect, useRef } from 'react'
 import { useVoiceSettings } from '@/hooks/useVoiceSettings'
 import { ANGRYMIAO_SKILL_BUNDLE_ID, ANGRYMIAO_SKILL_RUNTIME_ID } from '@/packages/agent-skills'
@@ -61,164 +61,6 @@ async function ensureAngrymiaoSkillRuntime(settings?: Partial<Settings>): Promis
   }
 }
 
-type ParsedShortcut = {
-  modifiers: Set<'ctrl' | 'meta' | 'alt' | 'shift' | 'mod'>
-  key?: string
-}
-
-function normalizeShortcutToken(token: string): string {
-  switch (token.trim().toLowerCase()) {
-    case 'control':
-    case 'ctrl':
-      return 'ctrl'
-    case 'command':
-    case 'cmd':
-    case 'meta':
-    case 'win':
-      return 'meta'
-    case 'option':
-    case 'alt':
-      return 'alt'
-    case 'shift':
-      return 'shift'
-    case 'commandorcontrol':
-    case 'mod':
-      return 'mod'
-    case 'return':
-    case 'enter':
-      return 'enter'
-    case 'space':
-      return ' '
-    case 'escape':
-    case 'esc':
-      return 'escape'
-    case 'up':
-      return 'arrowup'
-    case 'down':
-      return 'arrowdown'
-    case 'left':
-      return 'arrowleft'
-    case 'right':
-      return 'arrowright'
-    default:
-      return token.trim().toLowerCase()
-  }
-}
-
-function parseShortcut(shortcut: string): ParsedShortcut {
-  const parsed: ParsedShortcut = {
-    modifiers: new Set(),
-  }
-
-  for (const part of shortcut.split('+').filter(Boolean)) {
-    const normalized = normalizeShortcutToken(part)
-    if (
-      normalized === 'ctrl' ||
-      normalized === 'meta' ||
-      normalized === 'alt' ||
-      normalized === 'shift' ||
-      normalized === 'mod'
-    ) {
-      parsed.modifiers.add(normalized)
-    } else {
-      parsed.key = normalized
-    }
-  }
-
-  return parsed
-}
-
-function normalizeEventKey(key: string): string {
-  switch (key) {
-    case 'Control':
-      return 'ctrl'
-    case 'Meta':
-      return 'meta'
-    case 'Alt':
-      return 'alt'
-    case 'Shift':
-      return 'shift'
-    case 'Enter':
-      return 'enter'
-    case ' ':
-      return ' '
-    case 'Escape':
-      return 'escape'
-    case 'ArrowUp':
-      return 'arrowup'
-    case 'ArrowDown':
-      return 'arrowdown'
-    case 'ArrowLeft':
-      return 'arrowleft'
-    case 'ArrowRight':
-      return 'arrowright'
-    default:
-      return key.toLowerCase()
-  }
-}
-
-function matchesShortcutEvent(event: KeyboardEvent, shortcut: string): boolean {
-  const parsed = parseShortcut(shortcut)
-  if (!parsed.key) {
-    return false
-  }
-
-  const requiresCtrl = parsed.modifiers.has('ctrl')
-  const requiresMeta = parsed.modifiers.has('meta')
-  const requiresAlt = parsed.modifiers.has('alt')
-  const requiresShift = parsed.modifiers.has('shift')
-  const requiresMod = parsed.modifiers.has('mod')
-
-  if (normalizeEventKey(event.key) !== parsed.key) {
-    return false
-  }
-  if (requiresCtrl && !event.ctrlKey) {
-    return false
-  }
-  if (requiresMeta && !event.metaKey) {
-    return false
-  }
-  if (requiresAlt && !event.altKey) {
-    return false
-  }
-  if (requiresShift && !event.shiftKey) {
-    return false
-  }
-  if (requiresMod && !(event.ctrlKey || event.metaKey)) {
-    return false
-  }
-  if (!requiresAlt && event.altKey) {
-    return false
-  }
-  if (!requiresShift && event.shiftKey) {
-    return false
-  }
-  if (!requiresMod && !requiresCtrl && event.ctrlKey) {
-    return false
-  }
-  if (!requiresMod && !requiresMeta && event.metaKey) {
-    return false
-  }
-
-  return true
-}
-
-function releasesShortcut(event: KeyboardEvent, shortcut: string): boolean {
-  const parsed = parseShortcut(shortcut)
-  const released = normalizeEventKey(event.key)
-
-  if (parsed.key === released) {
-    return true
-  }
-  if (released === 'ctrl' || released === 'meta' || released === 'alt' || released === 'shift') {
-    return (
-      parsed.modifiers.has(released) || (parsed.modifiers.has('mod') && (released === 'ctrl' || released === 'meta'))
-    )
-  }
-
-  return false
-}
-
 /**
  * 语音控制器 Hook
  * 管理语音录制、识别、合成的完整流程
@@ -233,8 +75,10 @@ export function useVoiceController() {
   const setError = useSetAtom(voiceErrorAtom)
   const setPanelVisible = useSetAtom(voicePanelVisibleAtom)
   const setTypelessStatus = useSetAtom(typelessStatusAtom)
+  const typelessStatus = useAtomValue(typelessStatusAtom)
   const setTypelessChatResult = useSetAtom(typelessChatResultAtom)
   const setStreamingText = useSetAtom(streamingTextAtom)
+  const streamingText = useAtomValue(streamingTextAtom)
   const { settings } = useVoiceSettings()
 
   const recorderRef = useRef<VoiceRecorder | null>(null)
@@ -244,6 +88,7 @@ export function useVoiceController() {
   const voiceModeRef = useRef(voiceMode)
   const holdShortcutActiveRef = useRef(false)
   const holdActivationPendingRef = useRef(false)
+  const pendingHotkeyReleaseRef = useRef(false)
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const clearRecordingTimeout = useCallback(() => {
@@ -256,6 +101,63 @@ export function useVoiceController() {
   useEffect(() => {
     voiceModeRef.current = voiceMode
   }, [voiceMode])
+
+  useEffect(() => {
+    if (platform.type !== 'desktop') {
+      return
+    }
+
+    if (settings.workMode !== 'typeless') {
+      void window.electronAPI?.invoke('typelessOverlay:hide')
+      return
+    }
+
+    if (typelessStatus) {
+      void window.electronAPI?.invoke('typelessOverlay:show', {
+        mode: typelessStatus.type,
+        text: typelessStatus.message,
+      })
+
+      if (typelessStatus.type === 'success' || typelessStatus.type === 'error') {
+        const timer = setTimeout(() => {
+          void window.electronAPI?.invoke('typelessOverlay:hide')
+        }, 900)
+        return () => clearTimeout(timer)
+      }
+      return
+    }
+
+    if (voiceMode === 'listening' && isRecording) {
+      void window.electronAPI?.invoke('typelessOverlay:show', {
+        mode: 'listening',
+        text: streamingText?.trim() || '正在聆听...',
+      })
+      return
+    }
+
+    if (voiceMode === 'listening' && !isRecording) {
+      void window.electronAPI?.invoke('typelessOverlay:show', {
+        mode: 'listening',
+        text: '正在唤起麦克风...',
+      })
+      return
+    }
+
+    if (voiceMode === 'processing') {
+      void window.electronAPI?.invoke('typelessOverlay:show', {
+        mode: 'processing',
+        text: '正在识别...',
+      })
+      return
+    }
+
+    if (voiceMode === 'inactive') {
+      if (holdShortcutActiveRef.current || holdActivationPendingRef.current) {
+        return
+      }
+      void window.electronAPI?.invoke('typelessOverlay:hide')
+    }
+  }, [settings.workMode, typelessStatus, voiceMode, isRecording, streamingText])
 
   // 初始化 ASR 提供商
   const getASRProvider = useCallback((): ASRProvider => {
@@ -385,6 +287,7 @@ export function useVoiceController() {
       setTypelessStatus({ type: 'executing', message: `正在执行: ${shortcut.name}` })
 
       try {
+        await ensureAngrymiaoSkillRuntime({ voice: settings })
         const tools = mcpController.getAvailableTools({ skillBundleId: ANGRYMIAO_SKILL_BUNDLE_ID })
         const keyboardControlTool = tools['mcp__system-control__keyboard_control']
 
@@ -402,7 +305,7 @@ export function useVoiceController() {
         setError(message)
       }
     },
-    [setTypelessStatus, setError]
+    [settings, setTypelessStatus, setError]
   )
 
   // Typeless 模式：处理输入意图
@@ -455,14 +358,26 @@ export function useVoiceController() {
   )
 
   // 开始录音
-  const startRecording = useCallback(async () => {
+  const startRecording = useCallback(async (): Promise<boolean> => {
     try {
       clearRecordingTimeout()
       setError(null)
+
+      if (!VoiceRecorder.isSupported()) {
+        throw new Error('当前环境不支持麦克风录音')
+      }
+
+      if (platform.type === 'desktop') {
+        const granted = await window.electronAPI?.invoke('ensureMicrophonePermission')
+        if (granted === false) {
+          throw new Error('麦克风权限未授权，请在系统设置中允许后重试')
+        }
+      }
+
       setVoiceMode('listening')
       setPanelVisible(true)
-      setIsRecording(true)
       setStreamingText('')
+      setTypelessStatus(null)
 
       const recorder = new VoiceRecorder()
       recorderRef.current = recorder
@@ -483,17 +398,27 @@ export function useVoiceController() {
         startStreamingRecognition(recorder)
       }
 
+      setIsRecording(true)
+
       // 自动停止录音（最大时长）
       recordingTimeoutRef.current = setTimeout(() => {
         if (recorderRef.current) {
           stopRecording()
         }
       }, settings.maxRecordingDuration)
+
+      return true
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      recorderRef.current = null
       setError(message)
       setVoiceMode('inactive')
+      setPanelVisible(false)
       setIsRecording(false)
+      if (settings.workMode === 'typeless') {
+        setTypelessStatus({ type: 'error', message: `录音启动失败：${message}` })
+      }
+      return false
     }
   }, [
     settings.autoStopRecording,
@@ -507,6 +432,7 @@ export function useVoiceController() {
     setIsRecording,
     setAudioLevel,
     setStreamingText,
+    setTypelessStatus,
     clearRecordingTimeout,
     startStreamingRecognition,
   ])
@@ -514,6 +440,8 @@ export function useVoiceController() {
   // 停止录音并识别
   const stopRecording = useCallback(async () => {
     if (!recorderRef.current) return
+    const recorder = recorderRef.current
+    recorderRef.current = null
 
     try {
       clearRecordingTimeout()
@@ -521,8 +449,7 @@ export function useVoiceController() {
       setIsRecording(false)
       setVoiceMode('processing')
 
-      const audioBlob = await recorderRef.current.stop()
-      recorderRef.current = null
+      const audioBlob = await recorder.stop()
 
       // 执行语音识别
       const asrProvider = getASRProvider()
@@ -530,7 +457,6 @@ export function useVoiceController() {
 
       setTranscript(text)
       setStreamingText('')
-      setVoiceMode('inactive')
 
       // 根据工作模式决定输出目标
       if (text) {
@@ -625,12 +551,19 @@ export function useVoiceController() {
             }
           }
         }
+      } else if (settings.workMode === 'typeless') {
+        setTypelessStatus({ type: 'error', message: '未识别到语音，请重试' })
       }
+
+      setVoiceMode('inactive')
 
       return text
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setError(message)
+      if (settings.workMode === 'typeless') {
+        setTypelessStatus({ type: 'error', message: `识别失败：${message}` })
+      }
       setVoiceMode('inactive')
       return null
     }
@@ -644,6 +577,7 @@ export function useVoiceController() {
     setTranscript,
     setStreamingText,
     setError,
+    setTypelessStatus,
     settings.autoPlayResponse,
     settings.workMode,
     settings.keyboardShortcuts,
@@ -705,27 +639,50 @@ export function useVoiceController() {
   }, [setIsSpeaking, setSpeakingText, setVoiceMode])
 
   const activateVoiceInput = useCallback(async () => {
-    try {
-      await ensureAngrymiaoSkillRuntime({ voice: settings })
-    } catch (e) {
+    const started = await startRecording()
+    if (!started) {
+      return
+    }
+
+    void ensureAngrymiaoSkillRuntime({ voice: settings }).catch((e) => {
       console.error('Failed to start Angrymiao skill runtime (non-blocking):', e)
-    }
-    try {
-      const granted = await window.electronAPI?.invoke('ensureAccessibilityPermission')
-      if (!granted) {
-        console.warn('Accessibility permission not granted, system control may not work')
+    })
+
+    void (async () => {
+      try {
+        const granted = await window.electronAPI?.invoke('ensureAccessibilityPermission')
+        if (!granted) {
+          console.warn('Accessibility permission not granted, system control may not work')
+        }
+      } catch (e) {
+        console.error('Failed to check accessibility permission:', e)
       }
-    } catch (e) {
-      console.error('Failed to check accessibility permission:', e)
+    })()
+
+    if (settings.workMode !== 'typeless') {
+      void (async () => {
+        try {
+          const session = await ensureAngrymiaoSession({
+            keyboardShortcuts: settings.keyboardShortcuts,
+            purgeOthers: true,
+          })
+          switchCurrentSession(session.id)
+        } catch (e) {
+          console.error('Failed to switch to voice session:', e)
+        }
+      })()
     }
-    try {
-      const session = await ensureAngrymiaoSession({ keyboardShortcuts: settings.keyboardShortcuts, purgeOthers: true })
-      switchCurrentSession(session.id)
-    } catch (e) {
-      console.error('Failed to switch to voice session:', e)
-    }
-    await startRecording()
   }, [settings, startRecording])
+
+  const activateVoiceInputRef = useRef(activateVoiceInput)
+  const stopRecordingRef = useRef(stopRecording)
+  const stopSpeakingRef = useRef(stopSpeaking)
+
+  useEffect(() => {
+    activateVoiceInputRef.current = activateVoiceInput
+    stopRecordingRef.current = stopRecording
+    stopSpeakingRef.current = stopSpeaking
+  }, [activateVoiceInput, stopRecording, stopSpeaking])
 
   // 切换语音模式
   const toggleVoice = useCallback(async () => {
@@ -745,125 +702,60 @@ export function useVoiceController() {
       return
     }
 
-    console.log('Setting up voice toggle listener')
+    console.log('Setting up voice toggle listener, workMode:', settings.workMode)
 
-    const handleVoiceToggle = () => {
-      console.log('Voice toggle event received! triggerMode:', settings.triggerMode)
-
-      if (settings.triggerMode === 'hold') {
-        void (async () => {
-          if (voiceModeRef.current === 'inactive') {
-            holdShortcutActiveRef.current = true
-            holdActivationPendingRef.current = true
-            try {
-              await activateVoiceInput()
-              if (!holdShortcutActiveRef.current && recorderRef.current) {
-                await stopRecording()
-              }
-            } finally {
-              holdActivationPendingRef.current = false
-            }
-          } else if (voiceModeRef.current === 'listening' && recorderRef.current) {
-            await stopRecording()
-          } else if (voiceModeRef.current === 'speaking' && isSpeakingRef.current) {
-            stopSpeaking()
-          }
-        })()
-        return
-      }
-
-      if (settings.triggerMode !== 'toggle') {
-        return
-      }
-      console.log('Voice toggle event received!')
+    // 所有模式都使用全局键盘钩子事件（长按模式）
+    const handleHotkeyDown = () => {
+      console.log('Hotkey down, mode:', settings.workMode)
       void (async () => {
         if (voiceModeRef.current === 'inactive') {
-          await activateVoiceInput()
-        } else if (voiceModeRef.current === 'listening' && recorderRef.current) {
-          await stopRecording()
-        } else if (voiceModeRef.current === 'speaking' && isSpeakingRef.current) {
-          stopSpeaking()
-        }
-      })()
-    }
+          holdShortcutActiveRef.current = true
+          holdActivationPendingRef.current = true
+          pendingHotkeyReleaseRef.current = false
+          try {
+            await activateVoiceInputRef.current()
 
-    // 监听来自主进程的语音切换事件
-    const cleanup = window.electronAPI?.onVoiceToggle?.(handleVoiceToggle)
-
-    const handleHoldShortcutKeyDown = (event: KeyboardEvent) => {
-      if (
-        settings.triggerMode !== 'hold' ||
-        event.repeat ||
-        !matchesShortcutEvent(event, settings.shortcuts.toggleVoice)
-      ) {
-        return
-      }
-
-      event.preventDefault()
-      if (holdShortcutActiveRef.current || holdActivationPendingRef.current) {
-        return
-      }
-
-      holdShortcutActiveRef.current = true
-      holdActivationPendingRef.current = true
-
-      void (async () => {
-        try {
-          if (voiceModeRef.current === 'inactive') {
-            await activateVoiceInput()
-            if (!holdShortcutActiveRef.current && recorderRef.current) {
-              await stopRecording()
+            const shouldStopAfterActivation = !holdShortcutActiveRef.current || pendingHotkeyReleaseRef.current
+            if (shouldStopAfterActivation && recorderRef.current?.getState() === 'recording') {
+              pendingHotkeyReleaseRef.current = false
+              await stopRecordingRef.current()
             }
-          } else if (voiceModeRef.current === 'speaking' && isSpeakingRef.current) {
-            stopSpeaking()
+          } finally {
+            holdActivationPendingRef.current = false
           }
-        } finally {
-          holdActivationPendingRef.current = false
+        } else if (voiceModeRef.current === 'speaking' && isSpeakingRef.current) {
+          stopSpeakingRef.current()
         }
       })()
     }
 
-    const handleHoldShortcutKeyUp = (event: KeyboardEvent) => {
-      if (settings.triggerMode !== 'hold' || !releasesShortcut(event, settings.shortcuts.toggleVoice)) {
-        return
-      }
-
-      if (!holdShortcutActiveRef.current && !holdActivationPendingRef.current) {
-        return
-      }
-
+    const handleHotkeyUp = () => {
+      console.log('Hotkey up')
       holdShortcutActiveRef.current = false
+
+      pendingHotkeyReleaseRef.current = true
       if (recorderRef.current && recorderRef.current.getState() === 'recording') {
-        void stopRecording()
+        pendingHotkeyReleaseRef.current = false
+        void stopRecordingRef.current()
       }
     }
 
-    const handleWindowBlur = () => {
-      if (settings.triggerMode !== 'hold') {
-        return
-      }
-      holdShortcutActiveRef.current = false
-      if (recorderRef.current && recorderRef.current.getState() === 'recording') {
-        void stopRecording()
-      }
-    }
+    const cleanupDown = window.electronAPI?.onHotkeyDown?.(handleHotkeyDown)
+    const cleanupUp = window.electronAPI?.onHotkeyUp?.(handleHotkeyUp)
 
-    window.addEventListener('keydown', handleHoldShortcutKeyDown)
-    window.addEventListener('keyup', handleHoldShortcutKeyUp)
-    window.addEventListener('blur', handleWindowBlur)
-
-    console.log('Voice toggle listener registered, cleanup:', !!cleanup)
+    console.log('Global hotkey listeners registered')
 
     return () => {
-      console.log('Cleaning up voice toggle listener')
-      cleanup?.()
-      window.removeEventListener('keydown', handleHoldShortcutKeyDown)
-      window.removeEventListener('keyup', handleHoldShortcutKeyUp)
-      window.removeEventListener('blur', handleWindowBlur)
+      console.log('Cleaning up hotkey listeners')
+      cleanupDown?.()
+      cleanupUp?.()
       holdShortcutActiveRef.current = false
       holdActivationPendingRef.current = false
+      pendingHotkeyReleaseRef.current = false
       clearRecordingTimeout()
-      // 清理资源 - 只在 recorder 存在时才调用 stop
+      if (settings.workMode === 'typeless') {
+        void window.electronAPI?.invoke('typelessOverlay:hide')
+      }
       if (recorderRef.current && recorderRef.current.getState() !== 'inactive') {
         recorderRef.current.stop().catch((err) => {
           console.error('Error stopping recorder during cleanup:', err)
@@ -873,15 +765,7 @@ export function useVoiceController() {
         ttsProviderRef.current.stop()
       }
     }
-  }, [
-    settings.enabled,
-    settings.triggerMode,
-    settings.shortcuts.toggleVoice,
-    activateVoiceInput,
-    stopRecording,
-    stopSpeaking,
-    clearRecordingTimeout,
-  ])
+  }, [settings.enabled, settings.workMode, clearRecordingTimeout])
 
   return {
     voiceMode,

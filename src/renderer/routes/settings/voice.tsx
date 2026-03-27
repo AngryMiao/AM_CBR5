@@ -4,7 +4,6 @@ import {
   getDefaultFunASRLaunchCommand,
   type KeyboardShortcut,
   type TTSProvider,
-  type VoiceTriggerMode,
   type VoiceWorkMode,
   type WhisperModelSize,
 } from '@shared/types/voice'
@@ -1258,27 +1257,6 @@ export function RouteComponent() {
       <div className="space-y-3">
         <label className="font-medium">{t('快捷键')}</label>
         <div>
-          <label className="text-sm font-medium">{t('触发方式')}</label>
-          <select
-            value={settings.triggerMode}
-            onChange={(e) =>
-              setSettings({
-                ...settings,
-                triggerMode: e.target.value as VoiceTriggerMode,
-              })
-            }
-            className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
-          >
-            <option value="toggle">{t('按一次开始，再按一次停止')}</option>
-            <option value="hold">{t('长按录音，松开结束')}</option>
-          </select>
-          <p className="text-xs text-gray-500 mt-1">
-            {settings.triggerMode === 'hold'
-              ? t('长按模式依赖 Angrymiao-Voice-Control 窗口内的按下/抬起事件，使用时请保持窗口处于激活状态。')
-              : t('切换模式下，首次按下开始录音，再按一次结束录音。')}
-          </p>
-        </div>
-        <div>
           <label className="text-sm font-medium">{t('语音快捷键')}</label>
           <div className="mt-1">
             <HotkeyPicker
@@ -1291,6 +1269,7 @@ export function RouteComponent() {
               }
             />
           </div>
+          <p className="text-xs text-gray-500 mt-1">{t('长按快捷键开始录音，松开后发送识别内容。')}</p>
         </div>
       </div>
 

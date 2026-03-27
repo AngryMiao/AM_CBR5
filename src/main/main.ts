@@ -30,10 +30,11 @@ import path from 'path'
 // @ts-expect-error - source-map-support doesn't have type definitions
 import * as sourceMapSupport from 'source-map-support'
 import type { ShortcutSetting } from 'src/shared/types'
-import { getDefaultFunASRLaunchCommand } from 'src/shared/types/voice'
+import { getDefaultFunASRLaunchCommand, type VoiceWorkMode } from 'src/shared/types/voice'
 import * as analystic from './analystic-node'
 import * as autoLauncher from './autoLauncher'
 import { handleDeepLink } from './deeplinks'
+import { startGlobalKeyboardHook, stopGlobalKeyboardHook } from './global-keyboard-hook'
 import Locale from './locales'
 import * as mcpIpc from './mcp/ipc-stdio-transport'
 import MenuBuilder from './menu'
@@ -53,6 +54,13 @@ import {
   store,
 } from './store-node'
 import { insertTextToActiveApp, isTextInsertionSupported } from './text-inserter'
+import {
+  destroyTypelessOverlay,
+  hideTypelessOverlay,
+  type OverlayState,
+  showTypelessOverlay,
+  updateTypelessOverlay,
+} from './typeless-overlay'
 import * as windowState from './window_state'
 
 // 这行代码是解决 Windows 通知的标题和图标不正确的问题，标题会错误显示成 electron.app.Angrymiao-Voice-Control
@@ -297,7 +305,7 @@ function isValidShortcut(shortcut: string): boolean {
 
 function registerShortcuts(
   shortcutSetting?: ShortcutSetting,
-  voiceOverride?: { enabled?: boolean; shortcut?: string }
+  voiceOverride?: { enabled?: boolean; shortcut?: string; workMode?: VoiceWorkMode }
 ) {
   log.info('registerShortcuts called')
   if (!shortcutSetting) {
@@ -333,21 +341,13 @@ function registerShortcuts(
         log.warn('Invalid voice shortcut:', toggleVoice, '- falling back to default:', DEFAULT_VOICE_SHORTCUT)
         toggleVoice = normalizeShortcut(DEFAULT_VOICE_SHORTCUT)
       }
-      log.info('Registering voice shortcut:', toggleVoice)
-      const success = globalShortcut.register(toggleVoice, () => {
-        log.info('Voice shortcut triggered!')
-        if (mainWindow) {
-          mainWindow.webContents.send('voice:toggle')
-          if (!mainWindow.isFocused()) {
-            if (mainWindow.isMinimized()) {
-              mainWindow.restore()
-            }
-            mainWindow.show()
-            mainWindow.focus()
-          }
-        }
-      })
-      log.info('Voice shortcut registration result:', success)
+
+      const effectiveWorkMode = voiceOverride?.workMode ?? voiceSettings?.workMode
+      const isTypelessMode = effectiveWorkMode === 'typeless'
+      const showWindow = !isTypelessMode
+
+      log.info('Starting global keyboard hook for', toggleVoice, ', showWindow:', showWindow)
+      startGlobalKeyboardHook(toggleVoiceRaw, showWindow)
     } else {
       log.info('Voice control not enabled or shortcut not configured')
     }
@@ -357,6 +357,7 @@ function registerShortcuts(
 }
 
 function unregisterShortcuts() {
+  stopGlobalKeyboardHook()
   return globalShortcut.unregisterAll()
 }
 
@@ -474,6 +475,7 @@ async function createWindow() {
       spellcheck: true,
       webSecurity: false, // 其中一个作用是解决跨域问题
       allowRunningInsecureContent: false,
+      backgroundThrottling: false,
       preload: app.isPackaged
         ? path.join(__dirname, '../preload/index.js')
         : path.join(__dirname, '../../out/preload/index.js'),
@@ -712,6 +714,7 @@ if (!gotTheLock) {
           log.error('shortcut: failed to unregister', e)
         }
         stopFunASRService('app will quit')
+        destroyTypelessOverlay()
         mcpIpc.closeAllTransports()
         destroyTray()
       })
@@ -842,6 +845,18 @@ ipcMain.handle('ensureAccessibilityPermission', async () => {
 
   return true
 })
+ipcMain.handle('ensureMicrophonePermission', async () => {
+  if (process.platform !== 'darwin') {
+    return true
+  }
+
+  try {
+    return await systemPreferences.askForMediaAccess('microphone')
+  } catch (error) {
+    log.error('Failed to request microphone permission:', error)
+    return false
+  }
+})
 ipcMain.handle('getArch', () => {
   return process.arch
 })
@@ -879,10 +894,28 @@ ipcMain.handle('ensureShortcutConfig', (event, json) => {
   registerShortcuts(config)
 })
 
-ipcMain.handle('ensureVoiceShortcut', (event, voiceOverride?: { enabled?: boolean; shortcut?: string }) => {
-  log.info('ensureVoiceShortcut called with:', voiceOverride)
-  unregisterShortcuts()
-  registerShortcuts(undefined, voiceOverride)
+ipcMain.handle(
+  'ensureVoiceShortcut',
+  (event, voiceOverride?: { enabled?: boolean; shortcut?: string; workMode?: VoiceWorkMode }) => {
+    log.info('ensureVoiceShortcut called with:', voiceOverride)
+    unregisterShortcuts()
+    registerShortcuts(undefined, voiceOverride)
+  }
+)
+
+ipcMain.handle('typelessOverlay:show', (_event, state?: OverlayState) => {
+  showTypelessOverlay(state)
+  return true
+})
+
+ipcMain.handle('typelessOverlay:update', (_event, state?: OverlayState) => {
+  updateTypelessOverlay(state || {})
+  return true
+})
+
+ipcMain.handle('typelessOverlay:hide', () => {
+  hideTypelessOverlay()
+  return true
 })
 
 ipcMain.handle('ensureFunASRService', () => {

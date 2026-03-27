@@ -1,7 +1,14 @@
 import { useAtomValue } from 'jotai'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { audioLevelAtom, isRecordingAtom, transcriptAtom, voiceModeAtom } from '@/stores/voiceStore'
+import {
+  audioLevelAtom,
+  isRecordingAtom,
+  streamingTextAtom,
+  transcriptAtom,
+  typelessStatusAtom,
+  voiceModeAtom,
+} from '@/stores/voiceStore'
 
 /**
  * Typeless 模式的极简浮动面板
@@ -12,6 +19,8 @@ export function TypelessPanel() {
   const isRecording = useAtomValue(isRecordingAtom)
   const transcript = useAtomValue(transcriptAtom)
   const audioLevel = useAtomValue(audioLevelAtom)
+  const streamingText = useAtomValue(streamingTextAtom)
+  const status = useAtomValue(typelessStatusAtom)
 
   const [visible, setVisible] = useState(false)
 
@@ -25,6 +34,31 @@ export function TypelessPanel() {
     }
   }, [voiceMode])
 
+  const statusConfigMap = {
+    executing: { icon: '⚙️', bgColor: 'bg-blue-600/95' },
+    inserting: { icon: '✏️', bgColor: 'bg-yellow-600/95' },
+    thinking: { icon: '💭', bgColor: 'bg-purple-600/95' },
+    success: { icon: '✅', bgColor: 'bg-green-600/95' },
+    error: { icon: '❌', bgColor: 'bg-red-600/95' },
+  } as const
+
+  const getBgColor = () => {
+    if (status && status.type in statusConfigMap) {
+      return statusConfigMap[status.type as keyof typeof statusConfigMap].bgColor
+    }
+    if (voiceMode === 'processing') {
+      return 'bg-yellow-600/95'
+    }
+    return 'bg-gray-900/95'
+  }
+
+  const getStatusIcon = () => {
+    if (status && status.type in statusConfigMap) {
+      return statusConfigMap[status.type as keyof typeof statusConfigMap].icon
+    }
+    return null
+  }
+
   if (!visible) return null
 
   return (
@@ -32,17 +66,21 @@ export function TypelessPanel() {
       className={cn(
         'fixed bottom-8 left-1/2 -translate-x-1/2 z-50',
         'px-6 py-3 rounded-full shadow-xl',
-        'bg-gray-900/95 text-white',
+        'text-white',
         'flex items-center gap-3',
         'transition-all duration-200',
-        voiceMode === 'processing' && 'bg-yellow-600/95'
+        getBgColor()
       )}
     >
       {/* 状态指示器 */}
-      <div className={cn('w-3 h-3 rounded-full', isRecording ? 'bg-red-500 animate-pulse' : 'bg-green-500')} />
+      {getStatusIcon() ? (
+        <span className="text-base">{getStatusIcon()}</span>
+      ) : (
+        <div className={cn('w-3 h-3 rounded-full', isRecording ? 'bg-red-500 animate-pulse' : 'bg-green-500')} />
+      )}
 
       {/* 音频波形 */}
-      {isRecording && (
+      {isRecording && !status && (
         <div className="flex items-center gap-0.5 h-4">
           {[...Array(5)].map((_, i) => (
             <div
@@ -56,11 +94,17 @@ export function TypelessPanel() {
         </div>
       )}
 
-      {/* 转录文本预览 */}
-      {transcript && <span className="text-sm max-w-xs truncate">{transcript}</span>}
+      {/* 内容 */}
+      {status ? (
+        <span className="text-sm max-w-xs truncate">{status.message}</span>
+      ) : isRecording ? (
+        streamingText && <span className="text-sm max-w-xs truncate">{streamingText}</span>
+      ) : (
+        transcript && <span className="text-sm max-w-xs truncate">{transcript}</span>
+      )}
 
       {/* 处理中指示 */}
-      {voiceMode === 'processing' && <span className="text-sm">插入中...</span>}
+      {voiceMode === 'processing' && !status && <span className="text-sm">插入中...</span>}
     </div>
   )
 }

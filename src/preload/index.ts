@@ -58,6 +58,14 @@ const electronHandler: ElectronIPC = {
     ipcRenderer.on('voice:toggle', callback)
     return () => ipcRenderer.off('voice:toggle', callback)
   },
+  onHotkeyDown: (callback: () => void) => {
+    ipcRenderer.on('hotkey:down', callback)
+    return () => ipcRenderer.off('hotkey:down', callback)
+  },
+  onHotkeyUp: (callback: () => void) => {
+    ipcRenderer.on('hotkey:up', callback)
+    return () => ipcRenderer.off('hotkey:up', callback)
+  },
   insertText: (text: string) => ipcRenderer.invoke('text:insert', text),
   isTextInsertionSupported: () => ipcRenderer.invoke('text:isInsertionSupported'),
 }

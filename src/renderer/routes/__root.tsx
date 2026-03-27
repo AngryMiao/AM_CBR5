@@ -191,7 +191,7 @@ function Root() {
       {/* <WelcomeDialog /> */}
       <Toasts /> {/* mui */}
       <SettingsModal />
-      {voiceSettings.workMode === 'typeless' ? <TypelessPanel /> : <VoicePanel />}
+      {voiceSettings.workMode === 'typeless' ? platform.type === 'desktop' ? null : <TypelessPanel /> : <VoicePanel />}
       <TypelessChatResult />
     </Box>
   )
