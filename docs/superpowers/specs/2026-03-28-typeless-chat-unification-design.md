@@ -175,12 +175,14 @@ skill runtime 已注册 `type_text`：
 
 1. `ensureAngrymiaoSession({ keyboardShortcuts, purgeOthers: false })`
 2. `createMessage('user', text)`
-3. `submitNewUserMessage(sessionId, { newUserMsg, needGenerating: true })`
-4. 记录本轮 typeless 请求上下文，交给“执行态推导层”观察
+3. 立即创建并写入 `TypelessRequestContext`
+4. 以 fire-and-observe 方式触发 `submitNewUserMessage(sessionId, { newUserMsg, needGenerating: true })`
+5. renderer 侧执行态推导层通过 `userMessageId` 去观察新插入的 assistant 占位消息和后续流式更新
 
 说明：
 
 - `purgeOthers` 保持 `false`，延续当前 typeless 行为，不在本轮删除其他 session。
+- `submitNewUserMessage()` 当前会等待 compaction、assistant 占位消息插入、以及整轮 `generate()` 完成，因此不能在 `await submitNewUserMessage(...)` 之后才建立请求上下文；否则推导层看不到流式中的 `thinking / inserting / executing`。
 - 不再保留 `handleControlIntent()` 和 `handleInputIntent()` 作为主路径。
 - `handleChatIntent()` 的职责会被吸收进统一提交流程。
 
@@ -216,35 +218,47 @@ type TypelessRequestContext = {
 职责：
 
 - 从 `TypelessRequestContext` 和 `useSession(sessionId)` 读取本轮对应的 assistant message
-- 根据 `assistant.generating`、`assistant.error`、`assistant.contentParts` 推导当前显示态
+- 根据 `assistant.generating`、`assistant.error`、`assistant.contentParts` 推导当前领域执行态
+- 将领域执行态映射为 overlay 显示态或“隐藏 overlay，改弹结果窗”
 
 ### 状态来源
 
 真正可靠的状态信号来自 assistant message 的 `contentParts`：
 
 - `reasoning`：模型思考中
-- `tool-call` + `state: call`：工具已发起
-- `tool-call` + `state: result/error`：工具完成/失败
+- `tool-call`：工具已经参与本轮 assistant 生成
+- `tool-call.state = call / result / error`：工具当前状态
 
 这些 part 的生成位置：
 
 - `src/shared/models/abstract-ai-sdk.ts#processToolCalls:204`
 - `src/shared/models/abstract-ai-sdk.ts#processStreamChunk:356`
 
-### 显示态映射
+### 领域态与 overlay 显示态
+
+为了避免把“普通问答完成态”和 overlay 枚举混在一起，本轮区分两套状态：
+
+- **领域执行态**：`idle | thinking | inserting | executing | success | error | chat_result`
+- **overlay 显示态**：`listening | processing | thinking | inserting | executing | success | error`
+
+其中：
+
+- `chat_result` 不是 overlay 模式，它表示“隐藏 overlay，改由结果窗展示普通问答回复”。
+- `listening / processing` 继续沿用现有录音链路，不由 assistant message 推导。
 
 建议映射规则如下：
 
-| 条件 | overlay 状态 | 说明 |
-| --- | --- | --- |
-| 热键已按下，正在录音 | `listening` | 继续沿用现有逻辑 |
-| 录音结束，ASR 处理中 | `processing` | 继续沿用现有逻辑 |
-| 已提交消息，assistant 还在生成，且没有 `tool-call(state=call)` | `thinking` | 模型正在思考或开始文本回答 |
-| assistant 出现 `tool-call(state=call)`，且工具名为 `mcp__system-control__type_text` | `inserting` | 文本输入分支 |
-| assistant 出现 `tool-call(state=call)`，且工具名不是 `mcp__system-control__type_text` | `executing` | 其他 MCP 工具执行 |
-| assistant 生成结束，有工具调用且无错误 | `success` | 自动隐藏，不弹结果窗 |
-| assistant 生成结束，无工具调用，有普通文本回复 | 隐藏 overlay，弹结果窗 | 普通问答分支 |
-| assistant 报错，或 `tool-call` 最终为 error | `error` | 显示错误后自动隐藏 |
+| 条件 | 领域执行态 | overlay 显示 | 说明 |
+| --- | --- | --- | --- |
+| 热键已按下，正在录音 | `idle` | `listening` | 继续沿用现有逻辑 |
+| 录音结束，ASR 处理中 | `idle` | `processing` | 继续沿用现有逻辑 |
+| `TypelessRequestContext` 已建立，但 session 中还没观察到 assistant 占位消息 | `thinking` | `thinking` | 说明请求已经进入 chat 主链路；此时不再停留在 `processing`，等 assistant 占位消息出现后继续按同一套规则推导 |
+| 已提交消息，assistant 还在生成，且尚未出现任何 `tool-call` | `thinking` | `thinking` | 模型正在思考或开始文本回答 |
+| assistant 还在生成，且已经出现过 `tool-call`，并且存在 `mcp__system-control__type_text` | `inserting` | `inserting` | 只要本轮 assistant 仍在生成，就保持插入态，不因 tool-call 从 `call` 变成 `result` 而回退到 `thinking` |
+| assistant 还在生成，且已经出现过其他 `tool-call` | `executing` | `executing` | 其他 MCP 工具执行 |
+| assistant 生成结束，且出现过 `tool-call`，最终无错误 | `success` | `success` | 自动隐藏，不弹结果窗 |
+| assistant 生成结束，没有任何 `tool-call`，且有普通文本回复 | `chat_result` | 隐藏 overlay | 普通问答分支 |
+| assistant 报错，或 `tool-call` 最终为 `error` | `error` | `error` | 显示错误后自动隐藏 |
 
 ## 普通问答与工具执行的分界
 
@@ -252,7 +266,7 @@ type TypelessRequestContext = {
 
 - 只要本轮 assistant message 出现过任意 `tool-call`，本轮就视为工具执行。
 - 即使最终 assistant 同时生成了少量解释文本，也不弹 typeless 结果窗口。
-- 只有“没有任何 `tool-call`，且有正常文本回复”的场景，才弹 typeless 结果窗口。
+- 只有“没有任何 `tool-call`，且有正常文本回复”的场景，才进入 `chat_result`，再弹 typeless 结果窗口。
 
 这样做的原因：
 
@@ -266,6 +280,7 @@ type TypelessRequestContext = {
 - 只负责显示纯问答结果
 - 不负责推断工具执行态
 - 不再通过 `userText.includes(...)` 识别本轮消息
+- 结果窗只展示 assistant 回复，不重复展示 raw ASR 文本
 
 改造要求：
 
@@ -273,6 +288,15 @@ type TypelessRequestContext = {
 2. 找到对应 user message 后的 assistant message
 3. 若该 assistant message 含 `tool-call`，立即不显示结果窗
 4. 若该 assistant message 无 `tool-call` 且有文本，则显示结果
+
+## TypelessRequestContext 生命周期
+
+为了避免连续两次 typeless 请求相互污染，本轮明确以下生命周期规则：
+
+- 一次新的 typeless 请求开始时，先覆盖旧的 `TypelessRequestContext`
+- 若 `submitNewUserMessage(...)` 在 assistant 占位消息建立前就抛错，立即写入 `error`，并清空当前 `TypelessRequestContext`
+- 若本轮进入 `success` 或 `error`，在 overlay 自动隐藏后清空当前 `TypelessRequestContext`
+- 若本轮进入 `chat_result`，保持 `TypelessRequestContext`，直到用户关闭结果窗，再清空
 
 ## 旧输入链路清理策略
 
@@ -319,7 +343,7 @@ type TypelessRequestContext = {
 ### 建议新增
 
 - `src/renderer/packages/voice/typeless-execution-state.ts`
-  - 根据 `session + userMessageId` 推导 `thinking / inserting / executing / success / error / result`
+  - 根据 `session + userMessageId` 推导 `thinking / inserting / executing / success / error / chat_result`
 
 ### 预期保留不改
 
