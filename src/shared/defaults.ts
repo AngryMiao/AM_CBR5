@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
-import { DEFAULT_VOICE_HOTKEY } from './voice-hotkey'
 import { type Config, ModelProviderEnum, type SessionSettings, type Settings, Theme } from './types'
+import { DEFAULT_VOICE_HOTKEY } from './voice-hotkey'
 
 export const BUILT_IN_DEEPSEEK_API_KEY = 'sk-8bf09678b5804183b7f800f04e1421c8'
 export const BUILT_IN_ALIYUN_ASR_API_KEY = 'sk-02e2c27765c248a092da9760070c8151'
@@ -30,6 +30,8 @@ export function defaultVoiceSettings(): NonNullable<Settings['voice']> {
     shortcuts: {
       toggleVoice: DEFAULT_VOICE_HOTKEY,
     },
+    microphoneDeviceId: undefined,
+    keyboardShortcuts: [],
     autoStopRecording: true,
     silenceThreshold: 0.01,
     silenceDuration: 1500,

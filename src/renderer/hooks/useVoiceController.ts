@@ -55,12 +55,12 @@ async function ensureAngrymiaoSkillRuntime(settings?: Partial<Settings>): Promis
   const bundle = await getInstalledSkillBundle(ANGRYMIAO_SKILL_BUNDLE_ID)
   if (!bundle) return
 
-  const existing = mcpController.servers.get('angrymiao-system-control')
-  if (existing && existing.instance.status.state === 'running') return
-
   try {
     const runtimeConfig = await resolveSkillBundleRuntimeServerConfig(bundle.id, ANGRYMIAO_SKILL_RUNTIME_ID, settings)
-    if (!runtimeConfig) return
+    if (!runtimeConfig) {
+      await mcpController.stopServer('angrymiao-system-control')
+      return
+    }
     await mcpController.updateServer({
       ...runtimeConfig,
       scope: 'skill-bundle',
@@ -332,10 +332,7 @@ export function useVoiceController() {
         const timer = setTimeout(() => {
           void window.electronAPI?.invoke('typelessOverlay:hide')
           setTypelessStatus(null)
-          if (
-            trackedUserMessageId &&
-            currentTypelessRequestRef.current?.userMessageId === trackedUserMessageId
-          ) {
+          if (trackedUserMessageId && currentTypelessRequestRef.current?.userMessageId === trackedUserMessageId) {
             setTypelessRequest(null)
           }
           if (completedOperationId !== null) {
@@ -606,6 +603,7 @@ export function useVoiceController() {
           : undefined,
         silenceThreshold: settings.silenceThreshold,
         silenceDuration: settings.silenceDuration,
+        microphoneDeviceId: settings.microphoneDeviceId,
       })
 
       if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
@@ -652,6 +650,7 @@ export function useVoiceController() {
     settings.silenceThreshold,
     settings.silenceDuration,
     settings.maxRecordingDuration,
+    settings.microphoneDeviceId,
     settings.workMode,
     setError,
     setVoiceMode,

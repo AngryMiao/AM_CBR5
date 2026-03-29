@@ -323,6 +323,19 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
           toggleVoice: z.string().default(DEFAULT_VOICE_HOTKEY),
         })
         .default({ toggleVoice: DEFAULT_VOICE_HOTKEY }),
+      microphoneDeviceId: z.string().optional(),
+      keyboardDriverPath: z.string().optional(),
+      keyboardShortcuts: z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            triggerWords: z.array(z.string()),
+            keyCodes: z.array(z.string()),
+            enabled: z.boolean().default(true),
+          })
+        )
+        .default([]),
       autoStopRecording: z.boolean().default(true),
       silenceThreshold: z.number().default(0.01),
       silenceDuration: z.number().default(1500),

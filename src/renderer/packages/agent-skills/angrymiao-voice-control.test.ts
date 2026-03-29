@@ -17,4 +17,21 @@ describe('buildAngrymiaoAgentSkillPrompt', () => {
     expect(prompt).toContain('["110700E0","11070006","10070006","100700E0"]')
     expect(prompt).toContain('["110700E2","1107002B","1007002B","100700E2"]')
   })
+
+  it('injects user configured keyboard shortcuts after the default mapping', () => {
+    const prompt = buildAngrymiaoAgentSkillPrompt('win32', undefined, [
+      {
+        id: 'ks_custom_copy_link',
+        name: '复制链接',
+        triggerWords: ['复制链接', '复制地址'],
+        keyCodes: ['110700E0', '11070006', '10070006', '100700E0'],
+        enabled: true,
+      },
+    ])
+
+    expect(prompt).toContain('User Configured Shortcut Mapping')
+    expect(prompt).toContain('优先级高于上文 Default Shortcut Mapping')
+    expect(prompt).toContain('复制链接 / 复制地址')
+    expect(prompt).toContain('["110700E0","11070006","10070006","100700E0"]')
+  })
 })

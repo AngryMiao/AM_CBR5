@@ -8,6 +8,8 @@ import {
 import { createFileRoute } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { DefaultMicrophoneSelect } from '@/components/voice/DefaultMicrophoneSelect'
+import { KeyboardControlSettings } from '@/components/voice/KeyboardControlSettings'
 import { VoiceHotkeyRecorder } from '@/components/voice/VoiceHotkeyRecorder'
 import { useVoiceSettings } from '@/hooks/useVoiceSettings'
 import {
@@ -319,6 +321,18 @@ export function RouteComponent() {
           <option value="chat">{t('Chat 模式')}</option>
           <option value="typeless">{t('Typeless 模式')}</option>
         </select>
+      </div>
+
+      {/* 默认麦克风 */}
+      <div className="space-y-3">
+        <div>
+          <label className="font-medium">{t('默认麦克风')}</label>
+          <p className="text-sm text-gray-600 dark:text-gray-400">{t('未选择时跟随系统默认设备。')}</p>
+        </div>
+        <DefaultMicrophoneSelect
+          value={settings.microphoneDeviceId}
+          onChange={(microphoneDeviceId) => setSettings({ ...settings, microphoneDeviceId })}
+        />
       </div>
 
       {/* ASR 提供商 */}
@@ -1264,6 +1278,13 @@ export function RouteComponent() {
         </div>
       </div>
 
+      <KeyboardControlSettings
+        keyboardDriverPath={settings.keyboardDriverPath}
+        keyboardShortcuts={settings.keyboardShortcuts}
+        onKeyboardDriverPathChange={(keyboardDriverPath) => setSettings({ ...settings, keyboardDriverPath })}
+        onKeyboardShortcutsChange={(keyboardShortcuts) => setSettings({ ...settings, keyboardShortcuts })}
+      />
+
       {/* 高级选项 */}
       <div className="space-y-3">
         <label className="font-medium">{t('高级选项')}</label>
@@ -1358,4 +1379,3 @@ export function RouteComponent() {
     </div>
   )
 }
-

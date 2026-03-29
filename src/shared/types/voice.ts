@@ -145,6 +145,16 @@ export const TTSConfigSchema = z.object({
 })
 export type TTSConfig = z.infer<typeof TTSConfigSchema>
 
+// 键盘快捷键映射条目
+export const KeyboardShortcutSchema = z.object({
+  id: z.string(),
+  name: z.string(), // 显示名，如 "复制"
+  triggerWords: z.array(z.string()), // 语音触发词，如 ["复制", "拷贝"]
+  keyCodes: z.array(z.string()), // hex key codes，如 ["110700E0","11070006","10070006","100700E0"]
+  enabled: z.boolean().default(true),
+})
+export type KeyboardShortcut = z.infer<typeof KeyboardShortcutSchema>
+
 // 快捷键配置
 export const VoiceShortcutsSchema = z.object({
   toggleVoice: z.string().default(DEFAULT_VOICE_HOTKEY), // 切换语音模式
@@ -162,6 +172,9 @@ export const VoiceSettingsSchema = z.object({
   asrConfig: ASRConfigSchema.default({}),
   ttsConfig: TTSConfigSchema.default({}),
   shortcuts: VoiceShortcutsSchema.default({ toggleVoice: DEFAULT_VOICE_HOTKEY }),
+  microphoneDeviceId: z.string().optional(),
+  keyboardDriverPath: z.string().optional(), // driver.exe 的完整路径
+  keyboardShortcuts: z.array(KeyboardShortcutSchema).default([]), // 键盘快捷键映射表
   autoStopRecording: z.boolean().default(true), // 检测到静音后自动停止录音
   silenceThreshold: z.number().min(0).max(0.2).default(0.02), // 静音阈值
   silenceDuration: z.number().min(500).max(10000).default(3000), // 静音持续时间（毫秒）

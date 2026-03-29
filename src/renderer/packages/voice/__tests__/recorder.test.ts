@@ -21,7 +21,15 @@ global.navigator.mediaDevices = {
   getUserMedia: vi.fn().mockResolvedValue(mockMediaStream),
 } as any
 
-global.MediaRecorder = vi.fn(() => mockMediaRecorder) as any
+const getUserMediaMock = navigator.mediaDevices.getUserMedia as unknown as ReturnType<typeof vi.fn>
+
+const MediaRecorderMock = vi.fn(function MediaRecorderMock() {
+  return mockMediaRecorder
+})
+
+global.MediaRecorder = Object.assign(MediaRecorderMock, {
+  isTypeSupported: vi.fn(() => true),
+}) as any
 
 global.AudioContext = vi.fn(() => ({
   createMediaStreamSource: vi.fn(() => ({
@@ -41,6 +49,8 @@ describe('VoiceRecorder', () => {
   beforeEach(() => {
     recorder = new VoiceRecorder()
     vi.clearAllMocks()
+    getUserMediaMock.mockReset()
+    getUserMediaMock.mockResolvedValue(mockMediaStream)
   })
 
   it('should start recording', async () => {
@@ -53,6 +63,62 @@ describe('VoiceRecorder', () => {
       },
     })
     expect(mockMediaRecorder.start).toHaveBeenCalledWith(100)
+  })
+
+  it('should pass selected microphone deviceId to getUserMedia', async () => {
+    await recorder.start({ microphoneDeviceId: 'mic-123' } as any)
+
+    expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledWith({
+      audio: {
+        deviceId: { exact: 'mic-123' },
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    })
+  })
+
+  it.each(['NotFoundError', 'OverconstrainedError'])(
+    'should fallback to default microphone when selected device is unavailable: %s',
+    async (errorName) => {
+      getUserMediaMock.mockRejectedValueOnce(Object.assign(new Error('device unavailable'), { name: errorName }))
+      getUserMediaMock.mockResolvedValueOnce(mockMediaStream)
+
+      await recorder.start({ microphoneDeviceId: 'missing-device' } as any)
+
+      expect(getUserMediaMock).toHaveBeenCalledTimes(2)
+      expect(getUserMediaMock).toHaveBeenNthCalledWith(1, {
+        audio: {
+          deviceId: { exact: 'missing-device' },
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      })
+      expect(getUserMediaMock).toHaveBeenNthCalledWith(2, {
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      })
+    },
+  )
+
+  it('should reject immediately without fallback for non-fallback error', async () => {
+    getUserMediaMock.mockRejectedValueOnce(Object.assign(new Error('permission denied'), { name: 'NotAllowedError' }))
+
+    await expect(recorder.start({ microphoneDeviceId: 'x' } as any)).rejects.toThrow('无法访问麦克风')
+
+    expect(getUserMediaMock).toHaveBeenCalledTimes(1)
+    expect(getUserMediaMock).toHaveBeenNthCalledWith(1, {
+      audio: {
+        deviceId: { exact: 'x' },
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    })
   })
 
   it('should get supported mime type', () => {

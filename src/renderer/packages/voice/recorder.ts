@@ -30,16 +30,29 @@ export class VoiceRecorder {
     onSilenceDetected?: () => void
     silenceThreshold?: number
     silenceDuration?: number
+    microphoneDeviceId?: string
   }): Promise<void> {
     try {
       // 请求麦克风权限
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      })
+      try {
+        this.stream = await navigator.mediaDevices.getUserMedia({
+          audio: this.buildAudioConstraints(options?.microphoneDeviceId),
+        })
+      } catch (error) {
+        const errorName =
+          error instanceof Error ? error.name : (error as { name?: string } | null | undefined)?.name
+
+        if (
+          options?.microphoneDeviceId &&
+          (errorName === 'NotFoundError' || errorName === 'OverconstrainedError')
+        ) {
+          this.stream = await navigator.mediaDevices.getUserMedia({
+            audio: this.buildAudioConstraints(),
+          })
+        } else {
+          throw error
+        }
+      }
 
       // 创建 MediaRecorder
       const mimeType = this.getSupportedMimeType()
@@ -273,6 +286,15 @@ export class VoiceRecorder {
     }
 
     return 'audio/webm' // 默认
+  }
+
+  private buildAudioConstraints(microphoneDeviceId?: string): MediaTrackConstraints {
+    return {
+      ...(microphoneDeviceId ? { deviceId: { exact: microphoneDeviceId } } : {}),
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    }
   }
 
   /**

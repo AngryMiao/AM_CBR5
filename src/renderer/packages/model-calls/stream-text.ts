@@ -86,7 +86,7 @@ export async function streamText(
   if (sessionId) {
     const session = await chatStore.getSession(sessionId)
     skillBundleId = session?.agentSkill?.bundleId || ''
-    skillPrompt = await resolveAgentSkillPrompt(session?.agentSkill)
+    skillPrompt = await resolveAgentSkillPrompt(session?.agentSkill, settingsStore.getState().getSettings().voice || null)
   }
   const injectionRole = model.isSupportSystemMessage() ? 'system' : 'user'
   if (skillPrompt) {
