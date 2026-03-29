@@ -3,6 +3,10 @@ import debounce from 'lodash/debounce'
 import { v4 as uuidv4 } from 'uuid'
 import BaseStorage from './BaseStorage'
 
+function encodeStorageSegment(value: string): string {
+  return encodeURIComponent(value)
+}
+
 export enum StorageKey {
   ChatSessions = 'chat-sessions',
   Configs = 'configs',
@@ -25,6 +29,13 @@ export const StorageKeyGenerator = {
   },
   file(sessionId: string, msgId: string) {
     return `file:${sessionId}:${msgId}:${uuidv4()}`
+  },
+  // 链接和文件预处理需要稳定 key，才能正确复用状态与缓存。
+  linkUniqKey(url: string) {
+    return `link:${encodeStorageSegment(url.trim())}`
+  },
+  fileUniqKey(file: Pick<File, 'name' | 'size' | 'type' | 'lastModified'>) {
+    return `file-uniq:${encodeStorageSegment(file.name)}:${file.size}:${encodeStorageSegment(file.type)}:${file.lastModified}`
   },
 }
 

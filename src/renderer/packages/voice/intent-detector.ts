@@ -1,10 +1,7 @@
-import type { KeyboardShortcut } from '@shared/types/voice'
-
-export type IntentType = 'control' | 'input' | 'chat'
+export type IntentType = 'input' | 'chat'
 
 export interface Intent {
   type: IntentType
-  shortcut?: KeyboardShortcut
   confidence: number
 }
 
@@ -44,29 +41,13 @@ const QUESTION_WORDS = [
 
 /**
  * 判断用户意图
- * 1. 优先匹配控制意图（keyboardShortcuts）
- * 2. 判断是否为对话意图（疑问词）
- * 3. 默认为输入意图
+ * 1. 判断是否为对话意图（疑问词）
+ * 2. 默认为输入意图
  */
-export function determineIntent(text: string, shortcuts: KeyboardShortcut[] = []): Intent {
+export function determineIntent(text: string): Intent {
   const trimmedText = text.trim().toLowerCase()
 
-  // 1. 优先匹配控制意图
-  for (const shortcut of shortcuts) {
-    if (!shortcut.enabled) continue
-
-    for (const triggerWord of shortcut.triggerWords) {
-      if (trimmedText.includes(triggerWord.toLowerCase())) {
-        return {
-          type: 'control',
-          shortcut,
-          confidence: 1.0,
-        }
-      }
-    }
-  }
-
-  // 2. 判断是否为对话意图
+  // 1. 判断是否为对话意图
   if (isConversationIntent(trimmedText)) {
     return {
       type: 'chat',
@@ -74,7 +55,7 @@ export function determineIntent(text: string, shortcuts: KeyboardShortcut[] = []
     }
   }
 
-  // 3. 默认为输入意图
+  // 2. 默认为输入意图
   return {
     type: 'input',
     confidence: 0.8,

@@ -1,6 +1,7 @@
 import { getBuiltinServerConfig } from '@/packages/mcp/builtin'
 import { mcpController } from '@/packages/mcp/controller'
 import type { MCPServerConfig } from '@/packages/mcp/types'
+import type { Settings } from '@shared/types'
 import { ANGRYMIAO_SKILL_BUNDLE_ID, ANGRYMIAO_SKILL_RUNTIME_ID } from '@/packages/agent-skills'
 import { getInstalledSkillBundle, resolveSkillBundleRuntimeServerConfig } from '@/packages/skill-bundles'
 import platform from '@/platform'
@@ -25,7 +26,7 @@ function monitorServerStatus() {
   }, 10000)
 }
 
-async function getAngrymiaoSkillRuntimeServerConfig(settings?: { voice?: { keyboardDriverPath?: string } }): Promise<MCPServerConfig | null> {
+async function getAngrymiaoSkillRuntimeServerConfig(settings?: Pick<Settings, 'voice'>): Promise<MCPServerConfig | null> {
   if (platform.type !== 'desktop') return null
   try {
     const bundle = await getInstalledSkillBundle(ANGRYMIAO_SKILL_BUNDLE_ID)

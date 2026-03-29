@@ -1,5 +1,4 @@
 import type { Session, SessionMeta } from '@shared/types'
-import type { KeyboardShortcut } from '@shared/types/voice'
 import storage from '@/storage'
 import { StorageKeyGenerator } from '@/storage/StoreStorage'
 import { ANGRYMIAO_AGENT_SKILL_ID, ANGRYMIAO_SKILL_BUNDLE_ID, ANGRYMIAO_SKILL_RUNTIME_ID } from '@/packages/agent-skills'
@@ -36,7 +35,7 @@ function normalizeAngrymiaoSession(session: Session): Session {
   }
 }
 
-async function ensureAngrymiaoAgentSkill(sessionId: string, _keyboardShortcuts: KeyboardShortcut[] = []) {
+async function ensureAngrymiaoAgentSkill(sessionId: string) {
   const session = await chatStore.getSession(sessionId)
   if (!session) {
     return null
@@ -80,7 +79,6 @@ function createAngrymiaoSession(): Omit<Session, 'id'> {
 }
 
 export async function ensureAngrymiaoSession(options?: {
-  keyboardShortcuts?: KeyboardShortcut[]
   purgeOthers?: boolean
 }) {
   const sessions = await chatStore.listSessionsMeta()
@@ -93,7 +91,7 @@ export async function ensureAngrymiaoSession(options?: {
   if (!session) {
     session = await chatStore.createSession(createAngrymiaoSession())
   } else {
-    session = await ensureAngrymiaoAgentSkill(session.id, options?.keyboardShortcuts)
+    session = await ensureAngrymiaoAgentSkill(session.id)
   }
 
   if (!session) {

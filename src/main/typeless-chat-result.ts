@@ -40,7 +40,15 @@ let chatResultWindow: BrowserWindow | null = null
 let chatResultReady = false
 let lastPayload: TypelessChatResultPayload | null = null
 let suppressNextClosedEvent = false
+let mainWindowVisibleBeforeResult = true
+let suppressMainWindowAutoShowOnNextActivate = false
 const closeListeners = new Set<(payload: TypelessChatResultClosedPayload) => void>()
+
+export function consumeSuppressMainWindowAutoShowOnActivate() {
+  const shouldSuppress = suppressMainWindowAutoShowOnNextActivate
+  suppressMainWindowAutoShowOnNextActivate = false
+  return shouldSuppress
+}
 
 export function buildTypelessChatResultWindowOptions(): BrowserWindowConstructorOptions {
   return {
@@ -78,7 +86,7 @@ export function getTypelessChatResultDisplayBounds(workArea: {
   }
 }
 
-function getTypelessChatResultHtml() {
+export function getTypelessChatResultHtml() {
   return `<!doctype html>
 <html>
   <head>
@@ -103,11 +111,11 @@ function getTypelessChatResultHtml() {
         max-height: 380px;
         box-sizing: border-box;
         border-radius: 24px;
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        background: rgba(10, 14, 20, 0.94);
+        overflow: hidden;
+        border: 0;
+        background: #10161f;
         color: #f8fafc;
-        box-shadow: 0 32px 72px rgba(0, 0, 0, 0.38);
-        backdrop-filter: blur(18px) saturate(140%);
+        box-shadow: none;
         padding: 22px 24px 20px;
       }
       #header {
@@ -234,6 +242,9 @@ function ensureTypelessChatResultWindow() {
 
     // 用户手动关闭中央结果窗时只隐藏结果层，不允许系统把“关闭当前窗口”的焦点回退语义
     // 传播成主窗口重新唤起。
+    if (!mainWindowVisibleBeforeResult) {
+      suppressMainWindowAutoShowOnNextActivate = true
+    }
     chatResultWindow?.blur()
     chatResultWindow?.hide()
 
@@ -287,8 +298,12 @@ export function onTypelessChatResultClosed(callback: (payload: TypelessChatResul
   }
 }
 
-export async function showTypelessChatResult(payload: TypelessChatResultPayload) {
+export async function showTypelessChatResult(
+  payload: TypelessChatResultPayload,
+  options?: { mainWindowVisible?: boolean }
+) {
   lastPayload = payload
+  mainWindowVisibleBeforeResult = options?.mainWindowVisible ?? true
   const hadReadyWindow = !!chatResultWindow && !chatResultWindow.isDestroyed() && chatResultReady
   const window = ensureTypelessChatResultWindow()
 

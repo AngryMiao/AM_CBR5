@@ -95,13 +95,11 @@ type ShortcutDataItem = {
   options?: string[]
 }
 
-export function ShortcutConfig(props: {
-  shortcuts: Settings['shortcuts']
-  setShortcuts: (shortcuts: Settings['shortcuts']) => void
-}) {
-  const { shortcuts, setShortcuts } = props
-  const { t } = useTranslation()
-  const items: ShortcutDataItem[] = [
+export function getShortcutConfigItems(
+  shortcuts: ShortcutSetting,
+  t: (key: string) => string
+): ShortcutDataItem[] {
+  return [
     {
       label: t('Show/Hide the Application Window'),
       name: 'quickToggle',
@@ -109,78 +107,21 @@ export function ShortcutConfig(props: {
       options: shortcutToggleWindowValues,
     },
     {
-      label: t('Focus on the Input Box'),
-      name: 'inputBoxFocus',
-      keys: shortcuts.inputBoxFocus,
-    },
-    {
       label: t('Send'),
       name: 'inputBoxSendMessage',
       keys: shortcuts.inputBoxSendMessage,
       options: shortcutSendValues,
     },
-    // {
-    //     label: t('Insert a New Line into the Input Box'),
-    //     // name: 'inputBoxInsertNewLine',
-    //     keys: shortcuts.inputBoxInsertNewLine,
-    // },
-    {
-      label: t('Send Without Generating Response'),
-      name: 'inputBoxSendMessageWithoutResponse',
-      keys: shortcuts.inputBoxSendMessageWithoutResponse,
-      options: shortcutSendValues,
-    },
-    {
-      label: t('Create a New Conversation'),
-      name: 'newChat',
-      keys: shortcuts.newChat,
-    },
-    {
-      label: t('Create a New Image-Creator Conversation'),
-      name: 'newPictureChat',
-      keys: shortcuts.newPictureChat,
-    },
-    {
-      label: t('Navigate to the Next Conversation'),
-      name: 'sessionListNavNext',
-      keys: shortcuts.sessionListNavNext,
-    },
-    {
-      label: t('Navigate to the Previous Conversation'),
-      name: 'sessionListNavPrev',
-      keys: shortcuts.sessionListNavPrev,
-    },
-    {
-      label: t('Navigate to the Specific Conversation'),
-      // name: 'sessionListNavTargetIndex',
-      keys: 'mod+1-9',
-    },
-    {
-      label: t('Start a New Thread'),
-      name: 'messageListRefreshContext',
-      keys: shortcuts.messageListRefreshContext,
-    },
-    {
-      label: t('Show/Hide the Search Dialog'),
-      name: 'dialogOpenSearch',
-      keys: shortcuts.dialogOpenSearch,
-    },
-    {
-      label: t('Navigate to the Previous Option (in search dialog)'),
-      // name: 'optionNavUp',
-      keys: shortcuts.optionNavUp,
-    },
-    {
-      label: t('Navigate to the Next Option (in search dialog)'),
-      // name: 'optionNavDown',
-      keys: shortcuts.optionNavDown,
-    },
-    {
-      label: t('Select the Current Option (in search dialog)'),
-      // name: 'optionSelect',
-      keys: shortcuts.optionSelect,
-    },
   ]
+}
+
+export function ShortcutConfig(props: {
+  shortcuts: Settings['shortcuts']
+  setShortcuts: (shortcuts: Settings['shortcuts']) => void
+}) {
+  const { shortcuts, setShortcuts } = props
+  const { t } = useTranslation()
+  const items = getShortcutConfigItems(shortcuts, t)
   const isConflict = (name: ShortcutName, shortcut: string) => {
     for (const item of items) {
       if (item.name && item.name !== name && item.keys === shortcut) {

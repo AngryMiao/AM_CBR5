@@ -84,6 +84,7 @@ import {
   cleanupLink,
   markLinkProcessing,
   onLinkProcessed,
+  type PreConstructedMessageState,
   storeLinkPromise,
 } from './preprocessState'
 import TokenCountMenu from './TokenCountMenu'
@@ -172,7 +173,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
         preConstructedMessage.preprocessedFiles,
         preConstructedMessage.preprocessedLinks
       )
-      setPreConstructedMessage((prev) => ({
+      setPreConstructedMessage((prev: PreConstructedMessageState) => ({
         ...prev,
         text: messageInput,
         pictureKeys,
@@ -400,8 +401,12 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
           return
         }
 
-        const messageTextForHistory =
-          preConstructedMessage.message.contentParts.find((p) => p.type === 'text')?.text || ''
+        const messageTextPart = preConstructedMessage.message.contentParts.find(
+          (
+            part: Message['contentParts'][number]
+          ): part is Extract<Message['contentParts'][number], { type: 'text' }> => part.type === 'text'
+        )
+        const messageTextForHistory = messageTextPart?.text || ''
 
         const params = {
           constructedMessage: preConstructedMessage.message,
@@ -473,12 +478,6 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
         return
       }
 
-      if (isPressedHash[shortcuts.inputBoxSendMessageWithoutResponse]) {
-        event.preventDefault()
-        handleSubmit(false)
-        return
-      }
-
       if (
         (event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
         inputRef.current &&
@@ -517,15 +516,15 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     }
 
     const startLinkPreprocessing = (url: string) => {
-      setPreConstructedMessage((prev) => markLinkProcessing(prev, url))
+      setPreConstructedMessage((prev: PreConstructedMessageState) => markLinkProcessing(prev, url))
 
       const preprocessPromise = sessionHelpers
         .preprocessLink(url, { provider: model?.provider || '', modelId: model?.modelId || '' })
         .then((preprocessedLink) => {
-          setPreConstructedMessage((prev) => onLinkProcessed(prev, url, preprocessedLink, 6))
+          setPreConstructedMessage((prev: PreConstructedMessageState) => onLinkProcessed(prev, url, preprocessedLink, 6))
         })
         .catch((error) => {
-          setPreConstructedMessage((prev) =>
+          setPreConstructedMessage((prev: PreConstructedMessageState) =>
             onLinkProcessed(
               prev,
               url,
@@ -541,7 +540,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
           )
         })
 
-      setPreConstructedMessage((prev) => storeLinkPromise(prev, url, preprocessPromise))
+      setPreConstructedMessage((prev: PreConstructedMessageState) => storeLinkPromise(prev, url, preprocessPromise))
     }
 
     const insertLinks = (urls: string[]) => {
@@ -574,7 +573,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
           picUtils.getImageBase64AndResize(file).then(async (base64) => {
             const key = StorageKeyGenerator.picture('input-box')
             await storage.setBlob(key, base64)
-            setPreConstructedMessage((prev) => ({
+            setPreConstructedMessage((prev: PreConstructedMessageState) => ({
               ...prev,
               pictureKeys: [...(prev.pictureKeys || []), key].slice(-8),
             }))
@@ -586,9 +585,9 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     }
 
     const onImageDeleteClick = async (picKey: string) => {
-      setPreConstructedMessage((prev) => ({
+      setPreConstructedMessage((prev: PreConstructedMessageState) => ({
         ...prev,
-        pictureKeys: (prev.pictureKeys || []).filter((k) => k !== picKey),
+        pictureKeys: (prev.pictureKeys || []).filter((k: string) => k !== picKey),
       }))
     }
 
@@ -606,7 +605,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
               picUtils.getImageBase64AndResize(file).then(async (base64) => {
                 const key = StorageKeyGenerator.picture('input-box')
                 await storage.setBlob(key, base64)
-                setPreConstructedMessage((prev) => ({
+                setPreConstructedMessage((prev: PreConstructedMessageState) => ({
                   ...prev,
                   pictureKeys: [...(prev.pictureKeys || []), key].slice(-8),
                 }))
@@ -746,14 +745,14 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
 
             {(!!pictureKeys.length || !!links.length) && (
               <Flex align="center" wrap="wrap" onClick={() => dom.focusMessageInput()}>
-                {pictureKeys?.map((picKey) => (
+                {pictureKeys?.map((picKey: string) => (
                   <ImageMiniCard key={picKey} storageKey={picKey} onDelete={() => onImageDeleteClick(picKey)} />
                 ))}
                 {links?.map((link) => {
                   const linkKey = StorageKeyGenerator.linkUniqKey(link.url)
                   const status = preConstructedMessage.preprocessingStatus.links[linkKey]
                   const preprocessedLink = preConstructedMessage.preprocessedLinks.find(
-                    (l) => StorageKeyGenerator.linkUniqKey(l.url) === linkKey
+                    (l: { url: string }) => StorageKeyGenerator.linkUniqKey(l.url) === linkKey
                   )
                   return (
                     <LinkMiniCard
@@ -771,7 +770,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                       }}
                       onDelete={() => {
                         setLinks(links.filter((l) => l.url !== link.url))
-                        setPreConstructedMessage((prev) => cleanupLink(prev, link.url))
+                        setPreConstructedMessage((prev: PreConstructedMessageState) => cleanupLink(prev, link.url))
                       }}
                     />
                   )

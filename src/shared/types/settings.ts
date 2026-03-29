@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DEFAULT_VOICE_HOTKEY } from '../voice-hotkey'
 import { ModelProviderEnum, ModelProviderType } from './provider'
 
 // Re-export for backward compatibility
@@ -155,19 +156,7 @@ const ShortcutToggleWindowValueSchema = z.enum(shortcutToggleWindowValues as [st
 
 const ShortcutSettingSchema = z.object({
   quickToggle: ShortcutToggleWindowValueSchema,
-  inputBoxFocus: z.string(),
-  newChat: z.string(),
-  newPictureChat: z.string(),
-  sessionListNavNext: z.string(),
-  sessionListNavPrev: z.string(),
-  sessionListNavTargetIndex: z.string(),
-  messageListRefreshContext: z.string(),
-  dialogOpenSearch: z.string(),
-  optionNavUp: z.string(),
-  optionNavDown: z.string(),
-  optionSelect: z.string(),
   inputBoxSendMessage: ShortcutSendValueSchema,
-  inputBoxSendMessageWithoutResponse: ShortcutSendValueSchema,
 })
 
 const ExtensionSettingsSchema = z.object({})
@@ -331,21 +320,9 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
       ttsConfig: z.record(z.string(), z.any()).default({}),
       shortcuts: z
         .object({
-          toggleVoice: z.string().default('Ctrl+Shift+V'),
+          toggleVoice: z.string().default(DEFAULT_VOICE_HOTKEY),
         })
-        .default({ toggleVoice: 'Ctrl+Shift+V' }),
-      keyboardDriverPath: z.string().optional(),
-      keyboardShortcuts: z
-        .array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-            triggerWords: z.array(z.string()),
-            keyCodes: z.array(z.string()),
-            enabled: z.boolean().default(true),
-          })
-        )
-        .default([]),
+        .default({ toggleVoice: DEFAULT_VOICE_HOTKEY }),
       autoStopRecording: z.boolean().default(true),
       silenceThreshold: z.number().default(0.01),
       silenceDuration: z.number().default(1500),

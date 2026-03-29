@@ -1,7 +1,7 @@
 import { defaultVoiceSettings } from '@shared/defaults'
-import { getDefaultKeyboardShortcuts } from '@shared/defaults/keyboard-shortcuts'
+import { normalizeStoredVoiceHotkey } from '@shared/voice-hotkey'
 import type { VoiceSettings } from '@shared/types/voice'
-import { useEffect, useMemo, useRef } from 'react'
+import { useMemo } from 'react'
 import platform from '@/platform'
 import { useSettingsStore } from '@/stores/settingsStore'
 
@@ -27,14 +27,31 @@ export function useVoiceSettings() {
 
   const defaultSettings = useMemo<VoiceSettings>(() => defaultVoiceSettings(), [])
   const currentSettings = useMemo<VoiceSettings>(
-    () => (voiceSettings ? { ...defaultSettings, ...voiceSettings } : defaultSettings),
+    () => {
+      const merged = voiceSettings ? { ...defaultSettings, ...voiceSettings } : defaultSettings
+      return {
+        ...merged,
+        shortcuts: {
+          ...merged.shortcuts,
+          toggleVoice: normalizeStoredVoiceHotkey(merged.shortcuts?.toggleVoice),
+        },
+      }
+    },
     [defaultSettings, voiceSettings]
   )
 
   const setVoiceSettings = async (nextSettings: VoiceSettingsUpdate) => {
     const resolvedSettings = typeof nextSettings === 'function' ? nextSettings(currentSettings) : nextSettings
     const sanitizedSettings = removeUndefinedFields<VoiceSettings>(resolvedSettings)
-    const merged: VoiceSettings = { ...currentSettings, ...sanitizedSettings }
+    const merged: VoiceSettings = {
+      ...currentSettings,
+      ...sanitizedSettings,
+      shortcuts: {
+        ...currentSettings.shortcuts,
+        ...sanitizedSettings.shortcuts,
+        toggleVoice: normalizeStoredVoiceHotkey(sanitizedSettings.shortcuts?.toggleVoice ?? currentSettings.shortcuts.toggleVoice),
+      },
+    }
 
     setSettings((draft) => {
       draft.voice = merged
@@ -54,19 +71,6 @@ export function useVoiceSettings() {
       }
     }
   }
-
-  // Auto-fill keyboard shortcuts when empty
-  const initRef = useRef(false)
-  useEffect(() => {
-    if (initRef.current) return
-    if (!currentSettings.keyboardShortcuts || currentSettings.keyboardShortcuts.length === 0) {
-      initRef.current = true
-      platform.getPlatform().then((platformType) => {
-        const defaults = getDefaultKeyboardShortcuts(platformType)
-        setVoiceSettings({ keyboardShortcuts: defaults })
-      })
-    }
-  }, [currentSettings.keyboardShortcuts])
 
   return {
     settings: currentSettings,

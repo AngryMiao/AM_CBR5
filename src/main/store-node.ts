@@ -71,7 +71,8 @@ export function getSettings(): Settings {
     return defaults.settings()
   }
   const defaultSettings = defaults.settings()
-  return { ...defaultSettings, ...stored, voice: { ...defaultSettings.voice, ...stored.voice } }
+  const mergedVoice = stored.voice ? { ...defaultSettings.voice, ...stored.voice } : defaultSettings.voice
+  return { ...defaultSettings, ...stored, voice: mergedVoice }
 }
 
 export function getConfig(): Config {

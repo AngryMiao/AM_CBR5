@@ -30,6 +30,7 @@ import path from 'path'
 // @ts-expect-error - source-map-support doesn't have type definitions
 import * as sourceMapSupport from 'source-map-support'
 import type { ShortcutSetting } from 'src/shared/types'
+import { normalizeStoredVoiceHotkey } from 'src/shared/voice-hotkey'
 import { getDefaultFunASRLaunchCommand, type VoiceWorkMode } from 'src/shared/types/voice'
 import * as analystic from './analystic-node'
 import * as autoLauncher from './autoLauncher'
@@ -61,6 +62,7 @@ import {
   updateTypelessOverlay,
 } from './typeless-overlay'
 import {
+  consumeSuppressMainWindowAutoShowOnActivate,
   destroyTypelessChatResult,
   hideTypelessChatResult,
   onTypelessChatResultClosed,
@@ -337,23 +339,17 @@ function registerShortcuts(
 
     const voiceEnabled = voiceOverride?.enabled ?? voiceSettings?.enabled
     const toggleVoiceRaw = voiceOverride?.shortcut || voiceSettings?.shortcuts?.toggleVoice
-    const DEFAULT_VOICE_SHORTCUT = 'Ctrl+Shift+V'
 
     log.info('Voice registration:', { voiceEnabled, toggleVoiceRaw, hasOverride: !!voiceOverride })
 
-    if (voiceEnabled && toggleVoiceRaw) {
-      let toggleVoice = normalizeShortcut(toggleVoiceRaw)
-      if (!isValidShortcut(toggleVoice)) {
-        log.warn('Invalid voice shortcut:', toggleVoice, '- falling back to default:', DEFAULT_VOICE_SHORTCUT)
-        toggleVoice = normalizeShortcut(DEFAULT_VOICE_SHORTCUT)
-      }
-
+    if (voiceEnabled) {
+      const toggleVoice = normalizeStoredVoiceHotkey(toggleVoiceRaw)
       const effectiveWorkMode = voiceOverride?.workMode ?? voiceSettings?.workMode
       const isTypelessMode = effectiveWorkMode === 'typeless'
       const showWindow = !isTypelessMode
 
       log.info('Starting global keyboard hook for', toggleVoice, ', showWindow:', showWindow)
-      startGlobalKeyboardHook(toggleVoiceRaw, showWindow)
+      startGlobalKeyboardHook(toggleVoice, showWindow)
     } else {
       log.info('Voice control not enabled or shortcut not configured')
     }
@@ -695,6 +691,9 @@ if (!gotTheLock) {
       app.on('activate', () => {
         // On macOS it's common to re-create a window in the app when the
         // dock icon is clicked and there are no other windows open.
+        if (consumeSuppressMainWindowAutoShowOnActivate()) {
+          return
+        }
         if (mainWindow === null) {
           createWindow()
         }
@@ -930,7 +929,10 @@ ipcMain.handle('typelessOverlay:hide', () => {
 
 const cleanupTypelessChatResultIpc = registerTypelessChatResultIpc({
   ipcMain,
-  show: showTypelessChatResult,
+  show: (payload) =>
+    showTypelessChatResult(payload, {
+      mainWindowVisible: !!mainWindow && mainWindow.isVisible(),
+    }),
   hide: hideTypelessChatResult,
   onClosed: onTypelessChatResultClosed,
   sendToMainWindow: (channel, payload) => {

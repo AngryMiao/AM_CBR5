@@ -46,6 +46,10 @@ import {
   voicePanelVisibleAtom,
 } from '@/stores/voiceStore'
 
+type TypelessOperationPhase = 'idle' | 'recording' | 'asr' | 'llm' | 'mcp' | 'result'
+
+const HOTKEY_RESTART_THRESHOLD_MS = 180
+
 async function ensureAngrymiaoSkillRuntime(settings?: Partial<Settings>): Promise<void> {
   if (platform.type !== 'desktop') return
   const bundle = await getInstalledSkillBundle(ANGRYMIAO_SKILL_BUNDLE_ID)
@@ -111,8 +115,15 @@ export function useVoiceController() {
   const holdShortcutActiveRef = useRef(false)
   const holdActivationPendingRef = useRef(false)
   const pendingHotkeyReleaseRef = useRef(false)
+  const interruptedHotkeyPressStartedAtRef = useRef<number | null>(null)
+  const interruptedHotkeyPendingRef = useRef(false)
+  const interruptedHotkeyRestartTriggeredRef = useRef(false)
+  const interruptedHotkeyRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentTypelessRequestRef = useRef(typelessRequest)
+  const typelessOperationIdRef = useRef(0)
+  const typelessOperationPhaseRef = useRef<TypelessOperationPhase>('idle')
+  const completedTypelessOperationIdRef = useRef<number | null>(null)
 
   const trackedAssistantMessage = typelessRequest
     ? findAssistantMessageForUser(typelessSession?.messages ?? [], typelessRequest.userMessageId)
@@ -141,6 +152,55 @@ export function useVoiceController() {
     }
   }, [])
 
+  const clearInterruptedHotkeyRestartTimer = useCallback(() => {
+    if (interruptedHotkeyRestartTimerRef.current) {
+      clearTimeout(interruptedHotkeyRestartTimerRef.current)
+      interruptedHotkeyRestartTimerRef.current = null
+    }
+  }, [])
+
+  const isCurrentTypelessOperation = useCallback((operationId: number) => {
+    return typelessOperationIdRef.current === operationId
+  }, [])
+
+  const setTypelessOperationPhase = useCallback(
+    (phase: TypelessOperationPhase, operationId: number = typelessOperationIdRef.current) => {
+      if (typelessOperationIdRef.current !== operationId) {
+        return false
+      }
+
+      typelessOperationPhaseRef.current = phase
+      if (phase === 'result') {
+        completedTypelessOperationIdRef.current = operationId
+      }
+      return true
+    },
+    []
+  )
+
+  const beginTypelessOperation = useCallback((phase: Exclude<TypelessOperationPhase, 'idle'>) => {
+    const nextOperationId = typelessOperationIdRef.current + 1
+    typelessOperationIdRef.current = nextOperationId
+    typelessOperationPhaseRef.current = phase
+    completedTypelessOperationIdRef.current = phase === 'result' ? nextOperationId : null
+    return nextOperationId
+  }, [])
+
+  const clearTypelessOperation = useCallback((operationId?: number) => {
+    if (operationId !== undefined && typelessOperationIdRef.current !== operationId) {
+      return false
+    }
+
+    typelessOperationIdRef.current += 1
+    typelessOperationPhaseRef.current = 'idle'
+    completedTypelessOperationIdRef.current = null
+    return true
+  }, [])
+
+  const isTypelessCancelablePhase = useCallback((phase: TypelessOperationPhase = typelessOperationPhaseRef.current) => {
+    return phase === 'recording' || phase === 'asr' || phase === 'llm' || phase === 'mcp'
+  }, [])
+
   useEffect(() => {
     voiceModeRef.current = voiceMode
   }, [voiceMode])
@@ -157,8 +217,35 @@ export function useVoiceController() {
     return window.electronAPI?.onTypelessChatResultClosed?.((payload) => {
       closeTypelessChatResultState(payload)
       setTypelessStatus(null)
+      const completedOperationId = completedTypelessOperationIdRef.current
+      if (completedOperationId !== null) {
+        clearTypelessOperation(completedOperationId)
+      }
     })
-  }, [settings.workMode, closeTypelessChatResultState, setTypelessStatus])
+  }, [settings.workMode, clearTypelessOperation, closeTypelessChatResultState, setTypelessStatus])
+
+  useEffect(() => {
+    if (settings.workMode !== 'typeless' || !typelessRequest) {
+      return
+    }
+
+    switch (typelessExecutionState?.phase) {
+      case 'thinking':
+        setTypelessOperationPhase('llm')
+        return
+      case 'executing':
+      case 'inserting':
+        setTypelessOperationPhase('mcp')
+        return
+      case 'success':
+      case 'error':
+      case 'chat_result':
+        setTypelessOperationPhase('result')
+        return
+      default:
+        return
+    }
+  }, [settings.workMode, typelessRequest, typelessExecutionState?.phase, setTypelessOperationPhase])
 
   useEffect(() => {
     if (platform.type !== 'desktop' || settings.workMode !== 'typeless') {
@@ -241,6 +328,7 @@ export function useVoiceController() {
 
       if (activeTypelessStatus.type === 'success' || activeTypelessStatus.type === 'error') {
         const trackedUserMessageId = typelessRequest?.userMessageId
+        const completedOperationId = completedTypelessOperationIdRef.current
         const timer = setTimeout(() => {
           void window.electronAPI?.invoke('typelessOverlay:hide')
           setTypelessStatus(null)
@@ -249,6 +337,9 @@ export function useVoiceController() {
             currentTypelessRequestRef.current?.userMessageId === trackedUserMessageId
           ) {
             setTypelessRequest(null)
+          }
+          if (completedOperationId !== null) {
+            clearTypelessOperation(completedOperationId)
           }
         }, 900)
         return () => clearTimeout(timer)
@@ -294,6 +385,7 @@ export function useVoiceController() {
     isRecording,
     streamingText,
     typelessRequest?.userMessageId,
+    clearTypelessOperation,
     setTypelessRequest,
     setTypelessStatus,
   ])
@@ -420,8 +512,58 @@ export function useVoiceController() {
     }
   }, [])
 
+  const cancelCurrentOperation = useCallback(async () => {
+    if (settings.workMode !== 'typeless' || !isTypelessCancelablePhase()) {
+      return false
+    }
+
+    clearRecordingTimeout()
+    stopStreamingRecognition()
+    clearInterruptedHotkeyRestartTimer()
+    clearTypelessOperation()
+
+    pendingHotkeyReleaseRef.current = false
+    setIsRecording(false)
+    setVoiceMode('inactive')
+    setPanelVisible(false)
+    setStreamingText('')
+    setTranscript('')
+    setTypelessStatus(null)
+    setTypelessRequest(null)
+    setTypelessChatResult(null)
+    void window.electronAPI?.invoke('typelessOverlay:hide')
+
+    const recorder = recorderRef.current
+    recorderRef.current = null
+    if (recorder && recorder.getState() !== 'inactive') {
+      try {
+        await recorder.stop()
+      } catch (error) {
+        console.error('Failed to stop recorder while cancelling typeless operation:', error)
+      }
+    }
+
+    return true
+  }, [
+    settings.workMode,
+    isTypelessCancelablePhase,
+    clearRecordingTimeout,
+    stopStreamingRecognition,
+    clearInterruptedHotkeyRestartTimer,
+    clearTypelessOperation,
+    setIsRecording,
+    setVoiceMode,
+    setPanelVisible,
+    setStreamingText,
+    setTranscript,
+    setTypelessStatus,
+    setTypelessRequest,
+    setTypelessChatResult,
+  ])
+
   // 开始录音
   const startRecording = useCallback(async (): Promise<boolean> => {
+    let operationId: number | null = null
     try {
       clearRecordingTimeout()
       setError(null)
@@ -444,6 +586,10 @@ export function useVoiceController() {
         }
       }
 
+      if (settings.workMode === 'typeless') {
+        operationId = beginTypelessOperation('recording')
+      }
+
       setVoiceMode('listening')
       setPanelVisible(true)
       setStreamingText('')
@@ -462,6 +608,15 @@ export function useVoiceController() {
         silenceDuration: settings.silenceDuration,
       })
 
+      if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
+        try {
+          await recorder.stop()
+        } catch (error) {
+          console.error('Failed to stop stale recorder after typeless restart:', error)
+        }
+        return false
+      }
+
       // Typeless 模式下启动流式识别
       if (settings.workMode === 'typeless') {
         startStreamingRecognition(recorder)
@@ -479,6 +634,9 @@ export function useVoiceController() {
       return true
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      if (operationId !== null) {
+        clearTypelessOperation(operationId)
+      }
       recorderRef.current = null
       setError(message)
       setVoiceMode('inactive')
@@ -504,6 +662,9 @@ export function useVoiceController() {
     setTypelessStatus,
     setTypelessChatResult,
     clearRecordingTimeout,
+    beginTypelessOperation,
+    clearTypelessOperation,
+    isCurrentTypelessOperation,
     startStreamingRecognition,
   ])
 
@@ -512,18 +673,28 @@ export function useVoiceController() {
     if (!recorderRef.current) return
     const recorder = recorderRef.current
     recorderRef.current = null
+    const operationId = settings.workMode === 'typeless' ? typelessOperationIdRef.current : null
 
     try {
       clearRecordingTimeout()
       stopStreamingRecognition()
       setIsRecording(false)
       setVoiceMode('processing')
+      if (operationId !== null) {
+        setTypelessOperationPhase('asr', operationId)
+      }
 
       const audioBlob = await recorder.stop()
+      if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
+        return null
+      }
 
       // 执行语音识别
       const asrProvider = getASRProvider()
       const text = await asrProvider.transcribe(audioBlob)
+      if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
+        return null
+      }
 
       setTranscript(text)
       setStreamingText('')
@@ -532,20 +703,31 @@ export function useVoiceController() {
       if (text) {
         if (settings.workMode === 'typeless') {
           try {
+            if (operationId !== null) {
+              setTypelessOperationPhase('llm', operationId)
+            }
             const { context, submitPromise } = await startTypelessRequest({
               text,
-              keyboardShortcuts: settings.keyboardShortcuts || [],
               ensureSession: ensureAngrymiaoSession,
               submit: submitNewUserMessage,
             })
+            if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
+              return text
+            }
             setTypelessRequest(context)
             void submitPromise.catch((err) => {
+              if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
+                return
+              }
               const message = err instanceof Error ? err.message : String(err)
               setTypelessStatus({ type: 'error', message })
               setTypelessRequest(null)
               setError(message)
             })
           } catch (err) {
+            if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
+              return text
+            }
             const message = err instanceof Error ? err.message : String(err)
             setTypelessStatus({ type: 'error', message })
             setError(message)
@@ -553,7 +735,6 @@ export function useVoiceController() {
         } else {
           // Chat 模式：发送到 AI 对话
           const session = await ensureAngrymiaoSession({
-            keyboardShortcuts: settings.keyboardShortcuts,
             purgeOthers: true,
           })
           const sessionId = session.id
@@ -628,6 +809,9 @@ export function useVoiceController() {
           }
         }
       } else if (settings.workMode === 'typeless') {
+        if (operationId !== null) {
+          setTypelessOperationPhase('result', operationId)
+        }
         setTypelessStatus({ type: 'error', message: '未识别到语音，请重试' })
       }
 
@@ -636,6 +820,9 @@ export function useVoiceController() {
       return text
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      if (operationId !== null && isCurrentTypelessOperation(operationId)) {
+        setTypelessOperationPhase('result', operationId)
+      }
       setError(message)
       if (settings.workMode === 'typeless') {
         setTypelessStatus({ type: 'error', message: `识别失败：${message}` })
@@ -656,8 +843,9 @@ export function useVoiceController() {
     setTypelessStatus,
     settings.autoPlayResponse,
     settings.workMode,
-    settings.keyboardShortcuts,
     clearRecordingTimeout,
+    isCurrentTypelessOperation,
+    setTypelessOperationPhase,
     stopStreamingRecognition,
     setTypelessRequest,
   ])
@@ -737,7 +925,6 @@ export function useVoiceController() {
       void (async () => {
         try {
           const session = await ensureAngrymiaoSession({
-            keyboardShortcuts: settings.keyboardShortcuts,
             purgeOthers: true,
           })
           switchCurrentSession(session.id)
@@ -757,6 +944,23 @@ export function useVoiceController() {
     stopRecordingRef.current = stopRecording
     stopSpeakingRef.current = stopSpeaking
   }, [activateVoiceInput, stopRecording, stopSpeaking])
+
+  const beginHoldRecordingStart = useCallback(async () => {
+    holdActivationPendingRef.current = true
+    pendingHotkeyReleaseRef.current = false
+
+    try {
+      await activateVoiceInputRef.current()
+
+      const shouldStopAfterActivation = !holdShortcutActiveRef.current || pendingHotkeyReleaseRef.current
+      if (shouldStopAfterActivation && recorderRef.current?.getState() === 'recording') {
+        pendingHotkeyReleaseRef.current = false
+        await stopRecordingRef.current()
+      }
+    } finally {
+      holdActivationPendingRef.current = false
+    }
+  }, [])
 
   // 切换语音模式
   const toggleVoice = useCallback(async () => {
@@ -782,21 +986,30 @@ export function useVoiceController() {
     const handleHotkeyDown = () => {
       console.log('Hotkey down, mode:', settings.workMode)
       void (async () => {
+        if (settings.workMode === 'typeless' && isTypelessCancelablePhase()) {
+          holdShortcutActiveRef.current = true
+          interruptedHotkeyPendingRef.current = true
+          interruptedHotkeyRestartTriggeredRef.current = false
+          interruptedHotkeyPressStartedAtRef.current = Date.now()
+          await cancelCurrentOperation()
+          clearInterruptedHotkeyRestartTimer()
+          interruptedHotkeyRestartTimerRef.current = setTimeout(() => {
+            if (!interruptedHotkeyPendingRef.current || !holdShortcutActiveRef.current) {
+              return
+            }
+
+            interruptedHotkeyRestartTriggeredRef.current = true
+            void beginHoldRecordingStart()
+          }, HOTKEY_RESTART_THRESHOLD_MS)
+          return
+        }
+
         if (voiceModeRef.current === 'inactive') {
           holdShortcutActiveRef.current = true
-          holdActivationPendingRef.current = true
-          pendingHotkeyReleaseRef.current = false
-          try {
-            await activateVoiceInputRef.current()
-
-            const shouldStopAfterActivation = !holdShortcutActiveRef.current || pendingHotkeyReleaseRef.current
-            if (shouldStopAfterActivation && recorderRef.current?.getState() === 'recording') {
-              pendingHotkeyReleaseRef.current = false
-              await stopRecordingRef.current()
-            }
-          } finally {
-            holdActivationPendingRef.current = false
-          }
+          interruptedHotkeyPendingRef.current = false
+          interruptedHotkeyRestartTriggeredRef.current = false
+          interruptedHotkeyPressStartedAtRef.current = null
+          await beginHoldRecordingStart()
         } else if (voiceModeRef.current === 'speaking' && isSpeakingRef.current) {
           stopSpeakingRef.current()
         }
@@ -806,6 +1019,23 @@ export function useVoiceController() {
     const handleHotkeyUp = () => {
       console.log('Hotkey up')
       holdShortcutActiveRef.current = false
+
+      if (interruptedHotkeyPendingRef.current) {
+        interruptedHotkeyPendingRef.current = false
+        clearInterruptedHotkeyRestartTimer()
+        const restartTriggered = interruptedHotkeyRestartTriggeredRef.current || holdActivationPendingRef.current
+        interruptedHotkeyRestartTriggeredRef.current = false
+        interruptedHotkeyPressStartedAtRef.current = null
+
+        if (restartTriggered) {
+          pendingHotkeyReleaseRef.current = true
+          if (recorderRef.current && recorderRef.current.getState() === 'recording') {
+            pendingHotkeyReleaseRef.current = false
+            void stopRecordingRef.current()
+          }
+        }
+        return
+      }
 
       pendingHotkeyReleaseRef.current = true
       if (recorderRef.current && recorderRef.current.getState() === 'recording') {
@@ -826,6 +1056,10 @@ export function useVoiceController() {
       holdShortcutActiveRef.current = false
       holdActivationPendingRef.current = false
       pendingHotkeyReleaseRef.current = false
+      interruptedHotkeyPendingRef.current = false
+      interruptedHotkeyRestartTriggeredRef.current = false
+      interruptedHotkeyPressStartedAtRef.current = null
+      clearInterruptedHotkeyRestartTimer()
       clearRecordingTimeout()
       if (settings.workMode === 'typeless') {
         void window.electronAPI?.invoke('typelessOverlay:hide')
@@ -839,7 +1073,15 @@ export function useVoiceController() {
         ttsProviderRef.current.stop()
       }
     }
-  }, [settings.enabled, settings.workMode, clearRecordingTimeout])
+  }, [
+    settings.enabled,
+    settings.workMode,
+    beginHoldRecordingStart,
+    cancelCurrentOperation,
+    clearInterruptedHotkeyRestartTimer,
+    clearRecordingTimeout,
+    isTypelessCancelablePhase,
+  ])
 
   return {
     voiceMode,

@@ -5,6 +5,7 @@
 
 import { BrowserWindow, globalShortcut } from 'electron'
 import { UiohookKey, uIOhook } from 'uiohook-napi'
+import { DEFAULT_VOICE_HOTKEY, normalizeStoredVoiceHotkey } from '@shared/voice-hotkey'
 import { resolveHotkeyDispatchWindow } from './hotkey-dispatch'
 import { showTypelessOverlay, updateTypelessOverlay } from './typeless-overlay'
 
@@ -15,19 +16,13 @@ const log = {
 }
 
 interface HotkeyConfig {
-  key: number
-  ctrl: boolean
-  meta: boolean
-  shift: boolean
-  alt: boolean
+  requiredKeys: Set<number>
+  primaryKey: number
 }
 
 const DEFAULT_HOTKEY: HotkeyConfig = {
-  key: UiohookKey.V,
-  ctrl: true,
-  meta: false,
-  shift: true,
-  alt: false,
+  requiredKeys: new Set([UiohookKey.AltRight]),
+  primaryKey: UiohookKey.AltRight,
 }
 
 const pressedKeys = new Set<number>()
@@ -133,10 +128,6 @@ const SUPPRESSIBLE_KEY_TO_ACCELERATOR: Record<number, string> = {
   [UiohookKey.Quote]: "'",
 }
 
-let isCtrlPressed = false
-let isMetaPressed = false
-let isShiftPressed = false
-let isAltPressed = false
 let isHotkeyActive = false
 let currentHotkey: HotkeyConfig = DEFAULT_HOTKEY
 let isRunning = false
@@ -146,246 +137,93 @@ let suppressShortcutAccelerator: string | null = null
 let suppressShortcutRegistered = false
 let hotkeyDispatchWindow: BrowserWindow | null = null
 
-export function parseShortcut(shortcut: string): HotkeyConfig {
-  const parts = shortcut
-    .toLowerCase()
-    .split('+')
-    .map((p) => p.trim())
-  const config: HotkeyConfig = {
-    key: UiohookKey.V,
-    ctrl: false,
-    meta: false,
-    shift: false,
-    alt: false,
+const EXACT_TOKEN_TO_UIOHOOK: Record<string, number> = {
+  LeftCtrl: UiohookKey.Ctrl,
+  RightCtrl: UiohookKey.CtrlRight,
+  LeftShift: UiohookKey.Shift,
+  RightShift: UiohookKey.ShiftRight,
+  LeftAlt: UiohookKey.Alt,
+  RightAlt: UiohookKey.AltRight,
+  LeftMeta: UiohookKey.Meta,
+  RightMeta: UiohookKey.MetaRight,
+  CapsLock: UiohookKey.CapsLock,
+  Enter: UiohookKey.Enter,
+  Space: UiohookKey.Space,
+  Tab: UiohookKey.Tab,
+  Escape: UiohookKey.Escape,
+  Backspace: UiohookKey.Backspace,
+  Insert: UiohookKey.Insert,
+  Delete: UiohookKey.Delete,
+  Home: UiohookKey.Home,
+  End: UiohookKey.End,
+  PageUp: UiohookKey.PageUp,
+  PageDown: UiohookKey.PageDown,
+  ArrowLeft: UiohookKey.ArrowLeft,
+  ArrowRight: UiohookKey.ArrowRight,
+  ArrowUp: UiohookKey.ArrowUp,
+  ArrowDown: UiohookKey.ArrowDown,
+  PrintScreen: UiohookKey.PrintScreen,
+  NumLock: UiohookKey.NumLock,
+  ScrollLock: UiohookKey.ScrollLock,
+  ';': UiohookKey.Semicolon,
+  '=': UiohookKey.Equal,
+  ',': UiohookKey.Comma,
+  '-': UiohookKey.Minus,
+  '.': UiohookKey.Period,
+  '/': UiohookKey.Slash,
+  '`': UiohookKey.Backquote,
+  '[': UiohookKey.BracketLeft,
+  '\\': UiohookKey.Backslash,
+  ']': UiohookKey.BracketRight,
+  "'": UiohookKey.Quote,
+}
+
+function resolveExactTokenToKeycode(token: string): number {
+  if (EXACT_TOKEN_TO_UIOHOOK[token] !== undefined) {
+    return EXACT_TOKEN_TO_UIOHOOK[token]
   }
 
-  for (const part of parts) {
-    switch (part) {
-      case 'ctrl':
-      case 'control':
-        config.ctrl = true
-        break
-      case 'meta':
-      case 'command':
-      case 'cmd':
-      case 'win':
-        config.meta = true
-        break
-      case 'commandorcontrol':
-      case 'mod':
-        if (process.platform === 'darwin') {
-          config.meta = true
-        } else {
-          config.ctrl = true
-        }
-        break
-      case 'alt':
-      case 'option':
-        config.alt = true
-        break
-      case 'shift':
-        config.shift = true
-        break
-      case 'a':
-        config.key = UiohookKey.A
-        break
-      case 'b':
-        config.key = UiohookKey.B
-        break
-      case 'c':
-        config.key = UiohookKey.C
-        break
-      case 'd':
-        config.key = UiohookKey.D
-        break
-      case 'e':
-        config.key = UiohookKey.E
-        break
-      case 'f':
-        config.key = UiohookKey.F
-        break
-      case 'g':
-        config.key = UiohookKey.G
-        break
-      case 'h':
-        config.key = UiohookKey.H
-        break
-      case 'i':
-        config.key = UiohookKey.I
-        break
-      case 'j':
-        config.key = UiohookKey.J
-        break
-      case 'k':
-        config.key = UiohookKey.K
-        break
-      case 'l':
-        config.key = UiohookKey.L
-        break
-      case 'm':
-        config.key = UiohookKey.M
-        break
-      case 'n':
-        config.key = UiohookKey.N
-        break
-      case 'o':
-        config.key = UiohookKey.O
-        break
-      case 'p':
-        config.key = UiohookKey.P
-        break
-      case 'q':
-        config.key = UiohookKey.Q
-        break
-      case 'r':
-        config.key = UiohookKey.R
-        break
-      case 's':
-        config.key = UiohookKey.S
-        break
-      case 't':
-        config.key = UiohookKey.T
-        break
-      case 'u':
-        config.key = UiohookKey.U
-        break
-      case 'v':
-        config.key = UiohookKey.V
-        break
-      case 'w':
-        config.key = UiohookKey.W
-        break
-      case 'x':
-        config.key = UiohookKey.X
-        break
-      case 'y':
-        config.key = UiohookKey.Y
-        break
-      case 'z':
-        config.key = UiohookKey.Z
-        break
-      case '0':
-        config.key = UiohookKey['0']
-        break
-      case '1':
-        config.key = UiohookKey['1']
-        break
-      case '2':
-        config.key = UiohookKey['2']
-        break
-      case '3':
-        config.key = UiohookKey['3']
-        break
-      case '4':
-        config.key = UiohookKey['4']
-        break
-      case '5':
-        config.key = UiohookKey['5']
-        break
-      case '6':
-        config.key = UiohookKey['6']
-        break
-      case '7':
-        config.key = UiohookKey['7']
-        break
-      case '8':
-        config.key = UiohookKey['8']
-        break
-      case '9':
-        config.key = UiohookKey['9']
-        break
-      case 'f1':
-        config.key = UiohookKey.F1
-        break
-      case 'f2':
-        config.key = UiohookKey.F2
-        break
-      case 'f3':
-        config.key = UiohookKey.F3
-        break
-      case 'f4':
-        config.key = UiohookKey.F4
-        break
-      case 'f5':
-        config.key = UiohookKey.F5
-        break
-      case 'f6':
-        config.key = UiohookKey.F6
-        break
-      case 'f7':
-        config.key = UiohookKey.F7
-        break
-      case 'f8':
-        config.key = UiohookKey.F8
-        break
-      case 'f9':
-        config.key = UiohookKey.F9
-        break
-      case 'f10':
-        config.key = UiohookKey.F10
-        break
-      case 'f11':
-        config.key = UiohookKey.F11
-        break
-      case 'f12':
-        config.key = UiohookKey.F12
-        break
-      case 'space':
-        config.key = UiohookKey.Space
-        break
-      case 'enter':
-        config.key = UiohookKey.Enter
-        break
-      case 'escape':
-      case 'esc':
-        config.key = UiohookKey.Escape
-        break
-      case 'backspace':
-        config.key = UiohookKey.Backspace
-        break
-      case 'tab':
-        config.key = UiohookKey.Tab
-        break
-      default: {
-        const tokenMap: Record<string, number> = {
-          ';': UiohookKey.Semicolon,
-          '=': UiohookKey.Equal,
-          ',': UiohookKey.Comma,
-          '-': UiohookKey.Minus,
-          '.': UiohookKey.Period,
-          '/': UiohookKey.Slash,
-          '`': UiohookKey.Backquote,
-          '[': UiohookKey.BracketLeft,
-          '\\': UiohookKey.Backslash,
-          ']': UiohookKey.BracketRight,
-          "'": UiohookKey.Quote,
-        }
-        const mapped = tokenMap[part]
-        if (typeof mapped === 'number') {
-          config.key = mapped
-          break
-        }
-        const direct =
-          (UiohookKey as Record<string, number>)[part.toUpperCase()] ?? (UiohookKey as Record<string, number>)[part]
-        if (typeof direct === 'number') {
-          config.key = direct
-        }
-        break
-      }
+  if (/^[A-Z]$/.test(token)) {
+    return (UiohookKey as Record<string, number>)[token]
+  }
+
+  if (/^[0-9]$/.test(token)) {
+    return (UiohookKey as Record<string, number>)[token]
+  }
+
+  if (/^F([1-9]|1[0-9]|2[0-4])$/.test(token)) {
+    return (UiohookKey as Record<string, number>)[token]
+  }
+
+  return (UiohookKey as Record<string, number>)[token]
+}
+
+export function parseShortcut(shortcut: string): HotkeyConfig {
+  const normalized = normalizeStoredVoiceHotkey(shortcut || DEFAULT_VOICE_HOTKEY)
+  const parts = normalized
+    .split('+')
+    .map((p) => p.trim())
+  const keycodes = parts.map(resolveExactTokenToKeycode).filter((value): value is number => typeof value === 'number')
+  const primaryKey = keycodes[keycodes.length - 1] ?? UiohookKey.AltRight
+
+  return {
+    requiredKeys: new Set(keycodes),
+    primaryKey,
+  }
+}
+
+export function isExactHotkeyMatch(requiredKeys: Set<number>, activeKeys: Set<number>): boolean {
+  if (requiredKeys.size !== activeKeys.size) {
+    return false
+  }
+
+  for (const key of requiredKeys) {
+    if (!activeKeys.has(key)) {
+      return false
     }
   }
 
-  return config
-}
-
-function matchesHotkey(): boolean {
-  const ctrlMatch = currentHotkey.ctrl ? isCtrlPressed : !isCtrlPressed
-  const metaMatch = currentHotkey.meta ? isMetaPressed : !isMetaPressed
-  const shiftMatch = currentHotkey.shift ? isShiftPressed : !isShiftPressed
-  const altMatch = currentHotkey.alt ? isAltPressed : !isAltPressed
-  const keyMatch = pressedKeys.has(currentHotkey.key)
-
-  return ctrlMatch && metaMatch && shiftMatch && altMatch && keyMatch
+  return true
 }
 
 function shouldCompensateOriginalInput(): boolean {
@@ -397,11 +235,11 @@ function shouldCompensateOriginalInput(): boolean {
     return false
   }
 
-  if (currentHotkey.ctrl || currentHotkey.meta || currentHotkey.shift || currentHotkey.alt) {
+  if (currentHotkey.requiredKeys.size !== 1) {
     return false
   }
 
-  return PRINTABLE_KEYS.has(currentHotkey.key)
+  return PRINTABLE_KEYS.has(currentHotkey.primaryKey)
 }
 
 function canSuppressOriginalInputWithGlobalShortcut(): boolean {
@@ -409,11 +247,11 @@ function canSuppressOriginalInputWithGlobalShortcut(): boolean {
     return false
   }
 
-  if (currentHotkey.ctrl || currentHotkey.meta || currentHotkey.shift || currentHotkey.alt) {
+  if (currentHotkey.requiredKeys.size !== 1) {
     return false
   }
 
-  return PRINTABLE_KEYS.has(currentHotkey.key)
+  return PRINTABLE_KEYS.has(currentHotkey.primaryKey)
 }
 
 function resolveSuppressShortcutAccelerator(): string | null {
@@ -421,7 +259,7 @@ function resolveSuppressShortcutAccelerator(): string | null {
     return null
   }
 
-  return SUPPRESSIBLE_KEY_TO_ACCELERATOR[currentHotkey.key] ?? null
+  return SUPPRESSIBLE_KEY_TO_ACCELERATOR[currentHotkey.primaryKey] ?? null
 }
 
 function unregisterSuppressionShortcut(): void {
@@ -480,7 +318,7 @@ function isSuppressedPrimaryKeyEvent(event: {
     return false
   }
 
-  return event.keycode === currentHotkey.key && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey
+  return event.keycode === currentHotkey.primaryKey && currentHotkey.requiredKeys.size === 1
 }
 
 function eraseOriginalInputEcho(keydownCount: number): void {
@@ -509,13 +347,9 @@ function handleKeyDown(event: {
   shiftKey: boolean
   altKey: boolean
 }): void {
-  isCtrlPressed = event.ctrlKey
-  isMetaPressed = event.metaKey
-  isShiftPressed = event.shiftKey
-  isAltPressed = event.altKey
   pressedKeys.add(event.keycode)
 
-  const matches = matchesHotkey()
+  const matches = isExactHotkeyMatch(currentHotkey.requiredKeys, pressedKeys)
 
   if (!matches) {
     return
@@ -535,14 +369,14 @@ function handleKeyDown(event: {
   }
 
   if (!isHotkeyActive) {
-    hotkeyPrimaryKeyDownCount = event.keycode === currentHotkey.key ? 1 : 0
+    hotkeyPrimaryKeyDownCount = event.keycode === currentHotkey.primaryKey ? 1 : 0
     isHotkeyActive = true
     log.info('Hotkey pressed (keydown) - sending hotkey:down')
     notifyRenderer('hotkey:down')
     return
   }
 
-  if (event.keycode === currentHotkey.key) {
+  if (event.keycode === currentHotkey.primaryKey) {
     hotkeyPrimaryKeyDownCount += 1
   }
 }
@@ -554,13 +388,9 @@ function handleKeyUp(event: {
   shiftKey: boolean
   altKey: boolean
 }): void {
-  isCtrlPressed = event.ctrlKey
-  isMetaPressed = event.metaKey
-  isShiftPressed = event.shiftKey
-  isAltPressed = event.altKey
   pressedKeys.delete(event.keycode)
 
-  const matches = matchesHotkey()
+  const matches = isExactHotkeyMatch(currentHotkey.requiredKeys, pressedKeys)
 
   if (isHotkeyActive && !matches) {
     isHotkeyActive = false
@@ -615,7 +445,7 @@ export function startGlobalKeyboardHook(shortcut?: string, showWindow = false): 
   showWindowOnHotkey = showWindow
   registerSuppressionShortcut()
 
-  log.info('Starting global keyboard hook with shortcut:', shortcut || 'Ctrl+Shift+V', 'showWindow:', showWindow)
+  log.info('Starting global keyboard hook with shortcut:', shortcut || DEFAULT_VOICE_HOTKEY, 'showWindow:', showWindow)
 
   uIOhook.on('keydown', handleKeyDown)
   uIOhook.on('keyup', handleKeyUp)
@@ -644,10 +474,6 @@ export function stopGlobalKeyboardHook(): void {
   uIOhook.stop()
 
   pressedKeys.clear()
-  isCtrlPressed = false
-  isMetaPressed = false
-  isShiftPressed = false
-  isAltPressed = false
   isHotkeyActive = false
   isRunning = false
   showWindowOnHotkey = false

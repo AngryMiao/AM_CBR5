@@ -2,6 +2,7 @@
 /** biome-ignore-all lint/suspicious/noFallthroughSwitchClause: migrate */
 
 import * as defaults from '@shared/defaults'
+import { normalizeStoredVoiceHotkey } from '@shared/voice-hotkey'
 import { type ProviderSettings, type Settings, SettingsSchema } from '@shared/types'
 import deepmerge from 'deepmerge'
 import type { WritableDraft } from 'immer'
@@ -70,9 +71,6 @@ export const settingsStore = createStore<Settings & Action>()(
               // fix typo
               settings.shortcuts.inputBoxSendMessage =
                 settings.shortcuts.inpubBoxSendMessage || settings.shortcuts.inputBoxSendMessage
-              settings.shortcuts.inputBoxSendMessageWithoutResponse =
-                settings.shortcuts.inpubBoxSendMessageWithoutResponse ||
-                settings.shortcuts.inputBoxSendMessageWithoutResponse
             case 1:
               if (settings.licenseKey && !settings.licenseActivationMethod) {
                 settings.licenseActivationMethod = 'manual'
@@ -80,6 +78,10 @@ export const settingsStore = createStore<Settings & Action>()(
               }
             default:
               break
+          }
+
+          if (settings.voice?.shortcuts) {
+            settings.voice.shortcuts.toggleVoice = normalizeStoredVoiceHotkey(settings.voice.shortcuts.toggleVoice)
           }
 
           return SettingsSchema.parse(settings)

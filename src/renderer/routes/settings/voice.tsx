@@ -1,8 +1,6 @@
-import { buildKeyCodes, getDefaultKeyboardShortcuts, KEY_CATEGORIES } from '@shared/defaults/keyboard-shortcuts'
 import {
   type ASRProvider,
   getDefaultFunASRLaunchCommand,
-  type KeyboardShortcut,
   type TTSProvider,
   type VoiceWorkMode,
   type WhisperModelSize,
@@ -10,6 +8,7 @@ import {
 import { createFileRoute } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { VoiceHotkeyRecorder } from '@/components/voice/VoiceHotkeyRecorder'
 import { useVoiceSettings } from '@/hooks/useVoiceSettings'
 import {
   AliyunASRProvider,
@@ -22,6 +21,7 @@ import {
 import type { WhisperDownloadProgress } from '@/packages/voice/asr/whisper-local'
 import { AzureTTSProvider, BrowserTTSProvider, ElevenLabsTTSProvider, OpenAITTSProvider } from '@/packages/voice/tts'
 import platform from '@/platform'
+import { useSettingsStore } from '@/stores/settingsStore'
 
 export const Route = createFileRoute('/settings/voice')({
   component: RouteComponent,
@@ -46,7 +46,8 @@ export const Route = createFileRoute('/settings/voice')({
 export function RouteComponent() {
   const { t } = useTranslation()
   const { settings, setSettings } = useVoiceSettings()
-  const defaultFunASRLaunchCommand = getDefaultFunASRLaunchCommand(platform.getPlatform())
+  const appShortcuts = useSettingsStore((state) => state.shortcuts)
+  const defaultFunASRLaunchCommand = getDefaultFunASRLaunchCommand()
   const [testingASR, setTestingASR] = useState(false)
   const [testingTTS, setTestingTTS] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -64,6 +65,10 @@ export function RouteComponent() {
       .filter(Boolean)
 
   const joinCsv = (value?: string[]): string => (value || []).join(', ')
+  const funasrLocalConfig = (settings.asrConfig.funasrLocal || {}) as any
+  const funasrRequestTemplateConfig = (settings.asrConfig.funasrLocal?.requestTemplate || {}) as any
+  const whisperLocalConfig = (settings.asrConfig.whisperLocal || {}) as any
+  const aliyunConfig = (settings.asrConfig.aliyun || {}) as any
 
   const refreshFunASRServiceStatus = useCallback(async () => {
     if (settings.asrProvider !== 'funasr-local') return
@@ -153,21 +158,6 @@ export function RouteComponent() {
         <p className="text-gray-500">Loading...</p>
       </div>
     )
-  }
-
-  const handleDriverPathSelect = async () => {
-    // 使用 Electron 的文件选择对话框
-    const result = await window.electronAPI?.invoke('dialog:openFile', {
-      filters: [{ name: 'Executable', extensions: ['exe'] }],
-      properties: ['openFile'],
-    })
-
-    if (result && !result.canceled && result.filePaths[0]) {
-      setSettings((prev) => ({
-        ...prev,
-        keyboardDriverPath: result.filePaths[0],
-      }))
-    }
   }
 
   const testASR = async () => {
@@ -361,7 +351,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       funasrLocal: {
-                        ...settings.asrConfig.funasrLocal,
+                        ...funasrLocalConfig,
                         baseURL: e.target.value,
                       },
                     },
@@ -412,7 +402,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       funasrLocal: {
-                        ...settings.asrConfig.funasrLocal,
+                        ...funasrLocalConfig,
                         model: e.target.value,
                       },
                     },
@@ -432,7 +422,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       funasrLocal: {
-                        ...settings.asrConfig.funasrLocal,
+                        ...funasrLocalConfig,
                         autoStart: e.target.checked,
                       },
                     },
@@ -453,7 +443,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       funasrLocal: {
-                        ...settings.asrConfig.funasrLocal,
+                        ...funasrLocalConfig,
                         launchCommand: e.target.value,
                       },
                     },
@@ -474,7 +464,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       funasrLocal: {
-                        ...settings.asrConfig.funasrLocal,
+                        ...funasrLocalConfig,
                         launchArgs: e.target.value,
                       },
                     },
@@ -495,7 +485,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       funasrLocal: {
-                        ...settings.asrConfig.funasrLocal,
+                        ...funasrLocalConfig,
                         launchCwd: e.target.value || undefined,
                       },
                     },
@@ -516,7 +506,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       funasrLocal: {
-                        ...settings.asrConfig.funasrLocal,
+                        ...funasrLocalConfig,
                         language: e.target.value,
                       },
                     },
@@ -537,7 +527,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       funasrLocal: {
-                        ...settings.asrConfig.funasrLocal,
+                        ...funasrLocalConfig,
                         healthPaths: parseCsv(e.target.value),
                       },
                     },
@@ -558,7 +548,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       funasrLocal: {
-                        ...settings.asrConfig.funasrLocal,
+                        ...funasrLocalConfig,
                         transcribePaths: parseCsv(e.target.value),
                       },
                     },
@@ -581,7 +571,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       funasrLocal: {
-                        ...settings.asrConfig.funasrLocal,
+                        ...funasrLocalConfig,
                         responseTextPaths: parseCsv(e.target.value),
                       },
                     },
@@ -603,9 +593,9 @@ export function RouteComponent() {
                       asrConfig: {
                         ...settings.asrConfig,
                         funasrLocal: {
-                          ...settings.asrConfig.funasrLocal,
+                          ...funasrLocalConfig,
                           requestTemplate: {
-                            ...settings.asrConfig.funasrLocal?.requestTemplate,
+                            ...funasrRequestTemplateConfig,
                             fileField: e.target.value,
                           },
                         },
@@ -626,9 +616,9 @@ export function RouteComponent() {
                       asrConfig: {
                         ...settings.asrConfig,
                         funasrLocal: {
-                          ...settings.asrConfig.funasrLocal,
+                          ...funasrLocalConfig,
                           requestTemplate: {
-                            ...settings.asrConfig.funasrLocal?.requestTemplate,
+                            ...funasrRequestTemplateConfig,
                             modelField: e.target.value,
                           },
                         },
@@ -649,9 +639,9 @@ export function RouteComponent() {
                       asrConfig: {
                         ...settings.asrConfig,
                         funasrLocal: {
-                          ...settings.asrConfig.funasrLocal,
+                          ...funasrLocalConfig,
                           requestTemplate: {
-                            ...settings.asrConfig.funasrLocal?.requestTemplate,
+                            ...funasrRequestTemplateConfig,
                             languageField: e.target.value,
                           },
                         },
@@ -672,9 +662,9 @@ export function RouteComponent() {
                       asrConfig: {
                         ...settings.asrConfig,
                         funasrLocal: {
-                          ...settings.asrConfig.funasrLocal,
+                          ...funasrLocalConfig,
                           requestTemplate: {
-                            ...settings.asrConfig.funasrLocal?.requestTemplate,
+                            ...funasrRequestTemplateConfig,
                             hotwordsField: e.target.value,
                           },
                         },
@@ -696,7 +686,7 @@ export function RouteComponent() {
                       asrConfig: {
                         ...settings.asrConfig,
                         funasrLocal: {
-                          ...settings.asrConfig.funasrLocal,
+                          ...funasrLocalConfig,
                           enableVAD: e.target.checked,
                         },
                       },
@@ -716,7 +706,7 @@ export function RouteComponent() {
                       asrConfig: {
                         ...settings.asrConfig,
                         funasrLocal: {
-                          ...settings.asrConfig.funasrLocal,
+                          ...funasrLocalConfig,
                           enablePunctuation: e.target.checked,
                         },
                       },
@@ -738,7 +728,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       funasrLocal: {
-                        ...settings.asrConfig.funasrLocal,
+                        ...funasrLocalConfig,
                         hotwords: e.target.value
                           .split(/[,，]/)
                           .map((item) => item.trim())
@@ -764,7 +754,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       funasrLocal: {
-                        ...settings.asrConfig.funasrLocal,
+                        ...funasrLocalConfig,
                         timeoutMs: Number(e.target.value || 30000),
                       },
                     },
@@ -803,7 +793,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       whisperLocal: {
-                        ...settings.asrConfig.whisperLocal,
+                        ...whisperLocalConfig,
                         modelSize: e.target.value as WhisperModelSize,
                       },
                     },
@@ -828,7 +818,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       whisperLocal: {
-                        ...settings.asrConfig.whisperLocal,
+                        ...whisperLocalConfig,
                         remoteHost: e.target.value || undefined,
                       },
                     },
@@ -853,7 +843,7 @@ export function RouteComponent() {
                       asrConfig: {
                         ...settings.asrConfig,
                         whisperLocal: {
-                          ...settings.asrConfig.whisperLocal,
+                          ...whisperLocalConfig,
                           localModelPath: e.target.value || undefined,
                         },
                       },
@@ -963,7 +953,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       aliyun: {
-                        ...settings.asrConfig.aliyun,
+                        ...aliyunConfig,
                         apiKey: e.target.value,
                         model: settings.asrConfig.aliyun?.model || 'qwen3-asr-flash',
                         baseURL:
@@ -987,7 +977,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       aliyun: {
-                        ...settings.asrConfig.aliyun,
+                        ...aliyunConfig,
                         apiKey: settings.asrConfig.aliyun?.apiKey || '',
                         model: e.target.value,
                         baseURL:
@@ -1011,7 +1001,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       aliyun: {
-                        ...settings.asrConfig.aliyun,
+                        ...aliyunConfig,
                         apiKey: settings.asrConfig.aliyun?.apiKey || '',
                         model: settings.asrConfig.aliyun?.model || 'qwen3-asr-flash',
                         baseURL: e.target.value,
@@ -1037,7 +1027,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       aliyun: {
-                        ...settings.asrConfig.aliyun,
+                        ...aliyunConfig,
                         apiKey: settings.asrConfig.aliyun?.apiKey || '',
                         model: settings.asrConfig.aliyun?.model || 'qwen3-asr-flash',
                         baseURL:
@@ -1066,7 +1056,7 @@ export function RouteComponent() {
                     asrConfig: {
                       ...settings.asrConfig,
                       aliyun: {
-                        ...settings.asrConfig.aliyun,
+                        ...aliyunConfig,
                         apiKey: settings.asrConfig.aliyun?.apiKey || '',
                         model: settings.asrConfig.aliyun?.model || 'qwen3-asr-flash',
                         baseURL:
@@ -1259,8 +1249,9 @@ export function RouteComponent() {
         <div>
           <label className="text-sm font-medium">{t('语音快捷键')}</label>
           <div className="mt-1">
-            <HotkeyPicker
+            <VoiceHotkeyRecorder
               value={settings.shortcuts.toggleVoice}
+              shortcuts={appShortcuts}
               onChange={(v) =>
                 setSettings({
                   ...settings,
@@ -1272,42 +1263,6 @@ export function RouteComponent() {
           <p className="text-xs text-gray-500 mt-1">{t('长按快捷键开始录音，松开后发送识别内容。')}</p>
         </div>
       </div>
-
-      {/* 键盘驱动路径 */}
-      <div className="space-y-3">
-        <label className="font-medium">{t('键盘控制驱动')}</label>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={settings.keyboardDriverPath || ''}
-            readOnly
-            placeholder={t('使用内置驱动（无需配置）') || ''}
-            className="flex-1 p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700"
-          />
-          <button
-            onClick={handleDriverPathSelect}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-          >
-            {t('浏览...')}
-          </button>
-          {settings.keyboardDriverPath && (
-            <button
-              onClick={() => setSettings((prev) => ({ ...prev, keyboardDriverPath: '' }))}
-              className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
-            >
-              {t('重置')}
-            </button>
-          )}
-        </div>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
-          {settings.keyboardDriverPath
-            ? t('当前使用自定义驱动路径，点击重置可恢复内置驱动')
-            : t('已内置 AIKeyBoardDriver.exe，无需手动配置。如需使用自定义版本可点击浏览选择')}
-        </p>
-      </div>
-
-      {/* 键盘快捷键映射 */}
-      <KeyboardShortcutsSection settings={settings} setSettings={setSettings} />
 
       {/* 高级选项 */}
       <div className="space-y-3">
@@ -1404,557 +1359,3 @@ export function RouteComponent() {
   )
 }
 
-// ─── Key display helpers ──────────────────────────────────────────────────────
-
-const HID_KEY_DISPLAY: Record<string, string> = {
-  CtrlLeft: 'Ctrl',
-  CmdLeft: 'Cmd/Win',
-  ShiftLeft: 'Shift',
-  AltLeft: 'Alt',
-  Num0: '0',
-  Num1: '1',
-  Num2: '2',
-  Num3: '3',
-  Num4: '4',
-  Num5: '5',
-  Num6: '6',
-  Num7: '7',
-  Num8: '8',
-  Num9: '9',
-  Up: '↑',
-  Down: '↓',
-  Left: '←',
-  Right: '→',
-  PageUp: 'PgUp',
-  PageDown: 'PgDn',
-  PrintScreen: 'PrtScr',
-  BracketLeft: '[',
-  BracketRight: ']',
-  Backslash: '\\',
-  Semicolon: ';',
-  Apostrophe: "'",
-  Grave: '`',
-  Comma: ',',
-  Period: '.',
-  Slash: '/',
-  Minus: '-',
-  Equal: '=',
-}
-
-const HID_CATEGORY_NAMES: Record<string, string> = {
-  modifiers: '修饰键',
-  letters: '字母',
-  numbers: '数字',
-  function: 'F键',
-  arrows: '方向',
-  special: '特殊',
-  punctuation: '标点',
-}
-
-function getHIDKeyLabel(key: string): string {
-  return HID_KEY_DISPLAY[key] || key
-}
-
-const MAX_COMBO_KEYS = 7
-
-// ─── KeyComboBuilder ──────────────────────────────────────────────────────────
-
-function KeyComboBuilder({ slots, onChange }: { slots: string[]; onChange: (s: string[]) => void }) {
-  const [showPicker, setShowPicker] = useState(false)
-  const [activeCategory, setActiveCategory] = useState<string>('modifiers')
-  const pickerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!showPicker) return
-    const handler = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setShowPicker(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showPicker])
-
-  const toggleKey = (key: string) => {
-    if (slots.includes(key)) {
-      onChange(slots.filter((k) => k !== key))
-    } else if (slots.length < MAX_COMBO_KEYS) {
-      onChange([...slots, key])
-    }
-  }
-
-  return (
-    <div className="relative space-y-1.5">
-      <div className="flex flex-wrap gap-1 items-center">
-        {slots.map((key, idx) => (
-          <span
-            key={idx}
-            className="inline-flex items-center gap-0.5 px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded border border-blue-300 dark:border-blue-700"
-          >
-            {getHIDKeyLabel(key)}
-            <button
-              type="button"
-              onClick={() => onChange(slots.filter((_, i) => i !== idx))}
-              className="ml-0.5 hover:text-red-600"
-            >
-              ×
-            </button>
-          </span>
-        ))}
-        <button
-          type="button"
-          disabled={slots.length >= MAX_COMBO_KEYS}
-          onClick={() => setShowPicker(!showPicker)}
-          className="px-2 py-0.5 text-xs border rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          + 添加键
-        </button>
-        {slots.length >= MAX_COMBO_KEYS && <span className="text-xs text-gray-400">最多 {MAX_COMBO_KEYS} 个键</span>}
-      </div>
-      {slots.length > 0 && <p className="text-xs text-gray-400">{buildKeyCodes(slots).join(', ')}</p>}
-      {showPicker && (
-        <div
-          ref={pickerRef}
-          className="absolute left-0 top-full mt-1 z-50 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg min-w-64"
-        >
-          <div className="flex flex-wrap gap-1 mb-2">
-            {(Object.keys(KEY_CATEGORIES) as Array<keyof typeof KEY_CATEGORIES>).map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setActiveCategory(cat)}
-                className={`px-2 py-0.5 text-xs rounded ${activeCategory === cat ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-              >
-                {HID_CATEGORY_NAMES[cat] || cat}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-1 max-w-72">
-            {KEY_CATEGORIES[activeCategory as keyof typeof KEY_CATEGORIES]?.map((key) => (
-              <button
-                key={key}
-                type="button"
-                disabled={slots.length >= MAX_COMBO_KEYS && !slots.includes(key)}
-                onClick={() => toggleKey(key)}
-                className={`px-2 py-1 text-xs rounded border min-w-8 ${
-                  slots.includes(key)
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 border-gray-200 dark:border-gray-500'
-                } disabled:opacity-40 disabled:cursor-not-allowed`}
-              >
-                {getHIDKeyLabel(key)}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── HotkeyPicker ─────────────────────────────────────────────────────────────
-
-const HOTKEY_MODIFIERS = new Set(['Ctrl', 'Shift', 'Alt', 'Meta'])
-
-const HOTKEY_CATEGORIES = {
-  modifiers: ['Ctrl', 'Shift', 'Alt', 'Meta'],
-  letters: [
-    'A',
-    'B',
-    'C',
-    'D',
-    'E',
-    'F',
-    'G',
-    'H',
-    'I',
-    'J',
-    'K',
-    'L',
-    'M',
-    'N',
-    'O',
-    'P',
-    'Q',
-    'R',
-    'S',
-    'T',
-    'U',
-    'V',
-    'W',
-    'X',
-    'Y',
-    'Z',
-  ],
-  numbers: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
-  function: ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'],
-  special: ['Return', 'Tab', 'Escape', 'Space', 'Backspace', 'Delete', 'Up', 'Down', 'Left', 'Right'],
-  punctuation: ['-', '=', '[', ']', '\\', ';', "'", '`', ',', '.', '/'],
-} as const
-
-const HOTKEY_CATEGORY_NAMES: Record<string, string> = {
-  modifiers: '修饰键',
-  letters: '字母',
-  numbers: '数字',
-  function: 'F键',
-  special: '特殊键',
-  punctuation: '标点',
-}
-
-function getHotkeyLabel(key: string, isMac: boolean): string {
-  if (key === 'Meta') return isMac ? 'Cmd' : 'Win'
-  if (key === 'Return') return 'Enter'
-  if (key === 'Up') return '↑'
-  if (key === 'Down') return '↓'
-  if (key === 'Left') return '←'
-  if (key === 'Right') return '→'
-  return key
-}
-
-function isValidHotkeyCombo(keys: string[]): boolean {
-  return keys.length > 0 && keys.some((k) => !HOTKEY_MODIFIERS.has(k))
-}
-
-function HotkeyPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [selectedKeys, setSelectedKeys] = useState<string[]>(() => (value ? value.split('+').filter(Boolean) : []))
-  const [showPicker, setShowPicker] = useState(false)
-  const [activeCategory, setActiveCategory] = useState<string>('modifiers')
-  const pickerRef = useRef<HTMLDivElement>(null)
-  const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
-  const selectedKeysRef = useRef(selectedKeys)
-  selectedKeysRef.current = selectedKeys
-
-  useEffect(() => {
-    const externalKeys = value ? value.split('+').filter(Boolean) : []
-    if (externalKeys.join('+') !== selectedKeysRef.current.join('+')) {
-      setSelectedKeys(externalKeys)
-    }
-  }, [value])
-
-  useEffect(() => {
-    if (!showPicker) return
-    const handler = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setShowPicker(false)
-        if (!isValidHotkeyCombo(selectedKeysRef.current)) {
-          const stored = value ? value.split('+').filter(Boolean) : []
-          setSelectedKeys(stored)
-        }
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showPicker, value])
-
-  const applyIfValid = (keys: string[]) => {
-    setSelectedKeys(keys)
-    if (isValidHotkeyCombo(keys)) {
-      onChange(keys.join('+'))
-    }
-  }
-
-  const toggleKey = (key: string) => {
-    let newKeys: string[]
-    if (HOTKEY_MODIFIERS.has(key)) {
-      newKeys = selectedKeys.includes(key) ? selectedKeys.filter((k) => k !== key) : [...selectedKeys, key]
-    } else {
-      const mods = selectedKeys.filter((k) => HOTKEY_MODIFIERS.has(k))
-      newKeys = selectedKeys.includes(key) ? mods : [...mods, key]
-    }
-    applyIfValid(newKeys)
-  }
-
-  const removeKey = (key: string) => {
-    const newKeys = selectedKeys.filter((k) => k !== key)
-    applyIfValid(newKeys)
-  }
-
-  const reset = () => {
-    const defaultKeys = ['Ctrl', 'Shift', 'V']
-    setSelectedKeys(defaultKeys)
-    onChange(defaultKeys.join('+'))
-  }
-
-  const valid = isValidHotkeyCombo(selectedKeys)
-
-  return (
-    <div className="relative space-y-1.5">
-      <div className="flex flex-wrap gap-1 items-center">
-        {selectedKeys.map((key) => (
-          <span
-            key={key}
-            className={`inline-flex items-center gap-0.5 px-2 py-0.5 text-xs rounded border ${
-              valid
-                ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 border-blue-300 dark:border-blue-700'
-                : 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-700'
-            }`}
-          >
-            {getHotkeyLabel(key, isMac)}
-            <button type="button" onClick={() => removeKey(key)} className="ml-0.5 hover:text-red-600">
-              ×
-            </button>
-          </span>
-        ))}
-        <button
-          type="button"
-          onClick={() => setShowPicker(!showPicker)}
-          className="px-2 py-0.5 text-xs border rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-        >
-          + 选择键
-        </button>
-        <button
-          type="button"
-          onClick={reset}
-          className="px-2 py-0.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-        >
-          重置
-        </button>
-      </div>
-      {selectedKeys.length > 0 && !valid && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">
-          不能仅使用修饰键（Ctrl/Shift/Alt/Meta），请添加一个普通键
-        </p>
-      )}
-      {selectedKeys.length > 0 && valid && <p className="text-xs text-gray-500">{selectedKeys.join('+')}</p>}
-      {showPicker && (
-        <div
-          ref={pickerRef}
-          className="absolute left-0 top-full mt-1 z-50 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg min-w-64"
-        >
-          <div className="flex flex-wrap gap-1 mb-2">
-            {(Object.keys(HOTKEY_CATEGORIES) as Array<keyof typeof HOTKEY_CATEGORIES>).map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setActiveCategory(cat)}
-                className={`px-2 py-0.5 text-xs rounded ${activeCategory === cat ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-              >
-                {HOTKEY_CATEGORY_NAMES[cat] || cat}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-1 max-w-72">
-            {HOTKEY_CATEGORIES[activeCategory as keyof typeof HOTKEY_CATEGORIES]?.map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => toggleKey(key)}
-                className={`px-2 py-1 text-xs rounded border min-w-8 ${
-                  selectedKeys.includes(key)
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 border-gray-200 dark:border-gray-500'
-                }`}
-              >
-                {getHotkeyLabel(key, isMac)}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Keyboard Shortcuts Section ──────────────────────────────────────────────
-
-function KeyboardShortcutsSection({
-  settings,
-  setSettings,
-}: {
-  settings: ReturnType<typeof useVoiceSettings>['settings']
-  setSettings: ReturnType<typeof useVoiceSettings>['setSettings']
-}) {
-  const { t } = useTranslation()
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [addingNew, setAddingNew] = useState(false)
-  const [newName, setNewName] = useState('')
-  const [newTriggerWords, setNewTriggerWords] = useState('')
-  const [newSlots, setNewSlots] = useState<string[]>([])
-
-  const shortcuts = settings.keyboardShortcuts || []
-
-  const updateShortcut = useCallback(
-    (id: string, patch: Partial<KeyboardShortcut>) => {
-      const updated = shortcuts.map((s) => (s.id === id ? { ...s, ...patch } : s))
-      setSettings({ keyboardShortcuts: updated })
-    },
-    [shortcuts, setSettings]
-  )
-
-  const removeShortcut = useCallback(
-    (id: string) => {
-      setSettings({ keyboardShortcuts: shortcuts.filter((s) => s.id !== id) })
-      if (expandedId === id) setExpandedId(null)
-    },
-    [shortcuts, setSettings, expandedId]
-  )
-
-  const addShortcut = useCallback(() => {
-    if (!newName.trim() || !newTriggerWords.trim() || newSlots.length === 0) return
-    const keyCodes = buildKeyCodes(newSlots)
-    const entry: KeyboardShortcut = {
-      id: `ks_custom_${Date.now()}`,
-      name: newName.trim(),
-      triggerWords: newTriggerWords
-        .split(/[,，]/)
-        .map((w) => w.trim())
-        .filter(Boolean),
-      keyCodes,
-      enabled: true,
-    }
-    setSettings({ keyboardShortcuts: [...shortcuts, entry] })
-    setNewName('')
-    setNewTriggerWords('')
-    setNewSlots([])
-    setAddingNew(false)
-  }, [newName, newTriggerWords, newSlots, shortcuts, setSettings])
-
-  const resetDefaults = useCallback(async () => {
-    const platformType = await platform.getPlatform()
-    setSettings({ keyboardShortcuts: getDefaultKeyboardShortcuts(platformType) })
-  }, [setSettings])
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <label className="font-medium">{t('键盘快捷键')}</label>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setAddingNew(true)}
-            className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            {t('添加快捷键')}
-          </button>
-          <button
-            onClick={resetDefaults}
-            className="px-3 py-1 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600"
-          >
-            {t('恢复默认')}
-          </button>
-        </div>
-      </div>
-
-      {/* Shortcut list */}
-      <div className="space-y-1">
-        {shortcuts.map((shortcut) => (
-          <div key={shortcut.id} className="border rounded-lg dark:border-gray-700">
-            <div
-              className="flex items-center justify-between p-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-              onClick={() => setExpandedId(expandedId === shortcut.id ? null : shortcut.id)}
-            >
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={shortcut.enabled}
-                  onChange={(e) => {
-                    e.stopPropagation()
-                    updateShortcut(shortcut.id, { enabled: e.target.checked })
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="w-4 h-4"
-                />
-                <span className="text-sm font-medium">{shortcut.name}</span>
-                <span className="text-xs text-gray-500">{shortcut.triggerWords.join(' / ')}</span>
-              </div>
-              <span className="text-xs text-gray-400">{expandedId === shortcut.id ? '▲' : '▼'}</span>
-            </div>
-
-            {expandedId === shortcut.id && (
-              <div className="p-3 border-t dark:border-gray-700 space-y-2">
-                <div>
-                  <label className="text-xs text-gray-500">{t('名称')}</label>
-                  <input
-                    type="text"
-                    value={shortcut.name}
-                    onChange={(e) => updateShortcut(shortcut.id, { name: e.target.value })}
-                    className="w-full p-1.5 text-sm border rounded dark:bg-gray-800 dark:border-gray-700"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500">{t('触发词（逗号分隔）')}</label>
-                  <input
-                    type="text"
-                    value={shortcut.triggerWords.join(', ')}
-                    onChange={(e) =>
-                      updateShortcut(shortcut.id, {
-                        triggerWords: e.target.value
-                          .split(/[,，]/)
-                          .map((w) => w.trim())
-                          .filter(Boolean),
-                      })
-                    }
-                    className="w-full p-1.5 text-sm border rounded dark:bg-gray-800 dark:border-gray-700"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500">{t('Key Codes')}</label>
-                  <input
-                    type="text"
-                    value={shortcut.keyCodes.join(', ')}
-                    readOnly
-                    className="w-full p-1.5 text-sm border rounded bg-gray-50 dark:bg-gray-900 dark:border-gray-700 text-gray-500"
-                  />
-                </div>
-                {shortcut.id.startsWith('ks_custom_') && (
-                  <button
-                    onClick={() => removeShortcut(shortcut.id)}
-                    className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600"
-                  >
-                    {t('删除')}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Add new shortcut form */}
-      {addingNew && (
-        <div className="p-3 border rounded-lg dark:border-gray-700 space-y-2">
-          <div>
-            <label className="text-xs text-gray-500">{t('名称')}</label>
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder={t('如：截图') || ''}
-              className="w-full p-1.5 text-sm border rounded dark:bg-gray-800 dark:border-gray-700"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500">{t('触发词（逗号分隔）')}</label>
-            <input
-              type="text"
-              value={newTriggerWords}
-              onChange={(e) => setNewTriggerWords(e.target.value)}
-              placeholder={t('如：截图, 截屏') || ''}
-              className="w-full p-1.5 text-sm border rounded dark:bg-gray-800 dark:border-gray-700"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500">{t('按键组合')}</label>
-            <div className="mt-1">
-              <KeyComboBuilder slots={newSlots} onChange={setNewSlots} />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={addShortcut}
-              disabled={!newName.trim() || !newTriggerWords.trim() || newSlots.length === 0}
-              className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {t('确认添加')}
-            </button>
-            <button
-              onClick={() => setAddingNew(false)}
-              className="px-3 py-1 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600"
-            >
-              {t('取消')}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}

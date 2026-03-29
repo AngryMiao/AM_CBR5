@@ -67,7 +67,7 @@ function scheduleAutoHide(mode: OverlayMode) {
   }
 }
 
-function getOverlayHtml(): string {
+export function getOverlayHtml(): string {
   return `<!doctype html>
 <html>
   <head>
@@ -94,15 +94,15 @@ function getOverlayHtml(): string {
         max-width: 280px;
         height: 42px;
         border-radius: 14px;
+        overflow: hidden;
         display: inline-flex;
         align-items: center;
         gap: 9px;
         padding: 0 12px;
         color: #f8fafc;
-        background: rgba(15, 18, 24, 0.92);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        box-shadow: 0 14px 32px rgba(0, 0, 0, 0.38);
-        backdrop-filter: blur(10px) saturate(140%);
+        background: #1a1f28;
+        border: 0;
+        box-shadow: none;
         user-select: none;
         white-space: nowrap;
       }

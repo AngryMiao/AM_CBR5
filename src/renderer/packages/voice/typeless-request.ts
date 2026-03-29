@@ -1,5 +1,4 @@
 import { createMessage, type Message } from '@shared/types'
-import type { KeyboardShortcut } from '@shared/types/voice'
 
 export interface TypelessRequestContext {
   sessionId: string
@@ -10,13 +9,11 @@ export interface TypelessRequestContext {
 
 export async function startTypelessRequest(args: {
   text: string
-  keyboardShortcuts: KeyboardShortcut[]
-  ensureSession: (options: { keyboardShortcuts: KeyboardShortcut[]; purgeOthers: boolean }) => Promise<{ id: string }>
+  ensureSession: (options: { purgeOthers: boolean }) => Promise<{ id: string }>
   submit: (sessionId: string, params: { newUserMsg: Message; needGenerating: boolean }) => Promise<unknown>
   now?: () => number
 }): Promise<{ context: TypelessRequestContext; submitPromise: Promise<unknown> }> {
   const session = await args.ensureSession({
-    keyboardShortcuts: args.keyboardShortcuts,
     purgeOthers: false,
   })
   const newUserMsg = createMessage('user', args.text)

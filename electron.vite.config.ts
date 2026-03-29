@@ -103,6 +103,7 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, './src/renderer'),
+          '@shared': path.resolve(__dirname, './src/shared'),
           'src/shared': path.resolve(__dirname, './src/shared'),
         },
       },
@@ -134,6 +135,7 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, './src/renderer'),
+          '@shared': path.resolve(__dirname, './src/shared'),
           'src/shared': path.resolve(__dirname, './src/shared'),
         },
       },

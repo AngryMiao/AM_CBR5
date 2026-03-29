@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid'
+import { DEFAULT_VOICE_HOTKEY } from './voice-hotkey'
 import { type Config, ModelProviderEnum, type SessionSettings, type Settings, Theme } from './types'
 
 export const BUILT_IN_DEEPSEEK_API_KEY = 'sk-8bf09678b5804183b7f800f04e1421c8'
@@ -27,9 +28,8 @@ export function defaultVoiceSettings(): NonNullable<Settings['voice']> {
     },
     ttsConfig: {},
     shortcuts: {
-      toggleVoice: 'Ctrl+Shift+V',
+      toggleVoice: DEFAULT_VOICE_HOTKEY,
     },
-    keyboardShortcuts: [],
     autoStopRecording: true,
     silenceThreshold: 0.01,
     silenceDuration: 1500,
@@ -149,19 +149,7 @@ export function settings(): Settings {
 
     shortcuts: {
       quickToggle: 'Alt+`', // 快速切换窗口显隐的快捷键
-      inputBoxFocus: 'mod+i', // 聚焦输入框的快捷键
-      newChat: 'mod+n', // 新建聊天的快捷键
-      newPictureChat: 'mod+shift+n', // 新建图片会话的快捷键
-      sessionListNavNext: 'mod+tab', // 切换到下一个会话的快捷键
-      sessionListNavPrev: 'mod+shift+tab', // 切换到上一个会话的快捷键
-      sessionListNavTargetIndex: 'mod', // 会话导航的快捷键
-      messageListRefreshContext: 'mod+r', // 刷新上下文的快捷键
-      dialogOpenSearch: 'mod+k', // 打开搜索对话框的快捷键
       inputBoxSendMessage: 'Enter', // 发送消息的快捷键
-      inputBoxSendMessageWithoutResponse: 'Ctrl+Enter', // 发送但不生成回复的快捷键
-      optionNavUp: 'up', // 选项导航的快捷键
-      optionNavDown: 'down', // 选项导航的快捷键
-      optionSelect: 'enter', // 选项导航的快捷键
     },
     extension: {},
     mcp: {
