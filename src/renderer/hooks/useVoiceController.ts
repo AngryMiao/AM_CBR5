@@ -1,5 +1,4 @@
 import { createMessage, type Settings } from '@shared/types'
-import type { KeyboardShortcut } from '@shared/types/voice'
 import { getMessageText } from '@shared/utils/message'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { useCallback, useEffect, useRef } from 'react'
@@ -17,7 +16,12 @@ import {
   OpenAIASRProvider,
   WhisperLocalProvider,
 } from '@/packages/voice/asr'
-import { determineIntent } from '@/packages/voice/intent-detector'
+import {
+  deriveTypelessExecutionState,
+  findAssistantMessageForUser,
+  mapTypelessExecutionStateToOverlay,
+} from '@/packages/voice/typeless-execution-state'
+import { startTypelessRequest } from '@/packages/voice/typeless-request'
 import { VoiceRecorder } from '@/packages/voice/recorder'
 import type { TTSProvider } from '@/packages/voice/tts'
 import { AzureTTSProvider, BrowserTTSProvider, ElevenLabsTTSProvider, OpenAITTSProvider } from '@/packages/voice/tts'
@@ -27,12 +31,15 @@ import { switchCurrentSession } from '@/stores/session/crud'
 import { submitNewUserMessage } from '@/stores/session/messages'
 import {
   audioLevelAtom,
+  closeTypelessChatResult,
   isRecordingAtom,
   isSpeakingAtom,
   speakingTextAtom,
   streamingTextAtom,
   transcriptAtom,
+  type TypelessStatus,
   typelessChatResultAtom,
+  typelessRequestAtom,
   typelessStatusAtom,
   voiceErrorAtom,
   voiceModeAtom,
@@ -61,6 +68,16 @@ async function ensureAngrymiaoSkillRuntime(settings?: Partial<Settings>): Promis
   }
 }
 
+function isSameTypelessStatus(left: TypelessStatus | null, right: TypelessStatus | null) {
+  if (!left && !right) {
+    return true
+  }
+  if (!left || !right) {
+    return false
+  }
+  return left.type === right.type && left.message === right.message
+}
+
 /**
  * 语音控制器 Hook
  * 管理语音录制、识别、合成的完整流程
@@ -76,10 +93,15 @@ export function useVoiceController() {
   const setPanelVisible = useSetAtom(voicePanelVisibleAtom)
   const setTypelessStatus = useSetAtom(typelessStatusAtom)
   const typelessStatus = useAtomValue(typelessStatusAtom)
+  const setTypelessRequest = useSetAtom(typelessRequestAtom)
+  const typelessRequest = useAtomValue(typelessRequestAtom)
   const setTypelessChatResult = useSetAtom(typelessChatResultAtom)
+  const typelessChatResult = useAtomValue(typelessChatResultAtom)
+  const closeTypelessChatResultState = useSetAtom(closeTypelessChatResult)
   const setStreamingText = useSetAtom(streamingTextAtom)
   const streamingText = useAtomValue(streamingTextAtom)
   const { settings } = useVoiceSettings()
+  const { session: typelessSession } = chatStore.useSession(typelessRequest?.sessionId ?? null)
 
   const recorderRef = useRef<VoiceRecorder | null>(null)
   const asrProviderRef = useRef<ASRProvider | null>(null)
@@ -90,6 +112,27 @@ export function useVoiceController() {
   const holdActivationPendingRef = useRef(false)
   const pendingHotkeyReleaseRef = useRef(false)
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const currentTypelessRequestRef = useRef(typelessRequest)
+
+  const trackedAssistantMessage = typelessRequest
+    ? findAssistantMessageForUser(typelessSession?.messages ?? [], typelessRequest.userMessageId)
+    : null
+  const typelessExecutionState = typelessRequest
+    ? deriveTypelessExecutionState({ assistantMessage: trackedAssistantMessage })
+    : null
+  const typelessOverlayState = typelessExecutionState
+    ? mapTypelessExecutionStateToOverlay(typelessExecutionState)
+    : null
+  const derivedTypelessStatus =
+    typelessOverlayState?.visibility === 'visible'
+      ? {
+          type: typelessOverlayState.type,
+          message: typelessOverlayState.message,
+        }
+      : null
+  const activeTypelessStatus = typelessRequest ? derivedTypelessStatus : typelessStatus
+  const activeTypelessStatusType = activeTypelessStatus?.type ?? null
+  const activeTypelessStatusMessage = activeTypelessStatus?.message ?? null
 
   const clearRecordingTimeout = useCallback(() => {
     if (recordingTimeoutRef.current) {
@@ -103,6 +146,84 @@ export function useVoiceController() {
   }, [voiceMode])
 
   useEffect(() => {
+    currentTypelessRequestRef.current = typelessRequest
+  }, [typelessRequest])
+
+  useEffect(() => {
+    if (platform.type !== 'desktop' || settings.workMode !== 'typeless') {
+      return
+    }
+
+    return window.electronAPI?.onTypelessChatResultClosed?.((payload) => {
+      closeTypelessChatResultState(payload)
+      setTypelessStatus(null)
+    })
+  }, [settings.workMode, closeTypelessChatResultState, setTypelessStatus])
+
+  useEffect(() => {
+    if (platform.type !== 'desktop' || settings.workMode !== 'typeless') {
+      return
+    }
+
+    if (!typelessRequest || !trackedAssistantMessage || typelessExecutionState?.phase !== 'chat_result') {
+      return
+    }
+
+    const replyText = getMessageText(trackedAssistantMessage).trim()
+    if (!replyText || typelessChatResult?.userMessageId === typelessRequest.userMessageId) {
+      return
+    }
+
+    const payload = {
+      userMessageId: typelessRequest.userMessageId,
+      asrText: typelessRequest.asrText,
+      replyText,
+    }
+
+    // 纯聊天结果改由主进程全局窗口展示，先关闭底部状态条，再同步 renderer 状态与主进程窗口。
+    void window.electronAPI?.invoke('typelessOverlay:hide')
+    setTypelessChatResult({
+      sessionId: typelessRequest.sessionId,
+      userMessageId: typelessRequest.userMessageId,
+      asrText: typelessRequest.asrText,
+      replyText,
+      shownAt: Date.now(),
+    })
+    setTypelessStatus(null)
+    void window.electronAPI?.showTypelessChatResult?.(payload)
+  }, [
+    settings.workMode,
+    trackedAssistantMessage,
+    typelessExecutionState?.phase,
+    typelessChatResult?.userMessageId,
+    typelessRequest,
+    setTypelessChatResult,
+    setTypelessStatus,
+  ])
+
+  useEffect(() => {
+    if (platform.type !== 'desktop' || settings.workMode !== 'typeless') {
+      return
+    }
+
+    return () => {
+      void window.electronAPI?.hideTypelessChatResult?.()
+      closeTypelessChatResultState()
+      setTypelessStatus(null)
+    }
+  }, [settings.workMode, closeTypelessChatResultState, setTypelessStatus])
+
+  useEffect(() => {
+    if (settings.workMode !== 'typeless' || !typelessRequest) {
+      return
+    }
+
+    if (!isSameTypelessStatus(typelessStatus, derivedTypelessStatus)) {
+      setTypelessStatus(derivedTypelessStatus)
+    }
+  }, [settings.workMode, typelessRequest, typelessStatus, derivedTypelessStatus, setTypelessStatus])
+
+  useEffect(() => {
     if (platform.type !== 'desktop') {
       return
     }
@@ -112,15 +233,23 @@ export function useVoiceController() {
       return
     }
 
-    if (typelessStatus) {
+    if (activeTypelessStatus) {
       void window.electronAPI?.invoke('typelessOverlay:show', {
-        mode: typelessStatus.type,
-        text: typelessStatus.message,
+        mode: activeTypelessStatus.type,
+        text: activeTypelessStatus.message,
       })
 
-      if (typelessStatus.type === 'success' || typelessStatus.type === 'error') {
+      if (activeTypelessStatus.type === 'success' || activeTypelessStatus.type === 'error') {
+        const trackedUserMessageId = typelessRequest?.userMessageId
         const timer = setTimeout(() => {
           void window.electronAPI?.invoke('typelessOverlay:hide')
+          setTypelessStatus(null)
+          if (
+            trackedUserMessageId &&
+            currentTypelessRequestRef.current?.userMessageId === trackedUserMessageId
+          ) {
+            setTypelessRequest(null)
+          }
         }, 900)
         return () => clearTimeout(timer)
       }
@@ -157,7 +286,17 @@ export function useVoiceController() {
       }
       void window.electronAPI?.invoke('typelessOverlay:hide')
     }
-  }, [settings.workMode, typelessStatus, voiceMode, isRecording, streamingText])
+  }, [
+    settings.workMode,
+    activeTypelessStatusType,
+    activeTypelessStatusMessage,
+    voiceMode,
+    isRecording,
+    streamingText,
+    typelessRequest?.userMessageId,
+    setTypelessRequest,
+    setTypelessStatus,
+  ])
 
   // 初始化 ASR 提供商
   const getASRProvider = useCallback((): ASRProvider => {
@@ -281,87 +420,18 @@ export function useVoiceController() {
     }
   }, [])
 
-  // Typeless 模式：处理控制意图
-  const handleControlIntent = useCallback(
-    async (shortcut: KeyboardShortcut) => {
-      setTypelessStatus({ type: 'executing', message: `正在执行: ${shortcut.name}` })
-
-      try {
-        await ensureAngrymiaoSkillRuntime({ voice: settings })
-        const tools = mcpController.getAvailableTools({ skillBundleId: ANGRYMIAO_SKILL_BUNDLE_ID })
-        const keyboardControlTool = tools['mcp__system-control__keyboard_control']
-
-        if (!keyboardControlTool?.execute) {
-          throw new Error('键盘控制工具不可用')
-        }
-
-        await (keyboardControlTool.execute as (args: { keyCodes: string[] }) => Promise<unknown>)({
-          keyCodes: shortcut.keyCodes,
-        })
-        setTypelessStatus({ type: 'success', message: '已完成' })
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        setTypelessStatus({ type: 'error', message })
-        setError(message)
-      }
-    },
-    [settings, setTypelessStatus, setError]
-  )
-
-  // Typeless 模式：处理输入意图
-  const handleInputIntent = useCallback(
-    async (text: string) => {
-      setTypelessStatus({ type: 'inserting', message: '正在插入...' })
-
-      try {
-        const result = await window.electronAPI?.insertText(text)
-        if (!result?.success) {
-          throw new Error(result?.error || '文字插入失败')
-        }
-        setTypelessStatus({ type: 'success', message: '已完成' })
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        setTypelessStatus({ type: 'error', message })
-        setError(message)
-      }
-    },
-    [setTypelessStatus, setError]
-  )
-
-  // Typeless 模式：处理对话意图
-  const handleChatIntent = useCallback(
-    async (text: string) => {
-      setTypelessStatus({ type: 'thinking', message: '正在思考...' })
-
-      try {
-        const session = await ensureAngrymiaoSession({
-          keyboardShortcuts: settings.keyboardShortcuts,
-          purgeOthers: false,
-        })
-        const sessionId = session.id
-        const msg = createMessage('user', text)
-        await submitNewUserMessage(sessionId, {
-          newUserMsg: msg,
-          needGenerating: true,
-        })
-
-        // 设置结果，触发结果窗口显示
-        setTypelessChatResult({ sessionId, userText: text })
-        setTypelessStatus({ type: 'success', message: '已完成' })
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        setTypelessStatus({ type: 'error', message })
-        setError(message)
-      }
-    },
-    [settings.keyboardShortcuts, setTypelessStatus, setTypelessChatResult, setError]
-  )
-
   // 开始录音
   const startRecording = useCallback(async (): Promise<boolean> => {
     try {
       clearRecordingTimeout()
       setError(null)
+
+      if (settings.workMode === 'typeless') {
+        void window.electronAPI?.hideTypelessChatResult?.()
+      }
+      setTypelessChatResult(null)
+      setTypelessRequest(null)
+      setTypelessStatus(null)
 
       if (!VoiceRecorder.isSupported()) {
         throw new Error('当前环境不支持麦克风录音')
@@ -377,7 +447,6 @@ export function useVoiceController() {
       setVoiceMode('listening')
       setPanelVisible(true)
       setStreamingText('')
-      setTypelessStatus(null)
 
       const recorder = new VoiceRecorder()
       recorderRef.current = recorder
@@ -433,6 +502,7 @@ export function useVoiceController() {
     setAudioLevel,
     setStreamingText,
     setTypelessStatus,
+    setTypelessChatResult,
     clearRecordingTimeout,
     startStreamingRecognition,
   ])
@@ -461,18 +531,24 @@ export function useVoiceController() {
       // 根据工作模式决定输出目标
       if (text) {
         if (settings.workMode === 'typeless') {
-          const intent = determineIntent(text, settings.keyboardShortcuts || [])
-
-          switch (intent.type) {
-            case 'control':
-              await handleControlIntent(intent.shortcut!)
-              break
-            case 'input':
-              await handleInputIntent(text)
-              break
-            case 'chat':
-              await handleChatIntent(text)
-              break
+          try {
+            const { context, submitPromise } = await startTypelessRequest({
+              text,
+              keyboardShortcuts: settings.keyboardShortcuts || [],
+              ensureSession: ensureAngrymiaoSession,
+              submit: submitNewUserMessage,
+            })
+            setTypelessRequest(context)
+            void submitPromise.catch((err) => {
+              const message = err instanceof Error ? err.message : String(err)
+              setTypelessStatus({ type: 'error', message })
+              setTypelessRequest(null)
+              setError(message)
+            })
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            setTypelessStatus({ type: 'error', message })
+            setError(message)
           }
         } else {
           // Chat 模式：发送到 AI 对话
@@ -583,9 +659,7 @@ export function useVoiceController() {
     settings.keyboardShortcuts,
     clearRecordingTimeout,
     stopStreamingRecognition,
-    handleControlIntent,
-    handleInputIntent,
-    handleChatIntent,
+    setTypelessRequest,
   ])
 
   // 播放语音

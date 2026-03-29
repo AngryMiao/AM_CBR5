@@ -1,4 +1,4 @@
-import { BrowserWindow, screen } from 'electron'
+import { BrowserWindow, type BrowserWindowConstructorOptions, screen } from 'electron'
 import log from 'electron-log/main'
 
 export type OverlayMode = 'listening' | 'processing' | 'executing' | 'inserting' | 'thinking' | 'success' | 'error'
@@ -17,6 +17,31 @@ let autoHideTimer: ReturnType<typeof setTimeout> | null = null
 let lastState: Required<OverlayState> = {
   mode: 'listening',
   text: '正在聆听...',
+}
+
+export function buildTypelessOverlayWindowOptions(): BrowserWindowConstructorOptions {
+  return {
+    width: OVERLAY_WIDTH,
+    height: OVERLAY_HEIGHT,
+    show: false,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    focusable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    roundedCorners: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      backgroundThrottling: false,
+      // 该窗口只承载极简悬浮 UI，显式禁用 DevTools，避免开发环境或 popup 调试偏好污染显示内容。
+      devTools: false,
+    },
+  }
 }
 
 function clearAutoHideTimer() {
@@ -174,26 +199,7 @@ function ensureOverlayWindow() {
   }
 
   overlayReady = false
-  overlayWindow = new BrowserWindow({
-    width: OVERLAY_WIDTH,
-    height: OVERLAY_HEIGHT,
-    show: false,
-    frame: false,
-    transparent: true,
-    resizable: false,
-    minimizable: false,
-    maximizable: false,
-    focusable: false,
-    skipTaskbar: true,
-    hasShadow: false,
-    roundedCorners: false,
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      backgroundThrottling: false,
-    },
-  })
+  overlayWindow = new BrowserWindow(buildTypelessOverlayWindowOptions())
 
   overlayWindow.setAlwaysOnTop(true, 'screen-saver')
   overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })

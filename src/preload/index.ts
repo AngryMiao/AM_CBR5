@@ -26,6 +26,15 @@ const electronHandler: ElectronIPC = {
   //     },
   // },
   invoke: ipcRenderer.invoke,
+  showTypelessChatResult: (payload) => ipcRenderer.invoke('typelessChatResult:show', payload),
+  hideTypelessChatResult: () => ipcRenderer.invoke('typelessChatResult:hide'),
+  onTypelessChatResultClosed: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: { userMessageId: string }) => {
+      callback(payload)
+    }
+    ipcRenderer.on('typelessChatResult:closed', listener)
+    return () => ipcRenderer.off('typelessChatResult:closed', listener)
+  },
   onSystemThemeChange: (callback: () => void) => {
     ipcRenderer.on('system-theme-updated', callback)
     return () => ipcRenderer.off('system-theme-updated', callback)
@@ -66,8 +75,6 @@ const electronHandler: ElectronIPC = {
     ipcRenderer.on('hotkey:up', callback)
     return () => ipcRenderer.off('hotkey:up', callback)
   },
-  insertText: (text: string) => ipcRenderer.invoke('text:insert', text),
-  isTextInsertionSupported: () => ipcRenderer.invoke('text:isInsertionSupported'),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronHandler)

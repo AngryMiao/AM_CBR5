@@ -6,6 +6,7 @@ import ExitFullscreenButton from '@/components/layout/ExitFullscreenButton'
 import { TypelessChatResult } from '@/components/voice/TypelessChatResult'
 import { TypelessPanel } from '@/components/voice/TypelessPanel'
 import { VoicePanel } from '@/components/voice/VoicePanel'
+import { shouldRenderInAppTypelessChatResult } from '@/components/voice/voice-surface-policy'
 import useAppTheme from '@/hooks/useAppTheme'
 import { useSystemLanguageWhenInit } from '@/hooks/useDefaultSystemLanguage'
 import { useI18nEffect } from '@/hooks/useI18nEffect'
@@ -53,11 +54,12 @@ import PictureDialog from '@/pages/PictureDialog'
 import RemoteDialogWindow from '@/pages/RemoteDialogWindow'
 import SearchDialog from '@/pages/SearchDialog'
 import platform from '@/platform'
+import { router } from '@/router'
 import * as settingActions from '@/stores/settingActions'
 import { useLanguage, useSettingsStore, useTheme } from '@/stores/settingsStore'
 import { useUIStore } from '@/stores/uiStore'
 
-function Root() {
+export function Root() {
   const location = useLocation()
   const navigate = useNavigate()
   const spellCheck = useSettingsStore((state) => state.spellCheck)
@@ -192,7 +194,7 @@ function Root() {
       <Toasts /> {/* mui */}
       <SettingsModal />
       {voiceSettings.workMode === 'typeless' ? platform.type === 'desktop' ? null : <TypelessPanel /> : <VoicePanel />}
-      <TypelessChatResult />
+      {shouldRenderInAppTypelessChatResult({ platformType: platform.type }) ? <TypelessChatResult /> : null}
     </Box>
   )
 }

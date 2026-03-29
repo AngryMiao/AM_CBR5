@@ -34,7 +34,7 @@ import { getDefaultFunASRLaunchCommand, type VoiceWorkMode } from 'src/shared/ty
 import * as analystic from './analystic-node'
 import * as autoLauncher from './autoLauncher'
 import { handleDeepLink } from './deeplinks'
-import { startGlobalKeyboardHook, stopGlobalKeyboardHook } from './global-keyboard-hook'
+import { setHotkeyDispatchWindow, startGlobalKeyboardHook, stopGlobalKeyboardHook } from './global-keyboard-hook'
 import Locale from './locales'
 import * as mcpIpc from './mcp/ipc-stdio-transport'
 import MenuBuilder from './menu'
@@ -53,7 +53,6 @@ import {
   setStoreBlob,
   store,
 } from './store-node'
-import { insertTextToActiveApp, isTextInsertionSupported } from './text-inserter'
 import {
   destroyTypelessOverlay,
   hideTypelessOverlay,
@@ -61,6 +60,13 @@ import {
   showTypelessOverlay,
   updateTypelessOverlay,
 } from './typeless-overlay'
+import {
+  destroyTypelessChatResult,
+  hideTypelessChatResult,
+  onTypelessChatResultClosed,
+  registerTypelessChatResultIpc,
+  showTypelessChatResult,
+} from './typeless-chat-result'
 import * as windowState from './window_state'
 
 // 这行代码是解决 Windows 通知的标题和图标不正确的问题，标题会错误显示成 electron.app.Angrymiao-Voice-Control
@@ -481,6 +487,7 @@ async function createWindow() {
         : path.join(__dirname, '../../out/preload/index.js'),
     },
   })
+  setHotkeyDispatchWindow(mainWindow)
 
   // Load the local URL for development or the local
   // html file for production
@@ -515,6 +522,7 @@ async function createWindow() {
   })
 
   mainWindow.on('closed', () => {
+    setHotkeyDispatchWindow(null)
     mainWindow = null
   })
 
@@ -713,6 +721,8 @@ if (!gotTheLock) {
         } catch (e) {
           log.error('shortcut: failed to unregister', e)
         }
+        cleanupTypelessChatResultIpc()
+        destroyTypelessChatResult()
         stopFunASRService('app will quit')
         destroyTypelessOverlay()
         mcpIpc.closeAllTransports()
@@ -918,6 +928,19 @@ ipcMain.handle('typelessOverlay:hide', () => {
   return true
 })
 
+const cleanupTypelessChatResultIpc = registerTypelessChatResultIpc({
+  ipcMain,
+  show: showTypelessChatResult,
+  hide: hideTypelessChatResult,
+  onClosed: onTypelessChatResultClosed,
+  sendToMainWindow: (channel, payload) => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return
+    }
+    mainWindow.webContents.send(channel, payload)
+  },
+})
+
 ipcMain.handle('ensureFunASRService', () => {
   return ensureFunASRService()
 })
@@ -1086,13 +1109,4 @@ ipcMain.handle('window:close', () => {
 
 ipcMain.handle('window:is-maximized', () => {
   return mainWindow?.isMaximized()
-})
-
-// 文字插入 IPC
-ipcMain.handle('text:insert', async (_event, text: string) => {
-  return insertTextToActiveApp(text)
-})
-
-ipcMain.handle('text:isInsertionSupported', async () => {
-  return isTextInsertionSupported()
 })

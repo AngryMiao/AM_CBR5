@@ -5,6 +5,7 @@
 
 import { BrowserWindow, globalShortcut } from 'electron'
 import { UiohookKey, uIOhook } from 'uiohook-napi'
+import { resolveHotkeyDispatchWindow } from './hotkey-dispatch'
 import { showTypelessOverlay, updateTypelessOverlay } from './typeless-overlay'
 
 const log = {
@@ -143,6 +144,7 @@ let showWindowOnHotkey = false
 let hotkeyPrimaryKeyDownCount = 0
 let suppressShortcutAccelerator: string | null = null
 let suppressShortcutRegistered = false
+let hotkeyDispatchWindow: BrowserWindow | null = null
 
 export function parseShortcut(shortcut: string): HotkeyConfig {
   const parts = shortcut
@@ -570,7 +572,8 @@ function handleKeyUp(event: {
 }
 
 function notifyRenderer(event: 'hotkey:down' | 'hotkey:up'): void {
-  const mainWindow = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+  // Typeless overlay 也是 BrowserWindow，热键事件必须优先发给真正的主窗口，否则 renderer 无法启动录音链路。
+  const mainWindow = resolveHotkeyDispatchWindow(hotkeyDispatchWindow, BrowserWindow.getAllWindows())
 
   if (!showWindowOnHotkey) {
     if (event === 'hotkey:down') {
@@ -620,6 +623,10 @@ export function startGlobalKeyboardHook(shortcut?: string, showWindow = false): 
 
   isRunning = true
   log.info('Global keyboard hook started')
+}
+
+export function setHotkeyDispatchWindow(window: BrowserWindow | null): void {
+  hotkeyDispatchWindow = window
 }
 
 export function stopGlobalKeyboardHook(): void {

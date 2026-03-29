@@ -1,5 +1,6 @@
 import type { VoiceMode } from '@shared/types/voice'
 import { atom } from 'jotai'
+import type { TypelessRequestContext } from '@/packages/voice/typeless-request'
 
 // 语音模式状态（运行时状态，不持久化）
 export const voiceModeAtom = atom<VoiceMode>('inactive')
@@ -62,14 +63,29 @@ export interface TypelessStatus {
 }
 export const typelessStatusAtom = atom<TypelessStatus | null>(null)
 
-// Typeless Chat 结果
-export interface TypelessChatResult {
+// Typeless 请求上下文
+export const typelessRequestAtom = atom<TypelessRequestContext | null>(null)
+
+// Typeless 聊天结果上下文
+export interface TypelessChatResultContext {
   sessionId: string
-  userText: string
+  userMessageId: string
+  asrText: string
+  replyText: string
+  shownAt: number
 }
-export const typelessChatResultAtom = atom<TypelessChatResult | null>(null)
+export const typelessChatResultAtom = atom<TypelessChatResultContext | null>(null)
 
 // 关闭结果窗口的 action
-export const closeTypelessChatResult = atom(null, (_get, set) => {
-  set(typelessChatResultAtom, null)
+export const closeTypelessChatResult = atom(null, (get, set, payload?: { userMessageId?: string }) => {
+  const currentRequest = get(typelessRequestAtom)
+  const currentResult = get(typelessChatResultAtom)
+  const targetUserMessageId = payload?.userMessageId
+
+  if (!targetUserMessageId || currentResult?.userMessageId === targetUserMessageId) {
+    set(typelessChatResultAtom, null)
+  }
+  if (!targetUserMessageId || currentRequest?.userMessageId === targetUserMessageId) {
+    set(typelessRequestAtom, null)
+  }
 })

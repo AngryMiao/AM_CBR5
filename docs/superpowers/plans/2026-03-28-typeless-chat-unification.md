@@ -1,245 +1,191 @@
-# Typeless Chat Unification Implementation Plan
+# Typeless Global Chat Result Window Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 让桌面端 `typeless` 模式在 ASR 完成后统一复用 angrymiao chat 主链路，并基于真实 assistant 消息状态驱动 overlay、工具执行态和结果窗口。
+**Goal:** 让桌面端 `typeless` 在保留现有底部全局状态条的前提下，为纯聊天回复新增一个全局屏幕居中的结果卡片，并展示 ASR 文本与 AI 回复。
 
-**Architecture:** 录音与 ASR 仍由 `useVoiceController` 驱动；ASR 返回文本后不再走本地 `determineIntent()`，而是统一提交到 angrymiao session。提交路径必须先建立 `TypelessRequestContext`，再以 fire-and-observe 方式触发 `submitNewUserMessage(...)`，这样 renderer 才能在 assistant 流式生成期间观察到 `thinking / inserting / executing`。新增纯函数模块负责“请求上下文 + assistant message -> typeless 领域执行态”推导，renderer 再把领域态映射为 overlay 或结果窗口；旧的 `text:insert` IPC 在统一链路稳定后删除。
+**Architecture:** 保留 `src/main/typeless-overlay.ts` 作为底部状态条，不再把桌面端纯聊天结果渲染为 renderer 内卡片。新增独立的主进程中央结果窗口模块与 IPC；renderer 继续基于 `TypelessRequestContext + assistant message` 推导 `chat_result`，并在满足条件时驱动中央结果窗口显示、关闭回流与新一轮抢占关闭。
 
-**Tech Stack:** Electron main/preload IPC、React hooks、Jotai atoms、Vitest、Testing Library、MCP skill runtime
+**Tech Stack:** Electron BrowserWindow / IPC、preload bridge、React hooks、Jotai、Vitest、Testing Library
 
 ---
 
 ## Execution Prerequisites
 
-- 当前工作区已有未提交改动，且包含 `typeless` 相关文件。执行本计划前，控制器必须先用 `@superpowers:using-git-worktrees` 创建隔离 worktree，避免把本轮实现与现有改动混在一起。
-- 新分支名称使用 `codex/typeless-chat-unification`。
-- 如果仓库里仍不存在 `.worktrees/` 或 `worktrees/`，控制器需先询问用户 worktree 目录位置，再创建 worktree。
-- 进入 worktree 后先运行：
+- 用户已明确要求：
+  - 不使用 worktree 隔离
+  - 直接在当前分支 `refactor/angrymiao-voice-control` 上继续开发
+- 当前工作区已有未提交改动，且包含本特性的半成品实现。执行本计划时：
+  - 不要回滚或覆盖无关改动
+  - 只针对本计划列出的文件做增量修改
+  - `.superpowers/` 是本轮 brainstorming 产生的本地辅助文件，不要加入功能提交
+- 开始实现前先运行基线验证：
 
 ```bash
-pnpm install
-pnpm test -- src/main/hotkey-dispatch.test.ts src/main/typeless-overlay.test.ts
+pnpm test -- src/main/hotkey-dispatch.test.ts src/main/typeless-overlay.test.ts src/renderer/packages/voice/typeless-execution-state.test.ts src/renderer/packages/voice/typeless-request.test.ts src/renderer/components/voice/TypelessChatResult.test.tsx src/renderer/hooks/useVoiceController.test.tsx
 ```
 
-预期：依赖安装成功；现有 hotkey/overlay 相关测试通过，确认基线可继续。
+预期：
+
+- 现有定向测试通过
+- 如果失败，先定位失败是否来自工作区已有未提交改动，再继续实施
 
 ## File Structure
 
-- Create: `src/renderer/packages/voice/typeless-execution-state.ts`
-  纯函数模块。只负责：
-  - 根据 `userMessageId` 精确定位本轮 assistant message
-  - 根据 `assistant.generating / error / contentParts` 推导 `thinking / inserting / executing / success / error / chat_result`
-  - 将领域态映射为 overlay 显示态或“隐藏 overlay”
+- Create: `src/main/typeless-chat-result.ts`
+  - 新的全局中央聊天结果窗口模块
+  - 负责创建/复用 `BrowserWindow`
+  - 负责居中定位、展示 `asrText/replyText`、手动关闭与关闭回流
 
-- Create: `src/renderer/packages/voice/typeless-execution-state.test.ts`
-  覆盖状态推导和 assistant message 定位逻辑。
-
-- Create: `src/renderer/packages/voice/typeless-request.ts`
-  纯函数/轻依赖模块。负责统一启动 typeless transcript 提交流程，返回 `TypelessRequestContext + submitPromise`，确保 request context 在 `submitNewUserMessage(...)` 完整返回前就已建立。
-
-- Create: `src/renderer/packages/voice/typeless-request.test.ts`
-  覆盖 session 获取、user message 构造、context 返回等提交路径。
-
-- Modify: `src/renderer/stores/voiceStore.ts`
-  增加 `typelessRequestAtom`，保留 `typelessStatusAtom` 作为 UI 展示状态，不再让业务语义完全依赖手工状态。
-
-- Modify: `src/renderer/components/voice/TypelessChatResult.tsx`
-  改为根据 `typelessRequestAtom + useSession(sessionId)` 精确定位 assistant message，只在 `chat_result` 时渲染。
-
-- Create: `src/renderer/components/voice/TypelessChatResult.test.tsx`
-  覆盖“普通问答显示结果 / 工具调用不显示结果窗”。
-
-- Modify: `src/renderer/hooks/useVoiceController.ts`
-  去掉 typeless 主路径上的本地 `determineIntent()`/`handleControlIntent()`/`handleInputIntent()`/`handleChatIntent()` 分流，统一改成 `submitTypelessRequest()`；overlay 同步逻辑改为依赖执行态推导。
-
-- Modify: `src/preload/index.ts`
-  删除 `insertText` / `isTextInsertionSupported` 暴露。
-
-- Modify: `src/shared/electron-types.ts`
-  删除旧 `insertText` / `isTextInsertionSupported` 类型。
+- Create: `src/main/typeless-chat-result.test.ts`
+  - 覆盖中央结果窗口配置、定位、全局悬浮配置、关闭事件与 payload 更新
+  - 覆盖 IPC 注册 helper 与关闭回流
 
 - Modify: `src/main/main.ts`
-  删除 `text:insert` / `text:isInsertionSupported` IPC。
+  - 注册 `typelessChatResult:show` / `typelessChatResult:hide`
+  - 将中央结果窗口的关闭事件回传到主窗口 renderer
+  - 保留现有 `typelessOverlay:*` IPC
 
-- Delete: `src/main/text-inserter.ts`
-  旧主进程 `clipboard + paste` 输入链路。
+- Modify: `src/preload/index.ts`
+  - 在 `electronAPI` 上暴露专用方法：
+    - `showTypelessChatResult(payload)`
+    - `hideTypelessChatResult()`
+    - `onTypelessChatResultClosed(callback)`
 
-## Task 1: Build Typeless Execution-State Derivation
+- Create: `src/preload/index.test.ts`
+  - 覆盖 preload 暴露与关闭事件订阅
 
-**Files:**
-- Create: `src/renderer/packages/voice/typeless-execution-state.ts`
-- Test: `src/renderer/packages/voice/typeless-execution-state.test.ts`
+- Modify: `src/shared/electron-types.ts`
+  - 为上述专用方法与关闭事件补齐窄类型
+  - 不修改全局 `invoke(channel: string, ...args: any[])` 设计
 
-- [ ] **Step 1: Write the failing tests for assistant-message lookup and state mapping**
+- Modify: `src/renderer/stores/voiceStore.ts`
+  - `TypelessRequestContext.userText` 更名为 `asrText`
+  - 新增 `typelessChatResultAtom`
+  - 将 `closeTypelessChatResult` 改成“清 result，并按轮次清 request”，同时保持无参关闭当前结果的中间态兼容
 
-```ts
-import { createMessage } from '@shared/types'
-import { describe, expect, it } from 'vitest'
-import {
-  deriveTypelessExecutionState,
-  findAssistantMessageForUser,
-} from './typeless-execution-state'
+- Create: `src/renderer/stores/voiceStore.test.ts`
+  - 直接覆盖 `typelessChatResultAtom`
+  - 直接覆盖 `closeTypelessChatResult` 的无参关闭与按 `userMessageId` 精确清理
 
-describe('findAssistantMessageForUser', () => {
-  it('returns the assistant message immediately following the tracked user message', () => {
-    const olderUser = createMessage('user', 'older')
-    const olderAssistant = createMessage('assistant', 'older reply')
-    const trackedUser = createMessage('user', 'tracked')
-    const trackedAssistant = createMessage('assistant', 'tracked reply')
+- Modify: `src/renderer/packages/voice/typeless-request.ts`
+  - 返回 `asrText`
 
-    const result = findAssistantMessageForUser(
-      [olderUser, olderAssistant, trackedUser, trackedAssistant],
-      trackedUser.id
-    )
+- Modify: `src/renderer/packages/voice/typeless-request.test.ts`
+  - 断言 `context.asrText`
 
-    expect(result?.id).toBe(trackedAssistant.id)
-  })
-})
+- Modify: `src/renderer/hooks/useVoiceController.ts`
+  - 新一轮 `startRecording()` 前先抢占关闭旧中央卡片
+  - 在 `chat_result` 时显示中央结果卡片，而不是依赖 renderer 卡片组件
+  - 订阅主进程关闭回流，只清对应 `userMessageId`
+  - 保留底部状态条逻辑，不让工具执行路径误开中央卡片
 
-describe('deriveTypelessExecutionState', () => {
-  it('maps generating reasoning-only assistant output to thinking', () => {
-    const assistant = createMessage('assistant', '')
-    assistant.generating = true
-    assistant.contentParts = [{ type: 'reasoning', text: 'Thinking...' }]
+- Modify: `src/renderer/hooks/useVoiceController.test.tsx`
+  - 覆盖“纯聊天只开一次中央结果卡片”
+  - 覆盖“新一轮开始前先 hide 旧卡片”
+  - 覆盖“关闭回流只清对应轮次”
+  - 在 Task 3 同步把直接构造 `TypelessRequestContext` 的 fixture 从 `userText` 改成 `asrText`
 
-    const state = deriveTypelessExecutionState({ assistantMessage: assistant })
+- Modify: `src/renderer/routes/__root.tsx`
+  - 桌面端停止挂载 `TypelessChatResult`
+  - 非桌面端保持现状
 
-    expect(state.phase).toBe('thinking')
-  })
+- Create: `src/renderer/routes/__root.test.tsx`
+  - 覆盖桌面端 root 不再挂载 `TypelessChatResult`
+  - 覆盖非桌面端 root 仍保留现有挂载
 
-  it('keeps type_text requests in inserting while assistant is still generating', () => {
-    const assistant = createMessage('assistant', '')
-    assistant.generating = true
-    assistant.contentParts = [
-      {
-        type: 'tool-call',
-        state: 'result',
-        toolCallId: 'tc1',
-        toolName: 'mcp__system-control__type_text',
-        args: { text: '你好' },
-        result: { ok: true },
-      },
-    ]
+- Modify: `src/renderer/components/voice/TypelessChatResult.tsx`
+  - 若保留，明确为非桌面端使用
+  - 若确认无用，则在后续任务中删除
 
-    const state = deriveTypelessExecutionState({ assistantMessage: assistant })
+- Modify: `src/renderer/components/voice/TypelessChatResult.test.tsx`
+  - 缩小为非桌面端/组件局部行为测试
+  - 在 Task 3 同步把直接构造 `TypelessRequestContext` 的 fixture 从 `userText` 改成 `asrText`
 
-    expect(state.phase).toBe('inserting')
-  })
-})
-```
+- Create: `src/renderer/components/voice/voice-surface-policy.ts`
+  - 纯函数：决定桌面端是否还应挂载 renderer 内 `TypelessChatResult`
 
-- [ ] **Step 2: Run the targeted test to verify RED**
+- Create: `src/renderer/components/voice/voice-surface-policy.test.ts`
+  - 覆盖桌面端停用、非桌面端保留的分支判断
 
-Run:
-
-```bash
-pnpm test -- src/renderer/packages/voice/typeless-execution-state.test.ts
-```
-
-Expected: FAIL，提示模块或导出不存在，或实现尚未满足断言。
-
-- [ ] **Step 3: Implement the minimal pure-state module**
-
-```ts
-import type { Message } from '@shared/types'
-
-export type TypelessExecutionPhase =
-  | 'idle'
-  | 'thinking'
-  | 'inserting'
-  | 'executing'
-  | 'success'
-  | 'error'
-  | 'chat_result'
-
-export function findAssistantMessageForUser(messages: Message[], userMessageId: string) {
-  const userIndex = messages.findIndex((message) => message.id === userMessageId)
-  if (userIndex < 0) return null
-  return messages.slice(userIndex + 1).find((message) => message.role === 'assistant') ?? null
-}
-
-export function deriveTypelessExecutionState(args: { assistantMessage: Message | null }) {
-  const assistantMessage = args.assistantMessage
-  if (!assistantMessage) return { phase: 'thinking' as const }
-
-  if (assistantMessage.error) return { phase: 'error' as const, message: assistantMessage.error }
-
-  const toolCallParts = (assistantMessage.contentParts || []).filter((part) => part.type === 'tool-call')
-  const hasTypeTextToolCall = toolCallParts.some((part) => part.toolName === 'mcp__system-control__type_text')
-  const hasToolError = toolCallParts.some((part) => part.state === 'error')
-
-  if (assistantMessage.generating && toolCallParts.length > 0) {
-    return { phase: hasTypeTextToolCall ? ('inserting' as const) : ('executing' as const) }
-  }
-  if (assistantMessage.generating && toolCallParts.length === 0) {
-    return { phase: 'thinking' as const }
-  }
-  if (toolCallParts.length > 0) {
-    return { phase: hasToolError ? ('error' as const) : ('success' as const) }
-  }
-  const hasText = (assistantMessage.contentParts || []).some((part) => part.type === 'text' && part.text.trim())
-  return hasText ? { phase: 'chat_result' as const } : { phase: 'error' as const, message: '未生成可用结果' }
-}
-```
-
-- [ ] **Step 4: Run the targeted test to verify GREEN**
-
-Run:
-
-```bash
-pnpm test -- src/renderer/packages/voice/typeless-execution-state.test.ts
-```
-
-Expected: PASS
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/renderer/packages/voice/typeless-execution-state.ts src/renderer/packages/voice/typeless-execution-state.test.ts
-git commit -m "feat: derive typeless execution state"
-```
-
-## Task 2: Build Unified Typeless Request Submission
+## Task 1: Add the Main-Process Global Chat Result Window
 
 **Files:**
-- Create: `src/renderer/packages/voice/typeless-request.ts`
-- Test: `src/renderer/packages/voice/typeless-request.test.ts`
+- Create: `src/main/typeless-chat-result.ts`
+- Test: `src/main/typeless-chat-result.test.ts`
+- Reference: `src/main/typeless-overlay.ts`
 
-- [ ] **Step 1: Write the failing tests for request submission**
+- [ ] **Step 1: Write the failing tests for the new centered result window**
 
 ```ts
 import { describe, expect, it, vi } from 'vitest'
-import { startTypelessRequest } from './typeless-request'
+import {
+  buildTypelessChatResultWindowOptions,
+  getTypelessChatResultDisplayBounds,
+} from './typeless-chat-result'
 
-describe('startTypelessRequest', () => {
-  it('returns tracked request context before waiting for the submit promise to settle', async () => {
-    const ensureSession = vi.fn().mockResolvedValue({ id: 'session-1' })
-    let resolveSubmit: (() => void) | undefined
-    const submit = vi.fn().mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveSubmit = resolve
-        })
-    )
+describe('buildTypelessChatResultWindowOptions', () => {
+  it('creates a clickable centered result window instead of a click-through overlay', () => {
+    const options = buildTypelessChatResultWindowOptions()
 
-    const { context, submitPromise } = await startTypelessRequest({
-      text: '输入你好世界',
-      keyboardShortcuts: [],
-      ensureSession,
-      submit,
-      now: () => 123456,
+    expect(options.frame).toBe(false)
+    expect(options.transparent).toBe(true)
+    expect(options.focusable).toBe(true)
+  })
+})
+
+describe('getTypelessChatResultDisplayBounds', () => {
+  it('centers the result window in the target display work area', () => {
+    const bounds = getTypelessChatResultDisplayBounds({
+      x: 100,
+      y: 50,
+      width: 1600,
+      height: 900,
     })
 
-    expect(ensureSession).toHaveBeenCalledWith({ keyboardShortcuts: [], purgeOthers: false })
-    expect(submit).toHaveBeenCalledTimes(1)
-    expect(context.sessionId).toBe('session-1')
-    expect(context.userMessageId).toBeTruthy()
-    expect(context.userText).toBe('输入你好世界')
-    expect(context.startedAt).toBe(123456)
+    expect(bounds.x).toBeGreaterThan(100)
+    expect(bounds.y).toBeGreaterThan(50)
+  })
+})
 
-    resolveSubmit?.()
-    await submitPromise
+describe('showTypelessChatResult', () => {
+  it('pushes userMessageId, asrText, and replyText into the window payload', async () => {
+    await showTypelessChatResult({
+      userMessageId: 'u1',
+      asrText: '解释一下量子纠缠',
+      replyText: '量子纠缠是...',
+    })
+
+    expect(executeJavaScript).toHaveBeenCalledWith(expect.stringContaining('"userMessageId":"u1"'))
+    expect(executeJavaScript).toHaveBeenCalledWith(expect.stringContaining('"asrText":"解释一下量子纠缠"'))
+    expect(executeJavaScript).toHaveBeenCalledWith(expect.stringContaining('"replyText":"量子纠缠是..."'))
+  })
+})
+
+describe('ensureTypelessChatResultWindow', () => {
+  it('configures the result window as a global floating layer across workspaces', () => {
+    const win = createMockBrowserWindow()
+
+    ensureTypelessChatResultWindow({ createWindow: () => win })
+
+    expect(win.setAlwaysOnTop).toHaveBeenCalledWith(true, 'screen-saver')
+    expect(win.setVisibleOnAllWorkspaces).toHaveBeenCalledWith(true, { visibleOnFullScreen: true })
+  })
+
+  it('shows inactive first and still reports manual close for the tracked result', async () => {
+    const onClosed = vi.fn()
+    const win = createMockBrowserWindow()
+
+    bindTypelessChatResultWindow(win, { onClosed })
+    await showTypelessChatResult({
+      userMessageId: 'u1',
+      asrText: '解释一下量子纠缠',
+      replyText: '量子纠缠是...',
+    })
+
+    expect(win.showInactive).toHaveBeenCalled()
+    win.emit('close')
+    expect(onClosed).toHaveBeenCalledWith({ userMessageId: 'u1' })
   })
 })
 ```
@@ -249,296 +195,535 @@ describe('startTypelessRequest', () => {
 Run:
 
 ```bash
-pnpm test -- src/renderer/packages/voice/typeless-request.test.ts
+pnpm test -- src/main/typeless-chat-result.test.ts
 ```
 
-Expected: FAIL，提示模块缺失，或当前实现无法在提交 Promise 未完成前返回 request context。
+Expected:
 
-- [ ] **Step 3: Implement the minimal request helper**
+- FAIL，提示模块缺失或导出不存在
+
+- [ ] **Step 3: Implement the minimal chat-result window module**
 
 ```ts
-import { createMessage } from '@shared/types'
-import type { KeyboardShortcut } from '@shared/types/voice'
-import type { Message } from '@shared/types'
-
-export interface TypelessRequestContext {
-  sessionId: string
+export type TypelessChatResultPayload = {
   userMessageId: string
-  userText: string
-  startedAt: number
+  asrText: string
+  replyText: string
 }
 
-export async function startTypelessRequest(args: {
-  text: string
-  keyboardShortcuts: KeyboardShortcut[]
-  ensureSession: (options: { keyboardShortcuts: KeyboardShortcut[]; purgeOthers: boolean }) => Promise<{ id: string }>
-  submit: (sessionId: string, params: { newUserMsg: Message; needGenerating: boolean }) => Promise<unknown>
-  now?: () => number
-}): Promise<{ context: TypelessRequestContext; submitPromise: Promise<unknown> }> {
-  const session = await args.ensureSession({
-    keyboardShortcuts: args.keyboardShortcuts,
-    purgeOthers: false,
-  })
-  const newUserMsg = createMessage('user', args.text)
-  const submitPromise = args.submit(session.id, {
-    newUserMsg,
-    needGenerating: true,
-  })
+export function buildTypelessChatResultWindowOptions(): BrowserWindowConstructorOptions {
   return {
-    context: {
-      sessionId: session.id,
-      userMessageId: newUserMsg.id,
-      userText: args.text,
-      startedAt: (args.now ?? Date.now)(),
-    },
-    submitPromise,
+    width: 720,
+    height: 420,
+    show: false,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    focusable: true,
+    skipTaskbar: true,
   }
 }
 ```
+
+额外要求：
+
+- 多屏场景按“当前光标所在屏幕”的工作区中心定位
+- 必须具备与 `typeless-overlay.ts` 一致的全局悬浮能力：
+  - `setAlwaysOnTop(true, 'screen-saver')`
+  - `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })`
+- 首次展示尽量使用非抢焦点方式显示
+- 首次展示使用 `showInactive()` 时，不能破坏后续用户手动关闭
+- 不调用 `setIgnoreMouseEvents(true)`
+- `showTypelessChatResult(...)` 必须把 `userMessageId / asrText / replyText` 推入页面状态
+- 关闭时必须回传对应 `userMessageId`
+- 主进程页面更新路径参考 `typeless-overlay.ts` 现有的 `did-finish-load + executeJavaScript` ready/update 模式
 
 - [ ] **Step 4: Run the targeted test to verify GREEN**
 
 Run:
 
 ```bash
-pnpm test -- src/renderer/packages/voice/typeless-request.test.ts
+pnpm test -- src/main/typeless-chat-result.test.ts
 ```
 
-Expected: PASS
+Expected:
+
+- PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/renderer/packages/voice/typeless-request.ts src/renderer/packages/voice/typeless-request.test.ts
-git commit -m "feat: add typeless request bootstrap helper"
+git add src/main/typeless-chat-result.ts src/main/typeless-chat-result.test.ts
+git commit -m "feat: add typeless global chat result window"
 ```
 
-## Task 3: Integrate Request Tracking into Renderer UI Flow
+## Task 2: Wire Main/Preload IPC for the Result Window
 
 **Files:**
-- Modify: `src/renderer/stores/voiceStore.ts`
-- Modify: `src/renderer/components/voice/TypelessChatResult.tsx`
-- Modify: `src/renderer/hooks/useVoiceController.ts`
-- Test: `src/renderer/components/voice/TypelessChatResult.test.tsx`
+- Modify: `src/main/main.ts`
+- Modify: `src/preload/index.ts`
+- Create: `src/preload/index.test.ts`
+- Modify: `src/shared/electron-types.ts`
+- Test: `src/main/typeless-chat-result.test.ts`
+- Test: `src/preload/index.test.ts`
 
-- [ ] **Step 1: Write the failing result-window integration tests**
+- [ ] **Step 1: Write the failing main/preload IPC wiring tests**
 
-```tsx
-/**
- * @vitest-environment jsdom
- */
-import { Provider, createStore } from 'jotai'
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
-import { TypelessChatResult } from './TypelessChatResult'
-import { typelessRequestAtom } from '@/stores/voiceStore'
+```ts
+it('registers typelessChatResult show/hide handlers and relays close events to the main window', () => {
+  const ipcMain = { handle: vi.fn() }
+  const sendToMainWindow = vi.fn()
+  let emitClosed: ((payload: { userMessageId: string }) => void) | undefined
 
-vi.mock('@/stores/chatStore', () => ({
-  useSession: vi.fn(),
-}))
+  registerTypelessChatResultIpc({
+    ipcMain,
+    sendToMainWindow,
+    show: vi.fn(),
+    hide: vi.fn(),
+    onClosed: (callback) => {
+      emitClosed = callback
+      return () => {}
+    },
+  })
 
-it('renders the assistant reply for a plain chat_result request', () => {
-  // mock useSession to return tracked user + plain assistant reply
-  // set typelessRequestAtom with tracked userMessageId
-  // expect rendered text to contain assistant reply only
+  emitClosed?.({ userMessageId: 'u1' })
+  expect(sendToMainWindow).toHaveBeenCalledWith('typelessChatResult:closed', { userMessageId: 'u1' })
 })
 
-it('renders nothing when the tracked assistant message contains tool calls', () => {
-  // mock useSession to return tracked user + assistant tool-call
-  // expect query result to be null
+it('preload exposes typed chat-result helpers instead of requiring raw invoke channel strings', async () => {
+  await exposedApi.showTypelessChatResult({
+    userMessageId: 'u1',
+    asrText: '解释一下量子纠缠',
+    replyText: '量子纠缠是...',
+  })
+
+  expect(ipcRenderer.invoke).toHaveBeenCalledWith('typelessChatResult:show', {
+    userMessageId: 'u1',
+    asrText: '解释一下量子纠缠',
+    replyText: '量子纠缠是...',
+  })
+  expect(exposedApi.onTypelessChatResultClosed).toBeTypeOf('function')
 })
 ```
 
-- [ ] **Step 2: Run the targeted test to verify RED**
+- [ ] **Step 2: Run the targeted tests to verify RED**
 
 Run:
 
 ```bash
-pnpm test -- src/renderer/components/voice/TypelessChatResult.test.tsx
+pnpm test -- src/main/typeless-chat-result.test.ts src/preload/index.test.ts
 ```
 
-Expected: FAIL，提示 `typelessRequestAtom` 缺失或组件行为不符合断言。
+Expected:
 
-- [ ] **Step 3: Integrate the new helpers with minimal production changes**
+- FAIL，提示 IPC 注册 helper / preload 暴露尚不存在
+
+- [ ] **Step 3: Implement minimal IPC wiring**
 
 ```ts
-// src/renderer/stores/voiceStore.ts
-import type { TypelessRequestContext } from '@/packages/voice/typeless-request'
-
-export const typelessRequestAtom = atom<TypelessRequestContext | null>(null)
-export const closeTypelessChatResult = atom(null, (_get, set) => {
-  set(typelessRequestAtom, null)
-})
-
-// src/renderer/components/voice/TypelessChatResult.tsx
-const request = useAtomValue(typelessRequestAtom)
-const { session } = useSession(request?.sessionId ?? null)
-const assistantMessage = findAssistantMessageForUser(session?.messages ?? [], request?.userMessageId ?? '')
-const executionState = deriveTypelessExecutionState({ assistantMessage })
-
-if (!request || executionState.phase !== 'chat_result') return null
-
-// src/renderer/hooks/useVoiceController.ts
-if (settings.workMode === 'typeless') {
-  const { context, submitPromise } = await startTypelessRequest({
-    text,
-    keyboardShortcuts: settings.keyboardShortcuts || [],
-    ensureSession: ensureAngrymiaoSession,
-    submit: submitNewUserMessage,
+// typeless-chat-result.ts
+export function registerTypelessChatResultIpc(args: {
+  ipcMain: Pick<typeof import('electron').ipcMain, 'handle'>
+  show: (payload: TypelessChatResultPayload) => void
+  hide: () => void
+  onClosed: (callback: (payload: { userMessageId: string }) => void) => () => void
+  sendToMainWindow: (channel: string, payload: { userMessageId: string }) => void
+}) {
+  args.ipcMain.handle('typelessChatResult:show', (_event, payload) => {
+    args.show(payload)
+    return true
   })
-  setTypelessRequest(context)
-  void submitPromise.catch((error) => {
-    const message = error instanceof Error ? error.message : String(error)
-    setTypelessStatus({ type: 'error', message })
-    setTypelessRequest(null)
+
+  args.ipcMain.handle('typelessChatResult:hide', () => {
+    args.hide()
+    return true
+  })
+
+  args.onClosed((payload) => {
+    args.sendToMainWindow('typelessChatResult:closed', payload)
   })
 }
 ```
 
 额外要求：
 
-- 删除 `determineIntent` 的 typeless 主路径调用。
-- 删除 `handleControlIntent()`、`handleInputIntent()`、`handleChatIntent()` 作为 typeless 主流程入口。
-- 退役旧 `typelessChatResultAtom`，避免和 `typelessRequestAtom` 并存形成双状态源。
-- overlay 同步逻辑改为：
-  - `listening / processing` 仍使用录音态
-  - 若存在 `typelessRequestAtom`，根据 `deriveTypelessExecutionState()` 写入 `typelessStatusAtom`
-  - `chat_result` 必须映射为“隐藏 overlay，不写入 overlay 模式”
-- 只有 `chat_result` 才允许 `TypelessChatResult` 渲染。
-- 结果窗只展示 assistant 回复，不重复展示 `userText`。
-- `TypelessRequestContext` 生命周期必须显式落地：
-  - `submitPromise.catch(...)` 时立刻 `setTypelessRequest(null)`
-  - `success / error` 必须接入 `src/renderer/hooks/useVoiceController.ts` 现有 overlay 自动隐藏计时器，在 hide timer 完成时同步 `setTypelessRequest(null)`
-  - `chat_result` 必须替换 `src/renderer/components/voice/TypelessChatResult.tsx` 当前关闭路径，改为在用户点击关闭结果窗时通过 `closeTypelessChatResult` 清空 `typelessRequestAtom`
+- `registerTypelessChatResultIpc(...)` 必须可单测，不要把验证压到整个 `main.ts`
+- 主进程关闭回流应只发给真正主窗口，不发给 overlay/result 自身
+- preload 必须显式暴露：
+  - `showTypelessChatResult(payload)`
+  - `hideTypelessChatResult()`
+  - `onTypelessChatResultClosed(callback)`
+- `ElectronIPC` 为上述专用方法和 payload 补齐窄类型，而不是试图给全局 `invoke` 做大范围 overload
+
+- [ ] **Step 4: Run the targeted verification**
+
+Run:
+
+```bash
+pnpm test -- src/main/typeless-chat-result.test.ts src/preload/index.test.ts src/main/hotkey-dispatch.test.ts src/main/typeless-overlay.test.ts
+```
+
+Expected:
+
+- PASS
+- 既有 hotkey / overlay 测试不回归
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/main/main.ts src/preload/index.ts src/preload/index.test.ts src/shared/electron-types.ts src/main/typeless-chat-result.ts src/main/typeless-chat-result.test.ts
+git commit -m "feat: wire typeless chat result ipc"
+```
+
+## Task 3: Split Typeless Request State from Result-Window State
+
+**Files:**
+- Modify: `src/renderer/stores/voiceStore.ts`
+- Create: `src/renderer/stores/voiceStore.test.ts`
+- Modify: `src/renderer/packages/voice/typeless-request.ts`
+- Modify: `src/renderer/packages/voice/typeless-request.test.ts`
+- Modify: `src/renderer/hooks/useVoiceController.test.tsx`
+- Modify: `src/renderer/components/voice/TypelessChatResult.test.tsx`
+
+- [ ] **Step 1: Write the failing tests for `asrText` and store-level result cleanup**
+
+```ts
+it('stores asrText in the typeless request context', async () => {
+  const { context } = await startTypelessRequest(/* ... */)
+  expect(context.asrText).toBe('解释一下量子纠缠')
+})
+
+it('clears only the matching typeless request when closing a result by userMessageId', () => {
+  store.set(typelessRequestAtom, {
+    sessionId: 'session-new',
+    userMessageId: 'u-new',
+    asrText: '新的问题',
+    startedAt: 2,
+  })
+  store.set(typelessChatResultAtom, {
+    sessionId: 'session-old',
+    userMessageId: 'u-old',
+    asrText: '旧的问题',
+    replyText: '旧的回答',
+    shownAt: 1,
+  })
+
+  store.set(closeTypelessChatResult, { userMessageId: 'u-old' })
+
+  expect(store.get(typelessChatResultAtom)).toBeNull()
+  expect(store.get(typelessRequestAtom)?.userMessageId).toBe('u-new')
+})
+```
+
+- [ ] **Step 2: Run the targeted tests to verify RED**
+
+Run:
+
+```bash
+pnpm test -- src/renderer/packages/voice/typeless-request.test.ts src/renderer/stores/voiceStore.test.ts
+```
+
+Expected:
+
+- FAIL，仍然断言旧字段 `userText`
+- FAIL，`typelessChatResultAtom` / `closeTypelessChatResult` 尚未按新职责实现
+
+- [ ] **Step 3: Implement the minimal state-model changes**
+
+```ts
+export interface TypelessRequestContext {
+  sessionId: string
+  userMessageId: string
+  asrText: string
+  startedAt: number
+}
+
+export interface TypelessChatResultContext {
+  sessionId: string
+  userMessageId: string
+  asrText: string
+  replyText: string
+  shownAt: number
+}
+
+export const closeTypelessChatResult = atom(
+  null,
+  (get, set, payload?: { userMessageId?: string }) => {
+    const currentRequest = get(typelessRequestAtom)
+    const currentResult = get(typelessChatResultAtom)
+    const targetUserMessageId =
+      payload?.userMessageId ?? currentResult?.userMessageId ?? currentRequest?.userMessageId
+
+    set(typelessChatResultAtom, null)
+
+    if (!targetUserMessageId || currentRequest?.userMessageId === targetUserMessageId) {
+      set(typelessRequestAtom, null)
+    }
+  }
+)
+```
+
+额外要求：
+
+- `typelessStatusAtom` 只服务底部状态条
+- `typelessRequestAtom` 只服务 assistant 执行态推导
+- `typelessChatResultAtom` 只服务中央结果卡片
+- `closeTypelessChatResult` 需要支持“按 `userMessageId` 清理对应轮次”
+- Task 3 内必须同步更新所有直接构造 `TypelessRequestContext` 的测试 fixture：
+  - `src/renderer/hooks/useVoiceController.test.tsx`
+  - `src/renderer/components/voice/TypelessChatResult.test.tsx`
+- `closeTypelessChatResult` 在本任务阶段必须保持无参可调用，避免中间态破坏现有 `TypelessChatResult.tsx`；精确 payload 调用点放到 Task 4/5 再接入
 
 - [ ] **Step 4: Run the targeted tests to verify GREEN**
 
 Run:
 
 ```bash
-pnpm test -- src/renderer/packages/voice/typeless-execution-state.test.ts src/renderer/packages/voice/typeless-request.test.ts src/renderer/components/voice/TypelessChatResult.test.tsx
+pnpm test -- src/renderer/packages/voice/typeless-request.test.ts src/renderer/stores/voiceStore.test.ts src/renderer/hooks/useVoiceController.test.tsx src/renderer/components/voice/TypelessChatResult.test.tsx
 ```
 
-Expected: PASS
+Expected:
 
-- [ ] **Step 5: Verify request cleanup paths with a dedicated regression test**
-
-在 `src/renderer/components/voice/TypelessChatResult.test.tsx` 或相邻测试中补一条：
-
-- 关闭结果窗会清空 `typelessRequestAtom`
-- 工具执行完成的 `success`/`error` 路径不会留下 stale request
-
-Run:
-
-```bash
-pnpm test -- src/renderer/components/voice/TypelessChatResult.test.tsx
-```
-
-Expected: PASS
-
-- [ ] **Step 6: Run a focused typecheck on the changed renderer code**
-
-Run:
-
-```bash
-pnpm check
-```
-
-Expected: PASS
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add src/renderer/stores/voiceStore.ts src/renderer/components/voice/TypelessChatResult.tsx src/renderer/components/voice/TypelessChatResult.test.tsx src/renderer/hooks/useVoiceController.ts
-git commit -m "feat: unify typeless renderer flow with chat pipeline"
-```
-
-## Task 4: Remove the Legacy Text-Insertion IPC
-
-**Files:**
-- Modify: `src/main/main.ts`
-- Modify: `src/preload/index.ts`
-- Modify: `src/shared/electron-types.ts`
-- Delete: `src/main/text-inserter.ts`
-
-- [ ] **Step 1: Verify the legacy path is no longer used**
-
-Run:
-
-```bash
-git grep -n -I -E "insertTextToActiveApp|insertText\\(|text:insert|text:isInsertionSupported" src/main src/preload src/renderer src/shared
-```
-
-Expected before cleanup: 仅剩旧 IPC 定义与实现，不再有 renderer 业务调用。
-
-- [ ] **Step 2: Remove the dead IPC and legacy text inserter**
-
-```ts
-// src/main/main.ts
-// 删除：
-// import { insertTextToActiveApp, isTextInsertionSupported } from './text-inserter'
-// ipcMain.handle('text:insert', ...)
-// ipcMain.handle('text:isInsertionSupported', ...)
-
-// src/preload/index.ts
-// 删除 insertText / isTextInsertionSupported 暴露
-
-// src/shared/electron-types.ts
-// 删除旧 insertText 类型
-```
-
-并删除文件：
-
-```bash
-git rm src/main/text-inserter.ts
-```
-
-- [ ] **Step 3: Run regression checks after cleanup**
-
-Run:
-
-```bash
-pnpm test -- src/main/hotkey-dispatch.test.ts src/main/typeless-overlay.test.ts src/renderer/packages/voice/typeless-execution-state.test.ts src/renderer/packages/voice/typeless-request.test.ts src/renderer/components/voice/TypelessChatResult.test.tsx
-pnpm check
-```
-
-Expected: PASS
-
-- [ ] **Step 4: Confirm no dead references remain**
-
-Run:
-
-```bash
-git grep -n -I -E "insertTextToActiveApp|insertText\\(|text:insert|text:isInsertionSupported" src/main src/preload src/renderer src/shared
-```
-
-Expected: no output
+- PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/main/main.ts src/preload/index.ts src/shared/electron-types.ts
-git commit -m "refactor: remove legacy typeless text insertion ipc"
+git add src/renderer/stores/voiceStore.ts src/renderer/stores/voiceStore.test.ts src/renderer/packages/voice/typeless-request.ts src/renderer/packages/voice/typeless-request.test.ts src/renderer/hooks/useVoiceController.test.tsx src/renderer/components/voice/TypelessChatResult.test.tsx
+git commit -m "refactor: split typeless request and result state"
 ```
 
-## Task 5: Final Verification and Review Handoff
+## Task 4: Drive the Main-Process Result Window from `useVoiceController`
+
+**Files:**
+- Modify: `src/renderer/hooks/useVoiceController.ts`
+- Modify: `src/renderer/hooks/useVoiceController.test.tsx`
+- Modify: `src/renderer/stores/voiceStore.ts`
+- Reference: `src/renderer/packages/voice/typeless-execution-state.ts`
+
+- [ ] **Step 1: Write the failing hook tests for chat-result display and close flow**
+
+```tsx
+it('shows the centered chat result window once for a pure chat_result assistant reply', async () => {
+  expect(showTypelessChatResult).toHaveBeenCalledWith({
+    userMessageId: trackedUser.id,
+    asrText: '解释一下量子纠缠',
+    replyText: '量子纠缠是...',
+  })
+})
+
+it('hides the previous chat result window before starting a new recording', async () => {
+  expect(hideTypelessChatResult).toHaveBeenCalled()
+})
+
+it('clears typelessStatus after showing the centered chat result window', async () => {
+  expect(store.get(typelessStatusAtom)).toBeNull()
+})
+
+it('cleans only the matching request when the main process reports a close event', async () => {
+  // emit onTypelessChatResultClosed for old userMessageId
+  // expect current request to remain untouched
+})
+
+it('closes the centered chat result window and clears matching state when typeless mode is exited or the hook unmounts', async () => {
+  expect(hideTypelessChatResult).toHaveBeenCalled()
+})
+
+it('does not show the centered chat result window for tool success states', async () => {
+  expect(showTypelessChatResult).not.toHaveBeenCalled()
+})
+
+it('does not show the centered chat result window for tool error states', async () => {
+  expect(showTypelessChatResult).not.toHaveBeenCalled()
+})
+```
+
+- [ ] **Step 2: Run the targeted tests to verify RED**
+
+Run:
+
+```bash
+pnpm test -- src/renderer/hooks/useVoiceController.test.tsx
+```
+
+Expected:
+
+- FAIL，尚未调用 `typelessChatResult:*`
+- FAIL，尚未处理关闭回流
+
+- [ ] **Step 3: Implement the minimal renderer integration**
+
+```ts
+if (executionState.phase === 'chat_result' && request && replyText.trim()) {
+  void window.electronAPI?.invoke('typelessOverlay:hide')
+  setTypelessChatResult({
+    sessionId: request.sessionId,
+    userMessageId: request.userMessageId,
+    asrText: request.asrText,
+    replyText,
+    shownAt: Date.now(),
+  })
+  void window.electronAPI?.showTypelessChatResult?.(payload)
+}
+```
+
+额外要求：
+
+- 去重条件必须依赖 `userMessageId`，避免重复 `show`
+- `startRecording()` 开头先：
+  - `hideTypelessChatResult()`
+  - 清 `typelessChatResultAtom`
+  - 清 `typelessRequestAtom`
+  - 清 `typelessStatusAtom`
+- `chat_result` 展示成功后，显式清空 `typelessStatusAtom`，避免 `typelessRequest` 清理后底部状态条回弹
+- 只在 `chat_result` 路径打开中央结果卡片
+- `success / error` 工具路径继续沿用底部状态条自动隐藏
+- 工具 `success / error` 测试必须显式断言 `showTypelessChatResult` 从未被调用
+- 订阅 `onTypelessChatResultClosed` 后，按 `userMessageId` 条件清理，避免旧事件误清新请求
+- 在切出 `typeless` 模式、effect cleanup、窗口销毁清理时：
+  - `hideTypelessChatResult()`
+  - 清空匹配的 `typelessChatResultAtom`
+  - 清空匹配的 `typelessRequestAtom`
+  - 清空 `typelessStatusAtom`
+
+- [ ] **Step 4: Run the targeted tests to verify GREEN**
+
+Run:
+
+```bash
+pnpm test -- src/renderer/hooks/useVoiceController.test.tsx src/renderer/packages/voice/typeless-execution-state.test.ts
+```
+
+Expected:
+
+- PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/renderer/hooks/useVoiceController.ts src/renderer/hooks/useVoiceController.test.tsx src/renderer/stores/voiceStore.ts
+git commit -m "feat: drive typeless main-process result window"
+```
+
+## Task 5: Remove the Desktop Renderer Card Path
+
+**Files:**
+- Modify: `src/renderer/routes/__root.tsx`
+- Create: `src/renderer/routes/__root.test.tsx`
+- Create: `src/renderer/components/voice/voice-surface-policy.ts`
+- Create: `src/renderer/components/voice/voice-surface-policy.test.ts`
+- Modify: `src/renderer/components/voice/TypelessChatResult.tsx`
+- Modify: `src/renderer/components/voice/TypelessChatResult.test.tsx`
+
+- [ ] **Step 1: Write the failing desktop/non-desktop surface policy and root-mount tests**
+
+```ts
+it('disables renderer TypelessChatResult on desktop', () => {
+  expect(shouldRenderInAppTypelessChatResult({ platformType: 'desktop' })).toBe(false)
+})
+
+it('keeps renderer TypelessChatResult for non-desktop platforms', () => {
+  expect(shouldRenderInAppTypelessChatResult({ platformType: 'web' })).toBe(true)
+})
+
+it('does not mount TypelessChatResult in the desktop root when typeless mode is active', async () => {
+  renderRoot({ platformType: 'desktop', workMode: 'typeless' })
+  expect(screen.queryByTestId('typeless-chat-result')).toBeNull()
+})
+```
+
+- [ ] **Step 2: Run the targeted test to verify RED**
+
+Run:
+
+```bash
+pnpm test -- src/renderer/components/voice/voice-surface-policy.test.ts src/renderer/routes/__root.test.tsx
+```
+
+Expected:
+
+- FAIL，helper 尚不存在
+
+- [ ] **Step 3: Implement the minimal removal**
+
+按 spec 的确定路径执行，不再保留“直接删除组件”的分支：
+
+```ts
+// voice-surface-policy.ts
+export function shouldRenderInAppTypelessChatResult(args: { platformType: string }) {
+  return args.platformType !== 'desktop'
+}
+
+// __root.tsx
+{voiceSettings.workMode === 'typeless'
+  ? platform.type === 'desktop'
+    ? null
+    : <TypelessPanel />
+  : <VoicePanel />}
+
+{shouldRenderInAppTypelessChatResult({ platformType: platform.type }) ? <TypelessChatResult /> : null}
+```
+
+要求：
+
+- 非桌面端保持现状
+- 桌面端不能同时存在“主进程中央结果窗口 + renderer 右上角卡片”双展示源
+- `TypelessChatResult.test.tsx` 只保留组件局部行为测试，不再承担桌面端挂载策略验证
+- `__root.test.tsx` 必须直接覆盖桌面端不挂载、非桌面端仍挂载的集成行为，而不是只验证纯函数 helper
+
+- [ ] **Step 4: Run the targeted verification**
+
+Run:
+
+```bash
+pnpm test -- src/renderer/components/voice/voice-surface-policy.test.ts src/renderer/routes/__root.test.tsx src/renderer/components/voice/TypelessChatResult.test.tsx src/renderer/hooks/useVoiceController.test.tsx
+```
+
+Expected:
+
+- PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/renderer/routes/__root.tsx src/renderer/routes/__root.test.tsx src/renderer/components/voice/voice-surface-policy.ts src/renderer/components/voice/voice-surface-policy.test.ts src/renderer/components/voice/TypelessChatResult.tsx src/renderer/components/voice/TypelessChatResult.test.tsx
+git commit -m "refactor: remove desktop renderer typeless result card"
+```
+
+## Task 6: Final Verification and Manual Check
 
 **Files:**
 - Modify: none
-- Test: existing changed files only
+- Test: changed files only
 
 - [ ] **Step 1: Run the focused verification suite**
 
 Run:
 
 ```bash
-pnpm test -- src/main/hotkey-dispatch.test.ts src/main/typeless-overlay.test.ts src/renderer/packages/voice/typeless-execution-state.test.ts src/renderer/packages/voice/typeless-request.test.ts src/renderer/components/voice/TypelessChatResult.test.tsx
+pnpm test -- src/main/hotkey-dispatch.test.ts src/main/typeless-overlay.test.ts src/main/typeless-chat-result.test.ts src/preload/index.test.ts src/renderer/packages/voice/typeless-execution-state.test.ts src/renderer/packages/voice/typeless-request.test.ts src/renderer/stores/voiceStore.test.ts src/renderer/components/voice/voice-surface-policy.test.ts src/renderer/routes/__root.test.tsx src/renderer/components/voice/TypelessChatResult.test.tsx src/renderer/hooks/useVoiceController.test.tsx
+```
+
+Expected:
+
+- PASS
+
+- [ ] **Step 2: Run repository typecheck signal**
+
+Run:
+
+```bash
 pnpm check
 ```
 
-Expected: PASS
+Expected:
 
-- [ ] **Step 2: Run a targeted desktop build verification**
+- 若 PASS：说明本轮接口改动未引入新的类型问题
+- 若 FAIL：必须记录失败输出，并确认报错没有新增命中本轮修改文件；若命中本轮修改文件，先修复再继续
+
+- [ ] **Step 3: Run desktop build verification**
 
 Run:
 
@@ -549,20 +734,49 @@ pnpm build:preload
 pnpm build:renderer
 ```
 
-Expected: PASS
+Expected:
 
-- [ ] **Step 3: Record manual verification checklist results**
+- PASS
 
-至少手动验证：
+- [ ] **Step 4: Run residual reference checks**
 
-- “输入你好世界” -> `thinking -> inserting -> success`，不弹结果窗。
-- “复制” -> `thinking -> executing -> success`，不弹结果窗。
-- “解释一下量子纠缠” -> `thinking -> chat_result`，弹极简结果窗。
-- 工具失败场景 -> `error`。
-
-- [ ] **Step 4: Commit any last test-only or wiring fixes**
+Run:
 
 ```bash
-git add -A
-git commit -m "test: finalize typeless chat unification verification"
+git grep -n "TypelessChatResult" -- src/renderer
+git grep -n "typelessChatResult:show\\|typelessChatResult:hide" -- src/main src/preload src/shared src/renderer
+```
+
+Expected:
+
+- 桌面端 renderer 卡片路径已不再参与显示
+- 新 IPC 只在预期文件中出现
+
+- [ ] **Step 5: Record manual verification results**
+
+至少验证：
+
+- “解释一下量子纠缠”
+  - 底部状态条：`listening -> processing -> thinking`
+  - 然后弹中央结果卡片
+  - 卡片显示 `ASR 识别内容 + AI 聊天回复`
+  - 不自动消失，点关闭后消失
+
+- 卡片打开时再次触发 typeless
+  - 旧卡片立即关闭
+  - 新一轮进入 `listening`
+
+- “复制”/“输入你好世界”
+  - 只走底部状态条
+  - 不弹中央结果卡片
+
+- 切出 `typeless` 模式或窗口清理
+  - 中央结果卡片关闭
+  - 不残留旧 `status / request / result`
+
+- [ ] **Step 6: Commit final verification-only fixes**
+
+```bash
+git add src/main/typeless-chat-result.ts src/main/typeless-chat-result.test.ts src/main/main.ts src/preload/index.ts src/preload/index.test.ts src/shared/electron-types.ts src/renderer/stores/voiceStore.ts src/renderer/stores/voiceStore.test.ts src/renderer/packages/voice/typeless-request.ts src/renderer/packages/voice/typeless-request.test.ts src/renderer/hooks/useVoiceController.ts src/renderer/hooks/useVoiceController.test.tsx src/renderer/routes/__root.tsx src/renderer/routes/__root.test.tsx src/renderer/components/voice/voice-surface-policy.ts src/renderer/components/voice/voice-surface-policy.test.ts src/renderer/components/voice/TypelessChatResult.tsx src/renderer/components/voice/TypelessChatResult.test.tsx
+git commit -m "test: finalize typeless global chat result flow"
 ```
