@@ -17,9 +17,12 @@ description: Control the user's computer through voice-command-style text using 
 ## Tool Mapping
 
 - Text input:
-  Use `mcp__system-control__type_text` when the user says `打`、`输入`、`写`、`键入`、`打字` followed by content.
+  Only use `mcp__system-control__type_text` when the user clearly wants to input literal text into the active app, such as `打`、`输入`、`写`、`键入`、`打字` followed by content.
+  Patterns like `输入 <trigger word>`、`打 <trigger word>`、`写 <trigger word>`、`键入 <trigger word>` mean the trigger word itself should be typed as literal text, not executed as a shortcut.
+  Helper phrases like `帮我`、`请`、`一下`、`输出` do not by themselves override a shortcut trigger word.
 - Keyboard shortcuts:
   Use `mcp__system-control__keyboard_control` when the user asks for copy, paste, cut, undo, redo, select all, save, enter, backspace, tab, switch window, or escape-like actions.
+  If a user-configured trigger word is present anywhere in the utterance, prefer shortcut execution unless the user explicitly says they want to type the literal text itself.
 - Browser and search:
   Use `mcp__system-control__open_browser` for `打开浏览器`、`打开网页`、`搜索`、`上网`.
 - System actions:
@@ -64,10 +67,11 @@ For `Windows`:
 
 ## Intent Priority
 
-1. Text input
-2. Shortcut execution
-3. Browser open or search
-4. System control
+1. User-configured shortcut mapping
+2. Default shortcut execution
+3. Literal text input
+4. Browser open or search
+5. System control
 
 ## Response Style
 

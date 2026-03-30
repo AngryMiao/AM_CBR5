@@ -332,6 +332,7 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
             name: z.string(),
             triggerWords: z.array(z.string()),
             keyCodes: z.array(z.string()),
+            recordedKeys: z.array(z.string()).optional(),
             enabled: z.boolean().default(true),
           })
         )

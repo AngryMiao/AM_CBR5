@@ -77,6 +77,115 @@ function escapeTableCell(value: string): string {
   return value.replace(/\|/g, '\\|')
 }
 
+const EXPLICIT_LITERAL_TEXT_MARKERS = ['输入文字', '输出文字', '这几个字', '字面', '原样', 'literal text']
+const LEADING_POLITE_PREFIXES = [
+  '请帮我',
+  '请你帮我',
+  '帮我',
+  '请你',
+  '请',
+  '麻烦你',
+  '麻烦',
+  '劳烦你',
+  '劳烦',
+  '给我',
+  '替我',
+  '帮忙',
+]
+const DIRECT_LITERAL_INPUT_PREFIX_PATTERNS = [
+  /^(?:把|将)?(?:输入|键入|打字|打出|写出|敲出|敲入|写|打|敲)(?:一下|一下子)?(?:文字|文本|内容|这几个字|这些字)?$/,
+  /^(?:把|将)?(?:文字|文本|内容|这几个字|这些字)?(?:输入|键入|打字|打出|写出|敲出|敲入|写|打|敲)(?:一下|一下子)?$/,
+]
+const NEUTRAL_LITERAL_INPUT_SUFFIX_PATTERN = /^(?:吧|呀|啊|呢|啦|了|哦|噢|一下|一下子)?$/
+
+function normalizeIntentFragment(value: string): string {
+  return value.replace(/[\s"'`“”‘’。，！？!?,、：:；;]/g, '')
+}
+
+function stripLeadingPolitePrefixes(value: string): string {
+  let result = value
+  let hasRemovedPrefix = true
+
+  while (hasRemovedPrefix) {
+    hasRemovedPrefix = false
+    for (const prefix of LEADING_POLITE_PREFIXES) {
+      if (result.startsWith(prefix)) {
+        result = result.slice(prefix.length)
+        hasRemovedPrefix = true
+        break
+      }
+    }
+  }
+
+  return result
+}
+
+function hasDirectLiteralInputPrefix(text: string, triggerWord: string): boolean {
+  const triggerIndex = text.indexOf(triggerWord)
+  if (triggerIndex < 0) {
+    return false
+  }
+
+  const prefix = stripLeadingPolitePrefixes(normalizeIntentFragment(text.slice(0, triggerIndex)))
+  const suffix = normalizeIntentFragment(text.slice(triggerIndex + triggerWord.length))
+  if (!prefix || !NEUTRAL_LITERAL_INPUT_SUFFIX_PATTERN.test(suffix)) {
+    return false
+  }
+
+  return DIRECT_LITERAL_INPUT_PREFIX_PATTERNS.some((pattern) => pattern.test(prefix))
+}
+
+function isExplicitLiteralTextRequest(text: string, triggerWord = ''): boolean {
+  if (EXPLICIT_LITERAL_TEXT_MARKERS.some((marker) => text.includes(marker))) {
+    return true
+  }
+
+  if (!triggerWord) {
+    return false
+  }
+
+  return hasDirectLiteralInputPrefix(text, triggerWord)
+}
+
+function buildCurrentTurnShortcutDirective(
+  currentTurnUserText = '',
+  keyboardShortcuts: KeyboardShortcut[] = []
+): string {
+  const normalizedText = currentTurnUserText.trim()
+  if (!normalizedText) {
+    return ''
+  }
+
+  const enabledShortcuts = keyboardShortcuts.filter((shortcut) => shortcut.enabled)
+  const matchedEntries = enabledShortcuts.flatMap((shortcut) =>
+    shortcut.triggerWords
+      .filter((triggerWord) => triggerWord && normalizedText.includes(triggerWord))
+      .map((triggerWord) => ({
+        shortcut,
+        triggerWord,
+      }))
+  )
+
+  if (matchedEntries.length === 0) {
+    return ''
+  }
+
+  matchedEntries.sort((left, right) => right.triggerWord.length - left.triggerWord.length)
+  const { shortcut, triggerWord } = matchedEntries[0]
+  if (isExplicitLiteralTextRequest(normalizedText, triggerWord)) {
+    return ''
+  }
+
+  return `## Current Turn Shortcut Directive
+
+Current turn matched configured trigger word: \`${triggerWord}\`
+Current utterance: \`${normalizedText}\`
+For this turn, prefer \`mcp__system-control__keyboard_control\` over \`mcp__system-control__type_text\`.
+Do not type the matched trigger word as literal text unless the user explicitly asks to input the literal text itself.
+Matched recordedKeys: ${shortcut.recordedKeys?.length ? `\`${JSON.stringify(shortcut.recordedKeys)}\`` : '`[]`'}
+Matched keyCodes fallback: \`${JSON.stringify(shortcut.keyCodes)}\``
+}
+
 function buildKeyboardShortcutOverrides(keyboardShortcuts: KeyboardShortcut[] = []): string {
   const enabledShortcuts = keyboardShortcuts.filter((shortcut) => shortcut.enabled)
   if (enabledShortcuts.length === 0) {
@@ -86,8 +195,9 @@ function buildKeyboardShortcutOverrides(keyboardShortcuts: KeyboardShortcut[] = 
   const rows = enabledShortcuts
     .map((shortcut) => {
       const triggerWords = escapeTableCell(shortcut.triggerWords.join(' / '))
+      const recordedKeys = escapeTableCell(shortcut.recordedKeys?.length ? JSON.stringify(shortcut.recordedKeys) : '')
       const keyCodes = escapeTableCell(JSON.stringify(shortcut.keyCodes))
-      return `| ${triggerWords} | ${keyCodes} |`
+      return `| ${triggerWords} | ${recordedKeys} | ${keyCodes} |`
     })
     .join('\n')
 
@@ -95,23 +205,48 @@ function buildKeyboardShortcutOverrides(keyboardShortcuts: KeyboardShortcut[] = 
 
 以下是用户在应用内配置的键盘快捷键映射，优先级高于上文 Default Shortcut Mapping。
 
-| Trigger words | keyCodes |
-| --- | --- |
+| Trigger words | recordedKeys | keyCodes |
+| --- | --- | --- |
 ${rows}
 
 使用规则：
-- 当用户语句命中上表 trigger words 时，优先调用 \`mcp__system-control__keyboard_control\`，并严格使用表中 keyCodes。
+- 当用户语句命中上表 trigger words 时，优先参考 recordedKeys。
+- 即使 trigger word 出现在更长的句子中，也应视为命中；只要句子包含某个已配置 trigger word，就应优先执行对应快捷键，而不是把该 trigger word 当作普通文本输出。
+- 只有用户明确要求输入文字本身时，才调用 \`mcp__system-control__type_text\`；如果用户是在要求“输入这几个字”，才应把对应词语按文本输入。
+- 若用户直接说“输入 / 打 / 写 / 键入 <trigger word>”，表示要把该 trigger word 当作文本输入，不要执行快捷键。
+- 若 recordedKeys 对应的键在 HID reference 中可找到稳定映射，则生成 keyCodes 后调用 \`mcp__system-control__keyboard_control\`。
+- 若 recordedKeys 只包含非修饰键，则按 recordedKeys 当前顺序依次生成按下/抬起序列，例如 \`["Digit1","Digit2","Digit3"]\` 应执行成 \`123\`。
+- 若 recordedKeys 为空，则回退到表中已有 keyCodes。
+- 若 reference 中没有稳定映射，不要伪造高风险键码。
 - 如果上表未命中，再回退到上文 skill bundle 自带的默认快捷键映射。
 - 工具执行成功后保持简短确认，不要重复解释 keyCodes。`
+}
+
+function buildHidReferenceBlock(hidReference = ''): string {
+  if (!hidReference.trim()) {
+    return ''
+  }
+
+  return `## HID Reference Usage Rules
+
+- 对明确的键盘动作，可根据 recordedKeys 和下方 HID reference 生成 keyCodes。
+- 组合键顺序应遵循：修饰键先按下，普通键按下并抬起，最后修饰键逆序抬起。
+- 若 reference 中没有稳定映射，不要伪造高风险键码。
+
+${hidReference.trim()}`
 }
 
 export function buildAngrymiaoAgentSkillPrompt(
   platformType: string,
   template: string = DEFAULT_PROMPT_TEMPLATE,
-  keyboardShortcuts: KeyboardShortcut[] = []
+  keyboardShortcuts: KeyboardShortcut[] = [],
+  hidReference = '',
+  currentTurnUserText = ''
 ): string {
   const platformLabel = getPlatformLabel(platformType)
   const keyboardShortcutOverrides = buildKeyboardShortcutOverrides(keyboardShortcuts)
+  const hidReferenceBlock = buildHidReferenceBlock(hidReference)
+  const currentTurnShortcutDirective = buildCurrentTurnShortcutDirective(currentTurnUserText, keyboardShortcuts)
 
   return `<runtime_environment>
 当前检测到的操作系统环境：${platformLabel}。
@@ -120,12 +255,13 @@ export function buildAngrymiaoAgentSkillPrompt(
 - 如果当前环境与用户说法冲突，优先相信运行时检测到的系统环境。
 </runtime_environment>
 
-${template}${keyboardShortcutOverrides ? `\n\n${keyboardShortcutOverrides}` : ''}`
+${currentTurnShortcutDirective ? `${currentTurnShortcutDirective}\n\n` : ''}${template}${keyboardShortcutOverrides ? `\n\n${keyboardShortcutOverrides}` : ''}${hidReferenceBlock ? `\n\n${hidReferenceBlock}` : ''}`
 }
 
 export async function resolveAgentSkillPrompt(
   skill?: AgentSkillReference | null,
-  voiceSettings?: Pick<VoiceSettings, 'keyboardShortcuts'> | null
+  voiceSettings?: Pick<VoiceSettings, 'keyboardShortcuts'> | null,
+  currentTurnUserText = ''
 ): Promise<string> {
   if (!skill) {
     return ''
@@ -139,7 +275,14 @@ export async function resolveAgentSkillPrompt(
       }
       const promptTemplate = stripFrontmatter(await readSkillBundleTextFile(manifest.id, manifest.prompt.file))
       const platformType = await platform.getPlatform()
-      return buildAngrymiaoAgentSkillPrompt(platformType, promptTemplate, voiceSettings?.keyboardShortcuts || [])
+      const hidReference = await readSkillBundleTextFile(manifest.id, 'docs/keyboard-hid-reference.md')
+      return buildAngrymiaoAgentSkillPrompt(
+        platformType,
+        promptTemplate,
+        voiceSettings?.keyboardShortcuts || [],
+        hidReference,
+        currentTurnUserText
+      )
     }
     default:
       return ''

@@ -1,156 +1,33 @@
-import { buildKeyCodes, getDefaultKeyboardShortcuts, KEY_CATEGORIES } from '@shared/defaults/keyboard-shortcuts'
+import { getDefaultKeyboardShortcuts } from '@shared/defaults/keyboard-shortcuts'
 import type { KeyboardShortcut } from '@shared/types/voice'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { getRecordedKeyDisplayLabel, hasStableHidMapping, orderRecordedKeys } from '@shared/voice-key-reference'
+import { useCallback, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import platform from '@/platform'
+import { KeyboardShortcutRecorder } from './KeyboardShortcutRecorder'
 
-const HID_KEY_DISPLAY: Record<string, string> = {
-  CtrlLeft: 'Ctrl',
-  CmdLeft: 'Cmd/Win',
-  ShiftLeft: 'Shift',
-  AltLeft: 'Alt',
-  Num0: '0',
-  Num1: '1',
-  Num2: '2',
-  Num3: '3',
-  Num4: '4',
-  Num5: '5',
-  Num6: '6',
-  Num7: '7',
-  Num8: '8',
-  Num9: '9',
-  Up: '↑',
-  Down: '↓',
-  Left: '←',
-  Right: '→',
-  PageUp: 'PgUp',
-  PageDown: 'PgDn',
-  PrintScreen: 'PrtScr',
-  BracketLeft: '[',
-  BracketRight: ']',
-  Backslash: '\\',
-  Semicolon: ';',
-  Apostrophe: "'",
-  Grave: '`',
-  Comma: ',',
-  Period: '.',
-  Slash: '/',
-  Minus: '-',
-  Equal: '=',
+const LEGACY_SHORTCUT_MESSAGE = '旧版配置：当前仅保存 keyCodes，重新录制后可升级为真实键名配置'
+const UNSTABLE_HID_MESSAGE = '该键当前没有稳定 HID 映射，执行可能失败'
+
+function parseTriggerWords(value: string): string[] {
+  return value
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
-const HID_CATEGORY_NAMES: Record<string, string> = {
-  modifiers: '修饰键',
-  letters: '字母',
-  numbers: '数字',
-  function: 'F键',
-  arrows: '方向',
-  special: '特殊',
-  punctuation: '标点',
+function formatRecordedKeys(keys?: string[]): string {
+  return orderRecordedKeys(keys || [])
+    .map((code) => getRecordedKeyDisplayLabel(code))
+    .join(' + ')
 }
 
-const MAX_COMBO_KEYS = 7
-
-function getHIDKeyLabel(key: string): string {
-  return HID_KEY_DISPLAY[key] || key
+function isLegacyShortcut(shortcut: KeyboardShortcut): boolean {
+  return !shortcut.recordedKeys?.length && shortcut.keyCodes.length > 0
 }
 
-function KeyComboBuilder({ slots, onChange }: { slots: string[]; onChange: (slots: string[]) => void }) {
-  const [showPicker, setShowPicker] = useState(false)
-  const [activeCategory, setActiveCategory] = useState<string>('modifiers')
-  const pickerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!showPicker) {
-      return
-    }
-    const handler = (event: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
-        setShowPicker(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showPicker])
-
-  const toggleKey = (key: string) => {
-    if (slots.includes(key)) {
-      onChange(slots.filter((item) => item !== key))
-      return
-    }
-    if (slots.length < MAX_COMBO_KEYS) {
-      onChange([...slots, key])
-    }
-  }
-
-  return (
-    <div className="relative space-y-1.5">
-      <div className="flex flex-wrap items-center gap-1">
-        {slots.map((key) => (
-          <span
-            key={key}
-            className="inline-flex items-center gap-0.5 rounded border border-blue-300 bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200"
-          >
-            {getHIDKeyLabel(key)}
-            <button type="button" onClick={() => onChange(slots.filter((_, itemIndex) => itemIndex !== index))}>
-              ×
-            </button>
-          </span>
-        ))}
-        <button
-          type="button"
-          disabled={slots.length >= MAX_COMBO_KEYS}
-          onClick={() => setShowPicker(!showPicker)}
-          className="rounded border px-2 py-0.5 text-xs hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-gray-700"
-        >
-          + 添加键
-        </button>
-      </div>
-
-      {slots.length > 0 && <p className="text-xs text-gray-400">{buildKeyCodes(slots).join(', ')}</p>}
-
-      {showPicker && (
-        <div
-          ref={pickerRef}
-          className="absolute left-0 top-full z-50 mt-1 min-w-64 rounded-lg border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-600 dark:bg-gray-800"
-        >
-          <div className="mb-2 flex flex-wrap gap-1">
-            {(Object.keys(KEY_CATEGORIES) as Array<keyof typeof KEY_CATEGORIES>).map((category) => (
-              <button
-                key={category}
-                type="button"
-                onClick={() => setActiveCategory(category)}
-                className={`rounded px-2 py-0.5 text-xs ${
-                  activeCategory === category
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600'
-                }`}
-              >
-                {HID_CATEGORY_NAMES[category] || category}
-              </button>
-            ))}
-          </div>
-          <div className="flex max-w-72 flex-wrap gap-1">
-            {KEY_CATEGORIES[activeCategory as keyof typeof KEY_CATEGORIES]?.map((key) => (
-              <button
-                key={key}
-                type="button"
-                disabled={slots.length >= MAX_COMBO_KEYS && !slots.includes(key)}
-                onClick={() => toggleKey(key)}
-                className={`min-w-8 rounded border px-2 py-1 text-xs ${
-                  slots.includes(key)
-                    ? 'border-blue-600 bg-blue-600 text-white'
-                    : 'border-gray-200 bg-gray-50 hover:bg-gray-200 dark:border-gray-500 dark:bg-gray-700 dark:hover:bg-gray-600'
-                } disabled:cursor-not-allowed disabled:opacity-40`}
-              >
-                {getHIDKeyLabel(key)}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
+function hasUnstableRecordedKeys(shortcut: KeyboardShortcut): boolean {
+  return !!shortcut.recordedKeys?.length && !hasStableHidMapping(shortcut.recordedKeys)
 }
 
 type KeyboardControlSettingsProps = {
@@ -167,7 +44,8 @@ export function KeyboardControlSettings(props: KeyboardControlSettingsProps) {
   const [addingNew, setAddingNew] = useState(false)
   const [newName, setNewName] = useState('')
   const [newTriggerWords, setNewTriggerWords] = useState('')
-  const [newSlots, setNewSlots] = useState<string[]>([])
+  const [newRecordedKeys, setNewRecordedKeys] = useState<string[]>([])
+  const newShortcutFieldsId = useId()
 
   const handleDriverPathSelect = useCallback(async () => {
     const result = (await window.electronAPI?.invoke('dialog:openFile', {
@@ -200,25 +78,25 @@ export function KeyboardControlSettings(props: KeyboardControlSettingsProps) {
   )
 
   const addShortcut = useCallback(() => {
-    if (!newName.trim() || !newTriggerWords.trim() || newSlots.length === 0) {
+    if (!newName.trim() || !newTriggerWords.trim() || newRecordedKeys.length === 0) {
       return
     }
+
     const entry: KeyboardShortcut = {
       id: `ks_custom_${Date.now()}`,
       name: newName.trim(),
-      triggerWords: newTriggerWords
-        .split(/[,，]/)
-        .map((item) => item.trim())
-        .filter(Boolean),
-      keyCodes: buildKeyCodes(newSlots),
+      triggerWords: parseTriggerWords(newTriggerWords),
+      recordedKeys: orderRecordedKeys(newRecordedKeys),
+      keyCodes: [],
       enabled: true,
     }
+
     onKeyboardShortcutsChange([...keyboardShortcuts, entry])
     setNewName('')
     setNewTriggerWords('')
-    setNewSlots([])
+    setNewRecordedKeys([])
     setAddingNew(false)
-  }, [keyboardShortcuts, newName, newSlots, newTriggerWords, onKeyboardShortcutsChange])
+  }, [keyboardShortcuts, newName, newRecordedKeys, newTriggerWords, onKeyboardShortcutsChange])
 
   const resetDefaults = useCallback(async () => {
     const platformType = await platform.getPlatform()
@@ -265,85 +143,123 @@ export function KeyboardControlSettings(props: KeyboardControlSettingsProps) {
           </div>
         </div>
 
-        <div className="space-y-1">
-          {keyboardShortcuts.map((shortcut) => (
-            <div key={shortcut.id} className="rounded-lg border dark:border-gray-700">
-              <div
-                className="flex cursor-pointer items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-800"
-                onClick={() => setExpandedId(expandedId === shortcut.id ? null : shortcut.id)}
-              >
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={shortcut.enabled}
-                    onChange={(event) => {
-                      event.stopPropagation()
-                      updateShortcut(shortcut.id, { enabled: event.target.checked })
-                    }}
-                    onClick={(event) => event.stopPropagation()}
-                    className="h-4 w-4"
-                  />
-                  <span className="text-sm font-medium">{shortcut.name}</span>
-                  <span className="text-xs text-gray-500">{shortcut.triggerWords.join(' / ')}</span>
-                </div>
-                <span className="text-xs text-gray-400">{expandedId === shortcut.id ? '▲' : '▼'}</span>
-              </div>
+        <div className="space-y-2">
+          {keyboardShortcuts.map((shortcut) => {
+            const legacyShortcut = isLegacyShortcut(shortcut)
+            const unstableShortcut = hasUnstableRecordedKeys(shortcut)
+            const displayKeys = shortcut.recordedKeys?.length
+              ? formatRecordedKeys(shortcut.recordedKeys)
+              : shortcut.keyCodes.join(', ')
 
-              {expandedId === shortcut.id && (
-                <div className="space-y-2 border-t p-3 dark:border-gray-700">
-                  <div>
-                    <label className="text-xs text-gray-500">{t('名称')}</label>
+            return (
+              <div key={shortcut.id} className="rounded-lg border dark:border-gray-700">
+                <div
+                  className="flex cursor-pointer items-start justify-between gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  onClick={() => setExpandedId(expandedId === shortcut.id ? null : shortcut.id)}
+                >
+                  <div className="flex items-start gap-3">
                     <input
-                      type="text"
-                      value={shortcut.name}
-                      onChange={(event) => updateShortcut(shortcut.id, { name: event.target.value })}
-                      className="w-full rounded border p-1.5 text-sm dark:border-gray-700 dark:bg-gray-800"
+                      type="checkbox"
+                      checked={shortcut.enabled}
+                      onChange={(event) => {
+                        event.stopPropagation()
+                        updateShortcut(shortcut.id, { enabled: event.target.checked })
+                      }}
+                      onClick={(event) => event.stopPropagation()}
+                      className="mt-1 h-4 w-4"
                     />
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium">{shortcut.name}</div>
+                      <div className="text-xs text-gray-500">{shortcut.triggerWords.join(' / ')}</div>
+                      {displayKeys ? <div className="text-xs text-gray-400">{displayKeys}</div> : null}
+                      {legacyShortcut ? <div className="text-xs text-amber-600">{LEGACY_SHORTCUT_MESSAGE}</div> : null}
+                      {unstableShortcut ? <div className="text-xs text-amber-600">{UNSTABLE_HID_MESSAGE}</div> : null}
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-xs text-gray-500">{t('触发词（逗号分隔）')}</label>
-                    <input
-                      type="text"
-                      value={shortcut.triggerWords.join(', ')}
-                      onChange={(event) =>
-                        updateShortcut(shortcut.id, {
-                          triggerWords: event.target.value
-                            .split(/[,，]/)
-                            .map((item) => item.trim())
-                            .filter(Boolean),
-                        })
-                      }
-                      className="w-full rounded border p-1.5 text-sm dark:border-gray-700 dark:bg-gray-800"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500">{t('Key Codes')}</label>
-                    <input
-                      type="text"
-                      value={shortcut.keyCodes.join(', ')}
-                      readOnly
-                      className="w-full rounded border bg-gray-50 p-1.5 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900"
-                    />
-                  </div>
-                  {shortcut.id.startsWith('ks_custom_') && (
-                    <button
-                      onClick={() => removeShortcut(shortcut.id)}
-                      className="rounded bg-red-500 px-3 py-1 text-sm text-white hover:bg-red-600"
-                    >
-                      {t('删除')}
-                    </button>
-                  )}
+                  <span className="pt-1 text-xs text-gray-400">{expandedId === shortcut.id ? '▲' : '▼'}</span>
                 </div>
-              )}
-            </div>
-          ))}
+
+                {expandedId === shortcut.id && (
+                  <div className="space-y-3 border-t p-3 dark:border-gray-700">
+                    <div>
+                      <label htmlFor={`${shortcut.id}-name`} className="text-xs text-gray-500">
+                        {t('名称')}
+                      </label>
+                      <input
+                        id={`${shortcut.id}-name`}
+                        type="text"
+                        value={shortcut.name}
+                        onChange={(event) => updateShortcut(shortcut.id, { name: event.target.value })}
+                        className="w-full rounded border p-1.5 text-sm dark:border-gray-700 dark:bg-gray-800"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor={`${shortcut.id}-triggerWords`} className="text-xs text-gray-500">
+                        {t('触发词（逗号分隔）')}
+                      </label>
+                      <input
+                        id={`${shortcut.id}-triggerWords`}
+                        type="text"
+                        value={shortcut.triggerWords.join(', ')}
+                        onChange={(event) =>
+                          updateShortcut(shortcut.id, {
+                            triggerWords: parseTriggerWords(event.target.value),
+                          })
+                        }
+                        className="w-full rounded border p-1.5 text-sm dark:border-gray-700 dark:bg-gray-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">{t('按键组合')}</label>
+                      <div className="mt-1">
+                        <KeyboardShortcutRecorder
+                          value={shortcut.recordedKeys || []}
+                          onChange={(recordedKeys) =>
+                            updateShortcut(shortcut.id, {
+                              recordedKeys,
+                              keyCodes: [],
+                            })
+                          }
+                        />
+                      </div>
+                      {legacyShortcut ? <p className="mt-1 text-xs text-amber-600">{LEGACY_SHORTCUT_MESSAGE}</p> : null}
+                      {unstableShortcut ? <p className="mt-1 text-xs text-amber-600">{UNSTABLE_HID_MESSAGE}</p> : null}
+                    </div>
+                    <div>
+                      <label htmlFor={`${shortcut.id}-keyCodes`} className="text-xs text-gray-500">
+                        {t('Key Codes')}
+                      </label>
+                      <input
+                        id={`${shortcut.id}-keyCodes`}
+                        type="text"
+                        value={shortcut.keyCodes.join(', ')}
+                        readOnly
+                        className="w-full rounded border bg-gray-50 p-1.5 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900"
+                      />
+                    </div>
+                    {shortcut.id.startsWith('ks_custom_') ? (
+                      <button
+                        onClick={() => removeShortcut(shortcut.id)}
+                        className="rounded bg-red-500 px-3 py-1 text-sm text-white hover:bg-red-600"
+                      >
+                        {t('删除')}
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
 
         {addingNew && (
-          <div className="space-y-2 rounded-lg border p-3 dark:border-gray-700">
+          <div className="space-y-3 rounded-lg border p-3 dark:border-gray-700">
             <div>
-              <label className="text-xs text-gray-500">{t('名称')}</label>
+              <label htmlFor={`${newShortcutFieldsId}-name`} className="text-xs text-gray-500">
+                {t('名称')}
+              </label>
               <input
+                id={`${newShortcutFieldsId}-name`}
                 type="text"
                 value={newName}
                 onChange={(event) => setNewName(event.target.value)}
@@ -352,8 +268,11 @@ export function KeyboardControlSettings(props: KeyboardControlSettingsProps) {
               />
             </div>
             <div>
-              <label className="text-xs text-gray-500">{t('触发词（逗号分隔）')}</label>
+              <label htmlFor={`${newShortcutFieldsId}-triggerWords`} className="text-xs text-gray-500">
+                {t('触发词（逗号分隔）')}
+              </label>
               <input
+                id={`${newShortcutFieldsId}-triggerWords`}
                 type="text"
                 value={newTriggerWords}
                 onChange={(event) => setNewTriggerWords(event.target.value)}
@@ -364,13 +283,16 @@ export function KeyboardControlSettings(props: KeyboardControlSettingsProps) {
             <div>
               <label className="text-xs text-gray-500">{t('按键组合')}</label>
               <div className="mt-1">
-                <KeyComboBuilder slots={newSlots} onChange={setNewSlots} />
+                <KeyboardShortcutRecorder value={newRecordedKeys} onChange={setNewRecordedKeys} />
               </div>
+              {newRecordedKeys.length > 0 && !hasStableHidMapping(newRecordedKeys) ? (
+                <p className="mt-1 text-xs text-amber-600">{UNSTABLE_HID_MESSAGE}</p>
+              ) : null}
             </div>
             <div className="flex gap-2">
               <button
                 onClick={addShortcut}
-                disabled={!newName.trim() || !newTriggerWords.trim() || newSlots.length === 0}
+                disabled={!newName.trim() || !newTriggerWords.trim() || newRecordedKeys.length === 0}
                 className="rounded-lg bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t('确认添加')}

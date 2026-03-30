@@ -151,6 +151,7 @@ export const KeyboardShortcutSchema = z.object({
   name: z.string(), // 显示名，如 "复制"
   triggerWords: z.array(z.string()), // 语音触发词，如 ["复制", "拷贝"]
   keyCodes: z.array(z.string()), // hex key codes，如 ["110700E0","11070006","10070006","100700E0"]
+  recordedKeys: z.array(z.string()).optional(), // 录制得到的 KeyboardEvent.code，如 ["ControlLeft", "KeyV"]
   enabled: z.boolean().default(true),
 })
 export type KeyboardShortcut = z.infer<typeof KeyboardShortcutSchema>

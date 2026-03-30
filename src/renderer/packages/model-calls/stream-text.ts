@@ -1,12 +1,11 @@
 import { getModel } from '@shared/models'
 import { ChatboxAIAPIError, OCRError } from '@shared/models/errors'
-import { sequenceMessages } from '@shared/utils/message'
+import { getMessageText, sequenceMessages } from '@shared/utils/message'
 import { getModelSettings } from '@shared/utils/model_settings'
 import type { ModelMessage, ToolSet } from 'ai'
 import { t } from 'i18next'
-import { uniqueId } from 'lodash'
 import { createModelDependencies } from '@/adapters'
-import * as settingActions from '@/stores/settingActions'
+import * as chatStore from '@/stores/chatStore'
 import { settingsStore } from '@/stores/settingsStore'
 import type {
   ModelInterface,
@@ -14,17 +13,9 @@ import type {
   OnResultChangeWithCancel,
   OnStatusChange,
 } from '../../../shared/models/types'
-import {
-  type Message,
-  type MessageInfoPart,
-  type MessageToolCallPart,
-  ModelProviderEnum,
-  type ProviderOptions,
-  type StreamTextResult,
-} from '../../../shared/types'
-import { mcpController } from '../mcp/controller'
+import type { Message, MessageInfoPart, ProviderOptions, StreamTextResult } from '../../../shared/types'
 import { resolveAgentSkillPrompt } from '../agent-skills'
-import * as chatStore from '@/stores/chatStore'
+import { mcpController } from '../mcp/controller'
 import { convertToModelMessages, injectModelSystemPrompt, injectPrompt } from './message-utils'
 import { imageOCR } from './preprocess'
 import fileToolSet from './toolsets/file'
@@ -86,19 +77,20 @@ export async function streamText(
   if (sessionId) {
     const session = await chatStore.getSession(sessionId)
     skillBundleId = session?.agentSkill?.bundleId || ''
-    skillPrompt = await resolveAgentSkillPrompt(session?.agentSkill, settingsStore.getState().getSettings().voice || null)
+    const lastUserMessage = [...params.messages].reverse().find((message) => message.role === 'user')
+    const currentTurnUserText = lastUserMessage ? getMessageText(lastUserMessage).trim() : ''
+    skillPrompt = await resolveAgentSkillPrompt(
+      session?.agentSkill,
+      settingsStore.getState().getSettings().voice || null,
+      currentTurnUserText
+    )
   }
   const injectionRole = model.isSupportSystemMessage() ? 'system' : 'user'
   if (skillPrompt) {
     params.messages = injectPrompt(params.messages, `${skillPrompt}\n\n`, injectionRole)
   }
 
-  params.messages = injectModelSystemPrompt(
-    model.modelId,
-    params.messages,
-    toolSetInstructions,
-    injectionRole
-  )
+  params.messages = injectModelSystemPrompt(model.modelId, params.messages, toolSetInstructions, injectionRole)
 
   if (!model.isSupportSystemMessage()) {
     params.messages = params.messages.map((m) => ({ ...m, role: m.role === 'system' ? 'user' : m.role }))
