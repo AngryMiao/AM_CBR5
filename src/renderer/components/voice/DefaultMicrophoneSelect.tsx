@@ -7,6 +7,7 @@ export type DefaultMicrophoneSelectProps = {
 
 // 用内部编码隔离系统默认项和真实设备，允许空 deviceId 被单独保存与回显。
 const DEFAULT_OPTION_VALUE = JSON.stringify({ type: 'default' as const })
+const PSEUDO_AUDIO_INPUT_DEVICE_IDS = new Set(['default', 'communications'])
 
 function encodeOptionValue(deviceId?: string): string {
   if (deviceId === undefined) {
@@ -24,6 +25,58 @@ function decodeOptionValue(optionValue: string): string | undefined {
     }
   } catch {
     return undefined
+  }
+
+  return undefined
+}
+
+export function isPseudoAudioInputDeviceId(deviceId?: string): boolean {
+  return !!deviceId && PSEUDO_AUDIO_INPUT_DEVICE_IDS.has(deviceId)
+}
+
+function extractAliasedDeviceLabel(label: string): string | null {
+  const match = label.match(/^(Default|Communications)\s*-\s*(.+)$/i)
+  return match?.[2]?.trim() || null
+}
+
+export function getSelectableAudioInputDevices(devices: MediaDeviceInfo[]): MediaDeviceInfo[] {
+  return devices.filter((device) => device.kind === 'audioinput' && !isPseudoAudioInputDeviceId(device.deviceId))
+}
+
+export function resolveAliasedAudioInputDeviceId(
+  savedDeviceId: string | undefined,
+  devices: MediaDeviceInfo[]
+): string | undefined {
+  if (!isPseudoAudioInputDeviceId(savedDeviceId)) {
+    return savedDeviceId
+  }
+
+  const aliasDevice = devices.find((device) => device.kind === 'audioinput' && device.deviceId === savedDeviceId)
+  if (!aliasDevice) {
+    return undefined
+  }
+
+  const realDevices = getSelectableAudioInputDevices(devices)
+  const aliasedLabel = extractAliasedDeviceLabel(aliasDevice.label)
+  if (aliasedLabel) {
+    const exactLabelMatch = realDevices.find((device) => device.label === aliasedLabel)
+    if (exactLabelMatch) {
+      return exactLabelMatch.deviceId
+    }
+
+    const partialLabelMatch = realDevices.find(
+      (device) => device.label.includes(aliasedLabel) || aliasedLabel.includes(device.label)
+    )
+    if (partialLabelMatch) {
+      return partialLabelMatch.deviceId
+    }
+  }
+
+  if (aliasDevice.groupId) {
+    const groupMatch = realDevices.find((device) => device.groupId && device.groupId === aliasDevice.groupId)
+    if (groupMatch) {
+      return groupMatch.deviceId
+    }
   }
 
   return undefined
@@ -57,7 +110,8 @@ export function DefaultMicrophoneSelect(props: DefaultMicrophoneSelectProps) {
       if (requestIdRef.current !== requestId) {
         return
       }
-      setDevices(allDevices.filter((device) => device.kind === 'audioinput'))
+      const audioInputs = allDevices.filter((device) => device.kind === 'audioinput')
+      setDevices(getSelectableAudioInputDevices(audioInputs))
       hasLoadedDevicesRef.current = true
       setHasLoadedDevices(true)
     } catch {
@@ -75,9 +129,39 @@ export function DefaultMicrophoneSelect(props: DefaultMicrophoneSelectProps) {
     void refreshDevices()
   }, [refreshDevices])
 
-  const currentValue = encodeOptionValue(value)
+  useEffect(() => {
+    if (!isPseudoAudioInputDeviceId(value)) {
+      return
+    }
+
+    void (async () => {
+      const mediaDevices = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices
+      if (!mediaDevices?.enumerateDevices) {
+        return
+      }
+
+      try {
+        const allDevices = await mediaDevices.enumerateDevices()
+        const resolvedDeviceId = resolveAliasedAudioInputDeviceId(value, allDevices)
+        if (resolvedDeviceId && resolvedDeviceId !== value) {
+          console.info('[DefaultMicrophoneSelect] Resolved pseudo microphone id to concrete device id', {
+            previousDeviceId: value,
+            resolvedDeviceId,
+          })
+          onChange(resolvedDeviceId)
+        }
+      } catch (error) {
+        console.warn('[DefaultMicrophoneSelect] Failed to resolve pseudo microphone device id', error)
+      }
+    })()
+  }, [value, onChange])
+
+  const currentValue = isPseudoAudioInputDeviceId(value) ? DEFAULT_OPTION_VALUE : encodeOptionValue(value)
   const isSavedDeviceUnavailable =
-    value !== undefined && hasLoadedDevices && !devices.some((device) => device.deviceId === value)
+    value !== undefined &&
+    !isPseudoAudioInputDeviceId(value) &&
+    hasLoadedDevices &&
+    !devices.some((device) => device.deviceId === value)
 
   return (
     <div className="space-y-2">

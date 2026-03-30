@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     stopDelays: [] as number[],
     transcribeDelayMs: 0,
     transcribeText: '',
+    transcribeCalls: 0,
   }
 
   const request = {
@@ -73,6 +74,7 @@ const mocks = vi.hoisted(() => {
 
   class MockASRProvider {
     async transcribe() {
+      recorder.transcribeCalls += 1
       if (recorder.transcribeDelayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, recorder.transcribeDelayMs))
       }
@@ -112,6 +114,9 @@ vi.mock('@/hooks/useVoiceSettings', () => ({
       maxRecordingDuration: 60000,
       microphoneDeviceId: undefined,
       autoPlayResponse: false,
+      shortcuts: {
+        toggleVoice: 'PageDown',
+      },
     },
   }),
 }))
@@ -211,6 +216,10 @@ function hasInvokeCall(channel: string) {
   return mocks.ipc.invoke.mock.calls.some(([currentChannel]) => currentChannel === channel)
 }
 
+function countInvokeCalls(channel: string) {
+  return mocks.ipc.invoke.mock.calls.filter(([currentChannel]) => currentChannel === channel).length
+}
+
 async function flushAsyncWork(iterations = 5) {
   for (let index = 0; index < iterations; index += 1) {
     await Promise.resolve()
@@ -228,6 +237,7 @@ describe('useVoiceController typeless hotkey regressions', () => {
     mocks.recorder.stopDelays = []
     mocks.recorder.transcribeDelayMs = 0
     mocks.recorder.transcribeText = ''
+    mocks.recorder.transcribeCalls = 0
     mocks.request.executionPhase = null
     mocks.chat.session = null
     mocks.ipc.invoke.mockImplementation(async (channel: string) => {
@@ -292,6 +302,27 @@ describe('useVoiceController typeless hotkey regressions', () => {
     expect(mocks.recorder.startCalls).toBe(1)
     expect(mocks.recorder.stopCalls).toBe(1)
     expect(hasInvokeCall('typelessOverlay:hide')).toBe(true)
+    expect(countInvokeCalls('typelessOverlay:hide')).toBeGreaterThanOrEqual(2)
+  })
+
+  it('cancels the current round before asr when the initial hotkey press is a short tap', async () => {
+    const { result } = renderHook(() => useVoiceController(), { wrapper: createWrapper() })
+
+    await act(async () => {
+      mocks.hotkeys.down?.()
+      await flushAsyncWork(20)
+      vi.advanceTimersByTime(50)
+      mocks.hotkeys.up?.()
+      vi.advanceTimersByTime(10)
+      await flushAsyncWork(20)
+    })
+
+    expect(result.current.voiceMode).toBe('inactive')
+    expect(mocks.recorder.startCalls).toBe(1)
+    expect(mocks.recorder.stopCalls).toBe(1)
+    expect(mocks.recorder.transcribeCalls).toBe(0)
+    expect(vi.mocked(submitNewUserMessage)).not.toHaveBeenCalled()
+    expect(countInvokeCalls('typelessOverlay:hide')).toBeGreaterThanOrEqual(1)
   })
 
   it('cancels the active typeless operation on short tap during asr without starting a new recording', async () => {
@@ -325,6 +356,7 @@ describe('useVoiceController typeless hotkey regressions', () => {
     expect(mocks.recorder.startCalls).toBe(1)
     expect(vi.mocked(submitNewUserMessage)).not.toHaveBeenCalled()
     expect(hasInvokeCall('typelessOverlay:hide')).toBe(true)
+    expect(countInvokeCalls('typelessOverlay:hide')).toBeGreaterThanOrEqual(2)
   })
 
   it('restarts a new typeless recording on long press while a previous operation is active', async () => {
@@ -350,6 +382,31 @@ describe('useVoiceController typeless hotkey regressions', () => {
 
     expect(mocks.recorder.startCalls).toBe(2)
     expect(mocks.recorder.stopCalls).toBeGreaterThanOrEqual(1)
+  })
+
+  it('suppresses the configured single-key hotkey default behavior in typeless mode', () => {
+    renderHook(() => useVoiceController(), { wrapper: createWrapper() })
+
+    const keydownEvent = new KeyboardEvent('keydown', {
+      code: 'PageDown',
+      key: 'PageDown',
+      bubbles: true,
+      cancelable: true,
+    })
+    const keyupEvent = new KeyboardEvent('keyup', {
+      code: 'PageDown',
+      key: 'PageDown',
+      bubbles: true,
+      cancelable: true,
+    })
+
+    const keydownResult = window.dispatchEvent(keydownEvent)
+    const keyupResult = window.dispatchEvent(keyupEvent)
+
+    expect(keydownResult).toBe(false)
+    expect(keydownEvent.defaultPrevented).toBe(true)
+    expect(keyupResult).toBe(false)
+    expect(keyupEvent.defaultPrevented).toBe(true)
   })
 
   it('starts a new recording and hides the previous typeless result when the result is already visible', async () => {

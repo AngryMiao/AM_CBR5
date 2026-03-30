@@ -103,9 +103,6 @@ importers:
       source-map-support:
         specifier: ^0.5.21
         version: 0.5.21
-      uiohook-napi:
-        specifier: ^1.5.5
-        version: 1.5.5
       uuid:
         specifier: ^9.0.0
         version: 9.0.1
@@ -752,6 +749,9 @@ importers:
       '@libsql/client':
         specifier: ^0.15.6
         version: 0.15.15
+      uiohook-napi:
+        specifier: ^1.5.5
+        version: 1.5.5
 
 packages:
 

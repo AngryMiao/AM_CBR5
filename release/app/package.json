@@ -15,6 +15,7 @@
     "link-modules": "node ../../.erb/scripts/link-modules.cjs"
   },
   "dependencies": {
-    "@libsql/client": "^0.15.6"
+    "@libsql/client": "^0.15.6",
+    "uiohook-napi": "^1.5.5"
   }
 }

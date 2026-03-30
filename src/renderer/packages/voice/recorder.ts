@@ -13,7 +13,7 @@ export class VoiceRecorder {
   private stream: MediaStream | null = null
   private audioContext: AudioContext | null = null
   private analyser: AnalyserNode | null = null
-  private dataArray: Uint8Array | null = null
+  private dataArray: Uint8Array<ArrayBuffer> | null = null
   private animationFrameId: number | null = null
   private onAudioLevelChange: ((level: number) => void) | null = null
   private silenceDetectionTimer: NodeJS.Timeout | null = null
@@ -33,19 +33,31 @@ export class VoiceRecorder {
     microphoneDeviceId?: string
   }): Promise<void> {
     try {
+      const requestedDeviceId = options?.microphoneDeviceId
+      const requestedConstraints = this.buildAudioConstraints(requestedDeviceId)
+
+      console.info('[VoiceRecorder] Requesting microphone stream', {
+        requestedDeviceId: requestedDeviceId ?? 'system-default',
+        requestedConstraints,
+      })
+
       // 请求麦克风权限
       try {
         this.stream = await navigator.mediaDevices.getUserMedia({
-          audio: this.buildAudioConstraints(options?.microphoneDeviceId),
+          audio: requestedConstraints,
         })
       } catch (error) {
         const errorName =
           error instanceof Error ? error.name : (error as { name?: string } | null | undefined)?.name
 
         if (
-          options?.microphoneDeviceId &&
+          requestedDeviceId &&
           (errorName === 'NotFoundError' || errorName === 'OverconstrainedError')
         ) {
+          console.warn('[VoiceRecorder] Requested microphone unavailable, falling back to system default', {
+            requestedDeviceId,
+            errorName,
+          })
           this.stream = await navigator.mediaDevices.getUserMedia({
             audio: this.buildAudioConstraints(),
           })
@@ -53,6 +65,8 @@ export class VoiceRecorder {
           throw error
         }
       }
+
+      await this.logResolvedMicrophone(requestedDeviceId)
 
       // 创建 MediaRecorder
       const mimeType = this.getSupportedMimeType()
@@ -188,7 +202,7 @@ export class VoiceRecorder {
       this.analyser = this.audioContext.createAnalyser()
       this.analyser.fftSize = 256
       const bufferLength = this.analyser.frequencyBinCount
-      this.dataArray = new Uint8Array(bufferLength)
+      this.dataArray = new Uint8Array(new ArrayBuffer(bufferLength))
 
       source.connect(this.analyser)
 
@@ -297,10 +311,59 @@ export class VoiceRecorder {
     }
   }
 
+  private async logResolvedMicrophone(requestedDeviceId?: string): Promise<void> {
+    const tracks =
+      this.stream && typeof this.stream.getAudioTracks === 'function' ? this.stream.getAudioTracks() : []
+    const track = tracks[0]
+    if (!track) {
+      console.warn('[VoiceRecorder] No audio track available after getUserMedia')
+      return
+    }
+
+    const trackSettings = typeof track.getSettings === 'function' ? track.getSettings() : {}
+    const actualDeviceId = typeof trackSettings.deviceId === 'string' ? trackSettings.deviceId : undefined
+    const actualGroupId = typeof trackSettings.groupId === 'string' ? trackSettings.groupId : undefined
+    const actualLabel = track.label || undefined
+
+    let requestedDeviceLabel: string | undefined
+    let actualEnumeratedLabel: string | undefined
+
+    try {
+      const mediaDevices = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices
+      if (mediaDevices?.enumerateDevices) {
+        const devices = await mediaDevices.enumerateDevices()
+        const audioInputs = devices.filter((device) => device.kind === 'audioinput')
+        requestedDeviceLabel = requestedDeviceId
+          ? audioInputs.find((device) => device.deviceId === requestedDeviceId)?.label
+          : undefined
+        actualEnumeratedLabel =
+          audioInputs.find((device) => device.deviceId === actualDeviceId)?.label ||
+          audioInputs.find((device) => device.label === actualLabel)?.label
+      }
+    } catch (error) {
+      console.warn('[VoiceRecorder] Failed to enumerate audio input devices for logging', error)
+    }
+
+    console.info('[VoiceRecorder] Microphone stream resolved', {
+      requestedDeviceId: requestedDeviceId ?? 'system-default',
+      requestedDeviceLabel: requestedDeviceLabel ?? null,
+      actualTrackDeviceId: actualDeviceId ?? null,
+      actualTrackLabel: actualLabel ?? null,
+      actualEnumeratedLabel: actualEnumeratedLabel ?? null,
+      actualGroupId: actualGroupId ?? null,
+      readyState: track.readyState,
+    })
+  }
+
   /**
    * 检查浏览器是否支持录音
    */
   static isSupported(): boolean {
-    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder)
+    return !!(
+      typeof navigator !== 'undefined' &&
+      navigator.mediaDevices &&
+      typeof window !== 'undefined' &&
+      typeof window.MediaRecorder !== 'undefined'
+    )
   }
 }

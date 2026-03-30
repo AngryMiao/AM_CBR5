@@ -1,4 +1,5 @@
 import { createMessage, type Settings } from '@shared/types'
+import { normalizeRecordedVoiceHotkey, normalizeStoredVoiceHotkey } from '@shared/voice-hotkey'
 import { getMessageText } from '@shared/utils/message'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { useCallback, useEffect, useRef } from 'react'
@@ -82,6 +83,20 @@ function isSameTypelessStatus(left: TypelessStatus | null, right: TypelessStatus
   return left.type === right.type && left.message === right.message
 }
 
+function matchesSingleVoiceHotkeyKeyboardEvent(event: KeyboardEvent, hotkey?: string): boolean {
+  if (!hotkey) {
+    return false
+  }
+
+  const normalizedHotkey = normalizeStoredVoiceHotkey(hotkey)
+  if (normalizedHotkey.includes('+')) {
+    return false
+  }
+
+  const normalizedEventHotkey = normalizeRecordedVoiceHotkey([event.code])
+  return normalizedEventHotkey !== '' && normalizedEventHotkey === normalizedHotkey
+}
+
 /**
  * 语音控制器 Hook
  * 管理语音录制、识别、合成的完整流程
@@ -115,6 +130,8 @@ export function useVoiceController() {
   const holdShortcutActiveRef = useRef(false)
   const holdActivationPendingRef = useRef(false)
   const pendingHotkeyReleaseRef = useRef(false)
+  const pendingHotkeyReleaseShouldCancelRef = useRef(false)
+  const activationHotkeyPressStartedAtRef = useRef<number | null>(null)
   const interruptedHotkeyPressStartedAtRef = useRef<number | null>(null)
   const interruptedHotkeyPendingRef = useRef(false)
   const interruptedHotkeyRestartRequestedRef = useRef(false)
@@ -159,6 +176,17 @@ export function useVoiceController() {
       interruptedHotkeyRestartTimerRef.current = null
     }
   }, [])
+
+  const clearTypelessResultForNextRound = useCallback(() => {
+    if (settings.workMode !== 'typeless') {
+      return
+    }
+
+    void window.electronAPI?.hideTypelessChatResult?.()
+    setTypelessChatResult(null)
+    setTypelessRequest(null)
+    setTypelessStatus(null)
+  }, [settings.workMode, setTypelessChatResult, setTypelessRequest, setTypelessStatus])
 
   const isCurrentTypelessOperation = useCallback((operationId: number) => {
     return typelessOperationIdRef.current === operationId
@@ -400,6 +428,28 @@ export function useVoiceController() {
     setTypelessStatus,
   ])
 
+  useEffect(() => {
+    if (platform.type !== 'desktop' || !settings.enabled || settings.workMode !== 'typeless') {
+      return
+    }
+
+    const handleKeyboardEvent = (event: KeyboardEvent) => {
+      if (!matchesSingleVoiceHotkeyKeyboardEvent(event, settings.shortcuts?.toggleVoice)) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+    }
+
+    window.addEventListener('keydown', handleKeyboardEvent, true)
+    window.addEventListener('keyup', handleKeyboardEvent, true)
+    return () => {
+      window.removeEventListener('keydown', handleKeyboardEvent, true)
+      window.removeEventListener('keyup', handleKeyboardEvent, true)
+    }
+  }, [settings.enabled, settings.shortcuts?.toggleVoice, settings.workMode])
+
   // 初始化 ASR 提供商
   const getASRProvider = useCallback((): ASRProvider => {
     if (asrProviderRef.current) {
@@ -542,6 +592,7 @@ export function useVoiceController() {
     setTypelessRequest(null)
     setTypelessChatResult(null)
     void window.electronAPI?.invoke('typelessOverlay:hide')
+    void window.electronAPI?.hideTypelessChatResult?.()
 
     const recorder = recorderRef.current
     recorderRef.current = null
@@ -578,12 +629,7 @@ export function useVoiceController() {
       clearRecordingTimeout()
       setError(null)
 
-      if (settings.workMode === 'typeless') {
-        void window.electronAPI?.hideTypelessChatResult?.()
-      }
-      setTypelessChatResult(null)
-      setTypelessRequest(null)
-      setTypelessStatus(null)
+      clearTypelessResultForNextRound()
 
       if (!VoiceRecorder.isSupported()) {
         throw new Error('当前环境不支持麦克风录音')
@@ -606,6 +652,12 @@ export function useVoiceController() {
 
       const recorder = new VoiceRecorder()
       recorderRef.current = recorder
+
+      console.info('[VoiceController] Starting recording with microphone preference', {
+        microphoneDeviceId: settings.microphoneDeviceId ?? 'system-default',
+        workMode: settings.workMode,
+        asrProvider: settings.asrProvider,
+      })
 
       await recorder.start({
         onAudioLevelChange: (level) => setAudioLevel(level),
@@ -676,6 +728,7 @@ export function useVoiceController() {
     clearRecordingTimeout,
     beginTypelessOperation,
     clearTypelessOperation,
+    clearTypelessResultForNextRound,
     isCurrentTypelessOperation,
     startStreamingRecognition,
   ])
@@ -967,12 +1020,18 @@ export function useVoiceController() {
       const shouldStopAfterActivation = !holdShortcutActiveRef.current || pendingHotkeyReleaseRef.current
       if (shouldStopAfterActivation && recorderRef.current?.getState() === 'recording') {
         pendingHotkeyReleaseRef.current = false
+        const shouldCancelCurrentRound = pendingHotkeyReleaseShouldCancelRef.current
+        pendingHotkeyReleaseShouldCancelRef.current = false
+        if (shouldCancelCurrentRound) {
+          await cancelCurrentOperation()
+          return
+        }
         await stopRecordingRef.current()
       }
     } finally {
       holdActivationPendingRef.current = false
     }
-  }, [])
+  }, [cancelCurrentOperation])
 
   const triggerInterruptedHotkeyRestart = useCallback(() => {
     if (interruptedHotkeyRestartTriggeredRef.current || holdActivationPendingRef.current) {
@@ -1049,6 +1108,9 @@ export function useVoiceController() {
           interruptedHotkeyRestartRequestedRef.current = false
           interruptedHotkeyRestartTriggeredRef.current = false
           interruptedHotkeyPressStartedAtRef.current = null
+          activationHotkeyPressStartedAtRef.current = Date.now()
+          pendingHotkeyReleaseShouldCancelRef.current = false
+          clearTypelessResultForNextRound()
           await beginHoldRecordingStart()
         } else if (voiceModeRef.current === 'speaking' && isSpeakingRef.current) {
           stopSpeakingRef.current()
@@ -1072,6 +1134,9 @@ export function useVoiceController() {
           interruptedHotkeyRestartRequestedRef.current = false
           interruptedHotkeyRestartTriggeredRef.current = false
           interruptedHotkeyPressStartedAtRef.current = null
+          if (settings.workMode === 'typeless') {
+            void window.electronAPI?.invoke('typelessOverlay:hide')
+          }
           return
         }
 
@@ -1088,9 +1153,20 @@ export function useVoiceController() {
         return
       }
 
+      const activationPressStartedAt = activationHotkeyPressStartedAtRef.current
+      const activationPressDurationMs = activationPressStartedAt === null ? 0 : Date.now() - activationPressStartedAt
+      activationHotkeyPressStartedAtRef.current = null
+      pendingHotkeyReleaseShouldCancelRef.current =
+        settings.workMode === 'typeless' && activationPressDurationMs < HOTKEY_RESTART_THRESHOLD_MS
+
       pendingHotkeyReleaseRef.current = true
       if (recorderRef.current && recorderRef.current.getState() === 'recording') {
         pendingHotkeyReleaseRef.current = false
+        if (pendingHotkeyReleaseShouldCancelRef.current) {
+          pendingHotkeyReleaseShouldCancelRef.current = false
+          void cancelCurrentOperation()
+          return
+        }
         void stopRecordingRef.current()
       }
     }
@@ -1107,6 +1183,8 @@ export function useVoiceController() {
       holdShortcutActiveRef.current = false
       holdActivationPendingRef.current = false
       pendingHotkeyReleaseRef.current = false
+      pendingHotkeyReleaseShouldCancelRef.current = false
+      activationHotkeyPressStartedAtRef.current = null
       interruptedHotkeyPendingRef.current = false
       interruptedHotkeyRestartRequestedRef.current = false
       interruptedHotkeyRestartTriggeredRef.current = false
@@ -1130,6 +1208,7 @@ export function useVoiceController() {
     settings.workMode,
     beginHoldRecordingStart,
     cancelCurrentOperation,
+    clearTypelessResultForNextRound,
     clearInterruptedHotkeyRestartTimer,
     clearRecordingTimeout,
     isTypelessInterruptibleState,

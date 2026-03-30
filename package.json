@@ -311,7 +311,6 @@
     "officeparser": "5.0.0",
     "sanitize-filename": "^1.6.3",
     "source-map-support": "^0.5.21",
-    "uiohook-napi": "^1.5.5",
     "uuid": "^9.0.0"
   },
   "browserslist": [],
