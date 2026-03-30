@@ -1,7 +1,7 @@
 {
   "name": "angrymiao-voice-control",
   "productName": "Angrymiao-Voice-Control",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "engines": {
     "node": ">=20.0.0 <23.0.0",
     "pnpm": ">=10.0.0"
@@ -57,6 +57,7 @@
     "mobile:android": "pnpm run mobile:sync:android && npx cap open android",
     "mobile:assets": "npx capacitor-assets generate --ios --android",
     "prepare": "node -e \"try { require('husky') } catch(e) { process.exit(0) }\" && husky || true",
+    "version:sync": "node ./scripts/sync-release-version.cjs",
     "translate": "i18next && node script/translate.mjs"
   },
   "repository": {

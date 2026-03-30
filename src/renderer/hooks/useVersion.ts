@@ -2,6 +2,7 @@ import { compareVersions } from 'compare-versions'
 import dayjs from 'dayjs'
 import { useAtomValue } from 'jotai'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { shouldUseHostedReleaseServices } from '@shared/utils/app-version'
 import { remoteConfigAtom } from '@/stores/atoms'
 import { CHATBOX_BUILD_PLATFORM } from '@/variables'
 import * as remote from '../packages/remote'
@@ -44,10 +45,14 @@ export default function useVersion() {
   const updateCheckTimer = useRef<NodeJS.Timeout>()
   useEffect(() => {
     const handler = async () => {
-      const config = await platform.getConfig()
-      const settings = await platform.getSettings()
       const version = await platform.getVersion()
       _setVersion(version)
+      if (!shouldUseHostedReleaseServices(version)) {
+        setNeedCheckUpdate(false)
+        return
+      }
+      const config = await platform.getConfig()
+      const settings = await platform.getSettings()
       try {
         const os = await platform.getPlatform()
         const needUpdate = await remote.checkNeedUpdate(version, os, config, settings)

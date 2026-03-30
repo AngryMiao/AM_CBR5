@@ -1,6 +1,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
+const { syncReleaseVersion } = require('./sync-release-version.cjs')
 
 const rootDir = path.resolve(__dirname, '..')
 const releaseAppDir = path.join(rootDir, 'release', 'app')
@@ -9,6 +10,8 @@ const srcNodeModulesPath = path.join(rootDir, 'src', 'node_modules')
 
 const installEnv = { ...process.env, CI: process.env.CI || 'true' }
 const shell = process.platform === 'win32'
+
+syncReleaseVersion()
 
 let installResult = spawnSync('npm', ['ci', '--omit=dev', '--ignore-scripts'], {
   cwd: releaseAppDir,
