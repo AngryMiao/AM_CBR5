@@ -929,10 +929,18 @@ ipcMain.handle('typelessOverlay:hide', () => {
 
 const cleanupTypelessChatResultIpc = registerTypelessChatResultIpc({
   ipcMain,
-  show: (payload) =>
-    showTypelessChatResult(payload, {
-      mainWindowVisible: !!mainWindow && mainWindow.isVisible(),
-    }),
+  show: (payload) => {
+    const mainWindowVisible = !!mainWindow && mainWindow.isVisible()
+    return showTypelessChatResult(payload, {
+      mainWindowVisible,
+      restoreMainWindowVisibility: () => {
+        if (mainWindowVisible || !mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) {
+          return
+        }
+        mainWindow.hide()
+      },
+    })
+  },
   hide: hideTypelessChatResult,
   onClosed: onTypelessChatResultClosed,
   sendToMainWindow: (channel, payload) => {

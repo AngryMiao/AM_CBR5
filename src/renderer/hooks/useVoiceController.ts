@@ -117,6 +117,7 @@ export function useVoiceController() {
   const pendingHotkeyReleaseRef = useRef(false)
   const interruptedHotkeyPressStartedAtRef = useRef<number | null>(null)
   const interruptedHotkeyPendingRef = useRef(false)
+  const interruptedHotkeyRestartRequestedRef = useRef(false)
   const interruptedHotkeyRestartTriggeredRef = useRef(false)
   const interruptedHotkeyRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -200,6 +201,18 @@ export function useVoiceController() {
   const isTypelessCancelablePhase = useCallback((phase: TypelessOperationPhase = typelessOperationPhaseRef.current) => {
     return phase === 'recording' || phase === 'asr' || phase === 'llm' || phase === 'mcp'
   }, [])
+
+  const isTypelessResultPhase = useCallback((phase: TypelessOperationPhase = typelessOperationPhaseRef.current) => {
+    return phase === 'result'
+  }, [])
+
+  const isTypelessInterruptibleState = useCallback(() => {
+    if (isTypelessCancelablePhase()) {
+      return true
+    }
+
+    return voiceModeRef.current === 'processing' && !isTypelessResultPhase()
+  }, [isTypelessCancelablePhase, isTypelessResultPhase])
 
   useEffect(() => {
     voiceModeRef.current = voiceMode
@@ -510,7 +523,7 @@ export function useVoiceController() {
   }, [])
 
   const cancelCurrentOperation = useCallback(async () => {
-    if (settings.workMode !== 'typeless' || !isTypelessCancelablePhase()) {
+    if (settings.workMode !== 'typeless' || !isTypelessInterruptibleState()) {
       return false
     }
 
@@ -543,7 +556,7 @@ export function useVoiceController() {
     return true
   }, [
     settings.workMode,
-    isTypelessCancelablePhase,
+    isTypelessInterruptibleState,
     clearRecordingTimeout,
     stopStreamingRecognition,
     clearInterruptedHotkeyRestartTimer,
@@ -961,6 +974,18 @@ export function useVoiceController() {
     }
   }, [])
 
+  const triggerInterruptedHotkeyRestart = useCallback(() => {
+    if (interruptedHotkeyRestartTriggeredRef.current || holdActivationPendingRef.current) {
+      return
+    }
+
+    clearInterruptedHotkeyRestartTimer()
+    interruptedHotkeyRestartTriggeredRef.current = true
+    interruptedHotkeyRestartRequestedRef.current = false
+    interruptedHotkeyPressStartedAtRef.current = null
+    void beginHoldRecordingStart()
+  }, [beginHoldRecordingStart, clearInterruptedHotkeyRestartTimer])
+
   // 切换语音模式
   const toggleVoice = useCallback(async () => {
     if (voiceMode === 'inactive') {
@@ -985,27 +1010,43 @@ export function useVoiceController() {
     const handleHotkeyDown = () => {
       console.log('Hotkey down, mode:', settings.workMode)
       void (async () => {
-        if (settings.workMode === 'typeless' && isTypelessCancelablePhase()) {
+        if (settings.workMode === 'typeless' && isTypelessInterruptibleState()) {
           holdShortcutActiveRef.current = true
           interruptedHotkeyPendingRef.current = true
+          interruptedHotkeyRestartRequestedRef.current = false
           interruptedHotkeyRestartTriggeredRef.current = false
           interruptedHotkeyPressStartedAtRef.current = Date.now()
           await cancelCurrentOperation()
+
+          const pressStartedAt = interruptedHotkeyPressStartedAtRef.current
+          if (pressStartedAt === null) {
+            return
+          }
+
+          const elapsedMs = Date.now() - pressStartedAt
+          const remainingDelayMs = Math.max(0, HOTKEY_RESTART_THRESHOLD_MS - elapsedMs)
+          if (remainingDelayMs === 0) {
+            if (holdShortcutActiveRef.current || interruptedHotkeyRestartRequestedRef.current) {
+              triggerInterruptedHotkeyRestart()
+            }
+            return
+          }
+
           clearInterruptedHotkeyRestartTimer()
           interruptedHotkeyRestartTimerRef.current = setTimeout(() => {
-            if (!interruptedHotkeyPendingRef.current || !holdShortcutActiveRef.current) {
+            if (!interruptedHotkeyPendingRef.current && !interruptedHotkeyRestartRequestedRef.current) {
               return
             }
 
-            interruptedHotkeyRestartTriggeredRef.current = true
-            void beginHoldRecordingStart()
-          }, HOTKEY_RESTART_THRESHOLD_MS)
+            triggerInterruptedHotkeyRestart()
+          }, remainingDelayMs)
           return
         }
 
         if (voiceModeRef.current === 'inactive') {
           holdShortcutActiveRef.current = true
           interruptedHotkeyPendingRef.current = false
+          interruptedHotkeyRestartRequestedRef.current = false
           interruptedHotkeyRestartTriggeredRef.current = false
           interruptedHotkeyPressStartedAtRef.current = null
           await beginHoldRecordingStart()
@@ -1020,11 +1061,22 @@ export function useVoiceController() {
       holdShortcutActiveRef.current = false
 
       if (interruptedHotkeyPendingRef.current) {
-        interruptedHotkeyPendingRef.current = false
+        const pressStartedAt = interruptedHotkeyPressStartedAtRef.current
+        const pressDurationMs = pressStartedAt === null ? 0 : Date.now() - pressStartedAt
+        const shouldRestart = pressDurationMs >= HOTKEY_RESTART_THRESHOLD_MS
+
         clearInterruptedHotkeyRestartTimer()
+        interruptedHotkeyPendingRef.current = false
+
+        if (!shouldRestart) {
+          interruptedHotkeyRestartRequestedRef.current = false
+          interruptedHotkeyRestartTriggeredRef.current = false
+          interruptedHotkeyPressStartedAtRef.current = null
+          return
+        }
+
+        interruptedHotkeyRestartRequestedRef.current = !interruptedHotkeyRestartTriggeredRef.current
         const restartTriggered = interruptedHotkeyRestartTriggeredRef.current || holdActivationPendingRef.current
-        interruptedHotkeyRestartTriggeredRef.current = false
-        interruptedHotkeyPressStartedAtRef.current = null
 
         if (restartTriggered) {
           pendingHotkeyReleaseRef.current = true
@@ -1056,6 +1108,7 @@ export function useVoiceController() {
       holdActivationPendingRef.current = false
       pendingHotkeyReleaseRef.current = false
       interruptedHotkeyPendingRef.current = false
+      interruptedHotkeyRestartRequestedRef.current = false
       interruptedHotkeyRestartTriggeredRef.current = false
       interruptedHotkeyPressStartedAtRef.current = null
       clearInterruptedHotkeyRestartTimer()
@@ -1079,7 +1132,8 @@ export function useVoiceController() {
     cancelCurrentOperation,
     clearInterruptedHotkeyRestartTimer,
     clearRecordingTimeout,
-    isTypelessCancelablePhase,
+    isTypelessInterruptibleState,
+    triggerInterruptedHotkeyRestart,
   ])
 
   return {

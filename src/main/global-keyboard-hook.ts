@@ -77,6 +77,18 @@ const PRINTABLE_KEYS = new Set<number>([
   UiohookKey.Quote,
 ])
 
+const SUPPRESSIBLE_SINGLE_KEYS = new Set<number>([
+  ...PRINTABLE_KEYS,
+  UiohookKey.PageUp,
+  UiohookKey.PageDown,
+  UiohookKey.Home,
+  UiohookKey.End,
+  UiohookKey.ArrowLeft,
+  UiohookKey.ArrowRight,
+  UiohookKey.ArrowUp,
+  UiohookKey.ArrowDown,
+])
+
 const SUPPRESSIBLE_KEY_TO_ACCELERATOR: Record<number, string> = {
   [UiohookKey.Space]: 'Space',
   [UiohookKey.A]: 'A',
@@ -126,6 +138,14 @@ const SUPPRESSIBLE_KEY_TO_ACCELERATOR: Record<number, string> = {
   [UiohookKey.Backslash]: '\\',
   [UiohookKey.BracketRight]: ']',
   [UiohookKey.Quote]: "'",
+  [UiohookKey.PageUp]: 'PageUp',
+  [UiohookKey.PageDown]: 'PageDown',
+  [UiohookKey.Home]: 'Home',
+  [UiohookKey.End]: 'End',
+  [UiohookKey.ArrowLeft]: 'Left',
+  [UiohookKey.ArrowRight]: 'Right',
+  [UiohookKey.ArrowUp]: 'Up',
+  [UiohookKey.ArrowDown]: 'Down',
 }
 
 let isHotkeyActive = false
@@ -251,7 +271,7 @@ function canSuppressOriginalInputWithGlobalShortcut(): boolean {
     return false
   }
 
-  return PRINTABLE_KEYS.has(currentHotkey.primaryKey)
+  return SUPPRESSIBLE_SINGLE_KEYS.has(currentHotkey.primaryKey)
 }
 
 function resolveSuppressShortcutAccelerator(): string | null {

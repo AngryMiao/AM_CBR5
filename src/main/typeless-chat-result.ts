@@ -42,6 +42,7 @@ let lastPayload: TypelessChatResultPayload | null = null
 let suppressNextClosedEvent = false
 let mainWindowVisibleBeforeResult = true
 let suppressMainWindowAutoShowOnNextActivate = false
+let restoreMainWindowVisibilityAfterClose: (() => void) | null = null
 const closeListeners = new Set<(payload: TypelessChatResultClosedPayload) => void>()
 
 export function consumeSuppressMainWindowAutoShowOnActivate() {
@@ -247,6 +248,9 @@ function ensureTypelessChatResultWindow() {
     }
     chatResultWindow?.blur()
     chatResultWindow?.hide()
+    setTimeout(() => {
+      restoreMainWindowVisibilityAfterClose?.()
+    }, 0)
 
     if (lastPayload?.userMessageId) {
       emitTypelessChatResultClosed({ userMessageId: lastPayload.userMessageId })
@@ -300,10 +304,11 @@ export function onTypelessChatResultClosed(callback: (payload: TypelessChatResul
 
 export async function showTypelessChatResult(
   payload: TypelessChatResultPayload,
-  options?: { mainWindowVisible?: boolean }
+  options?: { mainWindowVisible?: boolean; restoreMainWindowVisibility?: () => void }
 ) {
   lastPayload = payload
   mainWindowVisibleBeforeResult = options?.mainWindowVisible ?? true
+  restoreMainWindowVisibilityAfterClose = options?.restoreMainWindowVisibility ?? null
   const hadReadyWindow = !!chatResultWindow && !chatResultWindow.isDestroyed() && chatResultReady
   const window = ensureTypelessChatResultWindow()
 
@@ -326,6 +331,7 @@ export function destroyTypelessChatResult() {
     chatResultWindow = null
     chatResultReady = false
     suppressNextClosedEvent = false
+    restoreMainWindowVisibilityAfterClose = null
     return
   }
 
@@ -333,4 +339,5 @@ export function destroyTypelessChatResult() {
   chatResultWindow.destroy()
   chatResultWindow = null
   chatResultReady = false
+  restoreMainWindowVisibilityAfterClose = null
 }
