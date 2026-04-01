@@ -1,8 +1,7 @@
 import { defaultVoiceSettings } from '@shared/defaults'
-import { getDefaultKeyboardShortcuts } from '@shared/defaults/keyboard-shortcuts'
 import type { VoiceSettings } from '@shared/types/voice'
 import { normalizeStoredVoiceHotkey } from '@shared/voice-hotkey'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useMemo } from 'react'
 import platform from '@/platform'
 import { useSettingsStore } from '@/stores/settingsStore'
 
@@ -81,24 +80,6 @@ export function useVoiceSettings() {
     },
     [currentSettings, setSettings]
   )
-
-  const initKeyboardShortcutsRef = useRef(false)
-
-  useEffect(() => {
-    if (initKeyboardShortcutsRef.current) {
-      return
-    }
-    if ((currentSettings.keyboardShortcuts || []).length > 0) {
-      initKeyboardShortcutsRef.current = true
-      return
-    }
-
-    initKeyboardShortcutsRef.current = true
-    void platform.getPlatform().then((platformType) => {
-      const defaults = getDefaultKeyboardShortcuts(platformType)
-      void setVoiceSettings({ keyboardShortcuts: defaults })
-    })
-  }, [currentSettings.keyboardShortcuts, setVoiceSettings])
 
   return {
     settings: currentSettings,

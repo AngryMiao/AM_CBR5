@@ -14,7 +14,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export function getLogger(logId: string) {
   // const logger = log.create({ logId })
-  // logger.transports.console.format = '{h}:{i}:{s}.{ms} › [{logId}] › {text}'
+  // logger.transports.console.format = '{h}:{i}:{s}.{ms} > [{logId}] > {text}'
   // return logger
   return {
     log(level: string, ...args: any[]) {

@@ -70,6 +70,7 @@ import {
   showTypelessOverlay,
   updateTypelessOverlay,
 } from './typeless-overlay'
+import { shouldHideMainWindowOnClose } from './window-close-behavior'
 import * as windowState from './window_state'
 
 // 这行代码是解决 Windows 通知的标题和图标不正确的问题，标题会错误显示成 electron.app.Angrymiao-Voice-Control
@@ -106,6 +107,7 @@ let tray: Tray | null = null
 let funasrProcess: ChildProcess | null = null
 let funasrStarting = false
 let funasrManagedBaseURL = ''
+let isQuitting = false
 const doubaoASRManager = createDoubaoASRManager()
 
 type FunASRLaunchConfig = {
@@ -513,9 +515,20 @@ async function createWindow() {
   })
 
   // 窗口关闭时保存窗口大小与位置
-  mainWindow.on('close', () => {
+  mainWindow.on('close', (event) => {
     if (mainWindow) {
       windowState.saveState(mainWindow)
+    }
+
+    if (
+      mainWindow &&
+      shouldHideMainWindowOnClose({
+        isQuitting,
+        voiceEnabled: getSettings().voice?.enabled,
+      })
+    ) {
+      event.preventDefault()
+      mainWindow.hide()
     }
   })
 
@@ -731,6 +744,7 @@ if (!gotTheLock) {
         destroyTray()
       })
       app.on('before-quit', () => {
+        isQuitting = true
         destroyTray()
       })
     })

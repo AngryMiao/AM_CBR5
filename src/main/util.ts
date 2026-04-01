@@ -27,7 +27,7 @@ export function sliceTextWithEllipsis(text: string, maxLength: number) {
 
 export function getLogger(logId: string) {
   const logger = log.create({ logId })
-  logger.transports.console.format = '{h}:{i}:{s}.{ms} › [{logId}] › {text}'
+  logger.transports.console.format = '{h}:{i}:{s}.{ms} > [{logId}] > {text}'
   logger.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] [{logId}] {text}'
   return logger
 }

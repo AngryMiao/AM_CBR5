@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next'
 import platform from '@/platform'
 import { KeyboardShortcutRecorder } from './KeyboardShortcutRecorder'
 
-const LEGACY_SHORTCUT_MESSAGE = '旧版配置：当前仅保存 keyCodes，重新录制后可升级为真实键名配置'
 const UNSTABLE_HID_MESSAGE = '该键当前没有稳定 HID 映射，执行可能失败'
 
 function parseTriggerWords(value: string): string[] {
@@ -20,10 +19,6 @@ function formatRecordedKeys(keys?: string[]): string {
   return orderRecordedKeys(keys || [])
     .map((code) => getRecordedKeyDisplayLabel(code))
     .join(' + ')
-}
-
-function isLegacyShortcut(shortcut: KeyboardShortcut): boolean {
-  return !shortcut.recordedKeys?.length && shortcut.keyCodes.length > 0
 }
 
 function hasUnstableRecordedKeys(shortcut: KeyboardShortcut): boolean {
@@ -42,10 +37,9 @@ export function KeyboardControlSettings(props: KeyboardControlSettingsProps) {
   const { t } = useTranslation()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [addingNew, setAddingNew] = useState(false)
-  const [newName, setNewName] = useState('')
   const [newTriggerWords, setNewTriggerWords] = useState('')
   const [newRecordedKeys, setNewRecordedKeys] = useState<string[]>([])
-  const newShortcutFieldsId = useId()
+  const newShortcutTriggerWordsId = useId()
 
   const handleDriverPathSelect = useCallback(async () => {
     const result = (await window.electronAPI?.invoke('dialog:openFile', {
@@ -78,13 +72,12 @@ export function KeyboardControlSettings(props: KeyboardControlSettingsProps) {
   )
 
   const addShortcut = useCallback(() => {
-    if (!newName.trim() || !newTriggerWords.trim() || newRecordedKeys.length === 0) {
+    if (!newTriggerWords.trim() || newRecordedKeys.length === 0) {
       return
     }
 
     const entry: KeyboardShortcut = {
       id: `ks_custom_${Date.now()}`,
-      name: newName.trim(),
       triggerWords: parseTriggerWords(newTriggerWords),
       recordedKeys: orderRecordedKeys(newRecordedKeys),
       keyCodes: [],
@@ -92,11 +85,10 @@ export function KeyboardControlSettings(props: KeyboardControlSettingsProps) {
     }
 
     onKeyboardShortcutsChange([...keyboardShortcuts, entry])
-    setNewName('')
     setNewTriggerWords('')
     setNewRecordedKeys([])
     setAddingNew(false)
-  }, [keyboardShortcuts, newName, newRecordedKeys, newTriggerWords, onKeyboardShortcutsChange])
+  }, [keyboardShortcuts, newRecordedKeys, newTriggerWords, onKeyboardShortcutsChange])
 
   const resetDefaults = useCallback(async () => {
     const platformType = await platform.getPlatform()
@@ -145,11 +137,8 @@ export function KeyboardControlSettings(props: KeyboardControlSettingsProps) {
 
         <div className="space-y-2">
           {keyboardShortcuts.map((shortcut) => {
-            const legacyShortcut = isLegacyShortcut(shortcut)
             const unstableShortcut = hasUnstableRecordedKeys(shortcut)
-            const displayKeys = shortcut.recordedKeys?.length
-              ? formatRecordedKeys(shortcut.recordedKeys)
-              : shortcut.keyCodes.join(', ')
+            const displayKeys = shortcut.recordedKeys?.length ? formatRecordedKeys(shortcut.recordedKeys) : ''
 
             return (
               <div key={shortcut.id} className="rounded-lg border dark:border-gray-700">
@@ -169,10 +158,8 @@ export function KeyboardControlSettings(props: KeyboardControlSettingsProps) {
                       className="mt-1 h-4 w-4"
                     />
                     <div className="space-y-1">
-                      <div className="text-sm font-medium">{shortcut.name}</div>
-                      <div className="text-xs text-gray-500">{shortcut.triggerWords.join(' / ')}</div>
+                      <div className="text-sm font-medium">{shortcut.triggerWords.join(' / ')}</div>
                       {displayKeys ? <div className="text-xs text-gray-400">{displayKeys}</div> : null}
-                      {legacyShortcut ? <div className="text-xs text-amber-600">{LEGACY_SHORTCUT_MESSAGE}</div> : null}
                       {unstableShortcut ? <div className="text-xs text-amber-600">{UNSTABLE_HID_MESSAGE}</div> : null}
                     </div>
                   </div>
@@ -181,18 +168,6 @@ export function KeyboardControlSettings(props: KeyboardControlSettingsProps) {
 
                 {expandedId === shortcut.id && (
                   <div className="space-y-3 border-t p-3 dark:border-gray-700">
-                    <div>
-                      <label htmlFor={`${shortcut.id}-name`} className="text-xs text-gray-500">
-                        {t('名称')}
-                      </label>
-                      <input
-                        id={`${shortcut.id}-name`}
-                        type="text"
-                        value={shortcut.name}
-                        onChange={(event) => updateShortcut(shortcut.id, { name: event.target.value })}
-                        className="w-full rounded border p-1.5 text-sm dark:border-gray-700 dark:bg-gray-800"
-                      />
-                    </div>
                     <div>
                       <label htmlFor={`${shortcut.id}-triggerWords`} className="text-xs text-gray-500">
                         {t('触发词（逗号分隔）')}
@@ -222,20 +197,7 @@ export function KeyboardControlSettings(props: KeyboardControlSettingsProps) {
                           }
                         />
                       </div>
-                      {legacyShortcut ? <p className="mt-1 text-xs text-amber-600">{LEGACY_SHORTCUT_MESSAGE}</p> : null}
                       {unstableShortcut ? <p className="mt-1 text-xs text-amber-600">{UNSTABLE_HID_MESSAGE}</p> : null}
-                    </div>
-                    <div>
-                      <label htmlFor={`${shortcut.id}-keyCodes`} className="text-xs text-gray-500">
-                        {t('Key Codes')}
-                      </label>
-                      <input
-                        id={`${shortcut.id}-keyCodes`}
-                        type="text"
-                        value={shortcut.keyCodes.join(', ')}
-                        readOnly
-                        className="w-full rounded border bg-gray-50 p-1.5 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900"
-                      />
                     </div>
                     {shortcut.id.startsWith('ks_custom_') ? (
                       <button
@@ -255,24 +217,11 @@ export function KeyboardControlSettings(props: KeyboardControlSettingsProps) {
         {addingNew && (
           <div className="space-y-3 rounded-lg border p-3 dark:border-gray-700">
             <div>
-              <label htmlFor={`${newShortcutFieldsId}-name`} className="text-xs text-gray-500">
-                {t('名称')}
-              </label>
-              <input
-                id={`${newShortcutFieldsId}-name`}
-                type="text"
-                value={newName}
-                onChange={(event) => setNewName(event.target.value)}
-                placeholder={t('如：截图') || ''}
-                className="w-full rounded border p-1.5 text-sm dark:border-gray-700 dark:bg-gray-800"
-              />
-            </div>
-            <div>
-              <label htmlFor={`${newShortcutFieldsId}-triggerWords`} className="text-xs text-gray-500">
+              <label htmlFor={newShortcutTriggerWordsId} className="text-xs text-gray-500">
                 {t('触发词（逗号分隔）')}
               </label>
               <input
-                id={`${newShortcutFieldsId}-triggerWords`}
+                id={newShortcutTriggerWordsId}
                 type="text"
                 value={newTriggerWords}
                 onChange={(event) => setNewTriggerWords(event.target.value)}
@@ -292,7 +241,7 @@ export function KeyboardControlSettings(props: KeyboardControlSettingsProps) {
             <div className="flex gap-2">
               <button
                 onClick={addShortcut}
-                disabled={!newName.trim() || !newTriggerWords.trim() || newRecordedKeys.length === 0}
+                disabled={!newTriggerWords.trim() || newRecordedKeys.length === 0}
                 className="rounded-lg bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t('确认添加')}

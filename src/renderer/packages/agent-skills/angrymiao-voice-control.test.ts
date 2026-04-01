@@ -25,7 +25,6 @@ describe('buildAngrymiaoAgentSkillPrompt', () => {
     const prompt = buildAngrymiaoAgentSkillPrompt('win32', undefined, [
       {
         id: 'ks_custom_copy_link',
-        name: '复制链接',
         triggerWords: ['复制链接', '复制地址'],
         keyCodes: ['110700E0', '11070006', '10070006', '100700E0'],
         enabled: true,
@@ -45,7 +44,6 @@ describe('buildAngrymiaoAgentSkillPrompt', () => {
       [
         {
           id: 'ks_custom_paste',
-          name: '粘贴',
           triggerWords: ['粘贴'],
           recordedKeys: ['ControlLeft', 'KeyV'],
           keyCodes: [],
@@ -67,7 +65,6 @@ describe('buildAngrymiaoAgentSkillPrompt', () => {
       [
         {
           id: 'ks_custom_trigger',
-          name: '自定义触发',
           triggerWords: ['咒语触发词'],
           recordedKeys: ['Digit1', 'Digit2', 'Digit3'],
           keyCodes: [],
@@ -95,7 +92,6 @@ describe('buildAngrymiaoAgentSkillPrompt', () => {
       [
         {
           id: 'ks_custom_literal',
-          name: '触发词',
           triggerWords: ['触发词'],
           recordedKeys: ['Digit1', 'Digit2', 'Digit3'],
           keyCodes: [],
@@ -116,7 +112,6 @@ describe('buildAngrymiaoAgentSkillPrompt', () => {
       [
         {
           id: 'ks_custom_literal_polite',
-          name: '触发词',
           triggerWords: ['触发词'],
           recordedKeys: ['Digit1', 'Digit2', 'Digit3'],
           keyCodes: [],

@@ -1,8 +1,12 @@
 const DISPLAY_LABELS: Record<string, string> = {
   ControlLeft: 'CtrlLeft',
+  ControlRight: 'CtrlRight',
   ShiftLeft: 'ShiftLeft',
+  ShiftRight: 'ShiftRight',
   AltLeft: 'AltLeft',
+  AltRight: 'AltRight',
   MetaLeft: 'Cmd/WinLeft',
+  MetaRight: 'Cmd/WinRight',
   ArrowUp: 'Up',
   ArrowDown: 'Down',
   ArrowLeft: 'Left',
@@ -20,7 +24,16 @@ const DISPLAY_LABELS: Record<string, string> = {
   Slash: '/',
 }
 
-const MODIFIER_ORDER = ['ControlLeft', 'ShiftLeft', 'AltLeft', 'MetaLeft'] as const
+const MODIFIER_ORDER = [
+  'ControlLeft',
+  'ControlRight',
+  'ShiftLeft',
+  'ShiftRight',
+  'AltLeft',
+  'AltRight',
+  'MetaLeft',
+  'MetaRight',
+] as const
 const STABLE_HID_KEYS = new Set<string>([
   ...MODIFIER_ORDER,
   ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((letter) => `Key${letter}`),

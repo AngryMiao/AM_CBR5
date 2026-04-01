@@ -126,42 +126,89 @@ function nextId(): string {
   return `ks_${++idCounter}`
 }
 
+function toRecordedModifierCode(hidName: 'CtrlLeft' | 'CmdLeft' | 'ShiftLeft' | 'AltLeft'): string {
+  switch (hidName) {
+    case 'CtrlLeft':
+      return 'ControlLeft'
+    case 'CmdLeft':
+      return 'MetaLeft'
+    case 'ShiftLeft':
+      return 'ShiftLeft'
+    case 'AltLeft':
+      return 'AltLeft'
+  }
+}
+
+function toRecordedKeyCode(hidName: keyof typeof HID): string {
+  if (hidName === 'CtrlLeft' || hidName === 'CmdLeft' || hidName === 'ShiftLeft' || hidName === 'AltLeft') {
+    return toRecordedModifierCode(hidName)
+  }
+
+  if (/^[A-Z]$/.test(hidName)) {
+    return `Key${hidName}`
+  }
+
+  if (/^Num[0-9]$/.test(hidName)) {
+    return `Digit${hidName.slice(3)}`
+  }
+
+  switch (hidName) {
+    case 'Up':
+      return 'ArrowUp'
+    case 'Down':
+      return 'ArrowDown'
+    case 'Left':
+      return 'ArrowLeft'
+    case 'Right':
+      return 'ArrowRight'
+    case 'Grave':
+      return 'Backquote'
+    case 'Apostrophe':
+      return 'Quote'
+    default:
+      return hidName
+  }
+}
+
+function makeRecordedShortcut(
+  triggerWords: string[],
+  recordedKeys: string[],
+  keyCodes: string[] = []
+): KeyboardShortcut {
+  return {
+    id: nextId(),
+    triggerWords,
+    recordedKeys,
+    keyCodes,
+    enabled: true,
+  }
+}
+
 export function getDefaultKeyboardShortcuts(platformType: string): KeyboardShortcut[] {
   idCounter = 0
   const isMac = platformType === 'darwin'
-  const mod = isMac ? HID.CmdLeft : HID.CtrlLeft
+  const modName = isMac ? 'CmdLeft' : 'CtrlLeft'
 
   return [
-    { id: nextId(), name: '复制', triggerWords: ['复制', '拷贝'], keyCodes: makeCombo([mod], HID.C), enabled: true },
-    { id: nextId(), name: '粘贴', triggerWords: ['粘贴'], keyCodes: makeCombo([mod], HID.V), enabled: true },
-    { id: nextId(), name: '剪切', triggerWords: ['剪切'], keyCodes: makeCombo([mod], HID.X), enabled: true },
-    { id: nextId(), name: '撤销', triggerWords: ['撤销'], keyCodes: makeCombo([mod], HID.Z), enabled: true },
-    {
-      id: nextId(),
-      name: '重做',
-      triggerWords: ['重做'],
-      keyCodes: isMac ? makeCombo([HID.CmdLeft, HID.ShiftLeft], HID.Z) : makeCombo([mod], HID.Y),
-      enabled: true,
-    },
-    { id: nextId(), name: '全选', triggerWords: ['全选'], keyCodes: makeCombo([mod], HID.A), enabled: true },
-    { id: nextId(), name: '保存', triggerWords: ['保存'], keyCodes: makeCombo([mod], HID.S), enabled: true },
-    { id: nextId(), name: '回车', triggerWords: ['回车', '换行'], keyCodes: makeSingleKey(HID.Enter), enabled: true },
-    {
-      id: nextId(),
-      name: '删除',
-      triggerWords: ['删除', '退格'],
-      keyCodes: makeSingleKey(HID.Backspace),
-      enabled: true,
-    },
-    { id: nextId(), name: 'Tab', triggerWords: ['Tab', '制表符'], keyCodes: makeSingleKey(HID.Tab), enabled: true },
-    {
-      id: nextId(),
-      name: '切换窗口',
-      triggerWords: ['切换窗口'],
-      keyCodes: isMac ? makeCombo([HID.CmdLeft], HID.Tab) : makeCombo([HID.AltLeft], HID.Tab),
-      enabled: true,
-    },
-    { id: nextId(), name: 'Esc', triggerWords: ['取消', '退出'], keyCodes: makeSingleKey(HID.Escape), enabled: true },
+    makeRecordedShortcut(['复制', '拷贝'], [toRecordedModifierCode(modName), toRecordedKeyCode('C')]),
+    makeRecordedShortcut(['粘贴'], [toRecordedModifierCode(modName), toRecordedKeyCode('V')]),
+    makeRecordedShortcut(['剪切'], [toRecordedModifierCode(modName), toRecordedKeyCode('X')]),
+    makeRecordedShortcut(['撤销'], [toRecordedModifierCode(modName), toRecordedKeyCode('Z')]),
+    isMac
+      ? makeRecordedShortcut(
+          ['重做'],
+          [toRecordedModifierCode('CmdLeft'), toRecordedModifierCode('ShiftLeft'), toRecordedKeyCode('Z')]
+        )
+      : makeRecordedShortcut(['重做'], [toRecordedModifierCode(modName), toRecordedKeyCode('Y')]),
+    makeRecordedShortcut(['全选'], [toRecordedModifierCode(modName), toRecordedKeyCode('A')]),
+    makeRecordedShortcut(['保存'], [toRecordedModifierCode(modName), toRecordedKeyCode('S')]),
+    makeRecordedShortcut(['回车', '换行'], [toRecordedKeyCode('Enter')]),
+    makeRecordedShortcut(['删除', '退格'], [toRecordedKeyCode('Backspace')]),
+    makeRecordedShortcut(['Tab', '制表符'], [toRecordedKeyCode('Tab')]),
+    isMac
+      ? makeRecordedShortcut(['切换窗口'], [toRecordedModifierCode('CmdLeft'), toRecordedKeyCode('Tab')])
+      : makeRecordedShortcut(['切换窗口'], [toRecordedModifierCode('AltLeft'), toRecordedKeyCode('Tab')]),
+    makeRecordedShortcut(['取消', '退出'], [toRecordedKeyCode('Escape')]),
   ]
 }
 

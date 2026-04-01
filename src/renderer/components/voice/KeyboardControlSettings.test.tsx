@@ -12,7 +12,7 @@ vi.mock('react-i18next', () => ({
 }))
 
 describe('KeyboardControlSettings', () => {
-  it('creates a custom shortcut using recordedKeys instead of rebuilding keyCodes locally', () => {
+  it('creates a custom shortcut with triggerWords and recordedKeys only', () => {
     const onKeyboardShortcutsChange = vi.fn()
 
     render(
@@ -24,7 +24,7 @@ describe('KeyboardControlSettings', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: '添加快捷键' }))
-    fireEvent.change(screen.getByLabelText('名称'), { target: { value: '粘贴' } })
+    expect(screen.queryByLabelText('名称')).toBeNull()
     fireEvent.change(screen.getByLabelText('触发词（逗号分隔）'), { target: { value: '粘贴' } })
 
     fireEvent.click(screen.getByRole('button', { name: '录制' }))
@@ -41,6 +41,7 @@ describe('KeyboardControlSettings', () => {
         keyCodes: [],
       }),
     ])
+    expect(onKeyboardShortcutsChange.mock.calls[0]?.[0]?.[0]).not.toHaveProperty('name')
   })
 
   it('shows a warning when recorded keys do not have stable HID coverage', () => {
@@ -49,7 +50,6 @@ describe('KeyboardControlSettings', () => {
         keyboardShortcuts={[
           {
             id: 'ks_unknown',
-            name: '日文键',
             triggerWords: ['日文键'],
             recordedKeys: ['IntlRo'],
             keyCodes: [],
@@ -64,13 +64,36 @@ describe('KeyboardControlSettings', () => {
     expect(screen.getByText('该键当前没有稳定 HID 映射，执行可能失败')).toBeTruthy()
   })
 
-  it('keeps legacy shortcuts with keyCodes readable until the user re-records them', () => {
+  it('shows recorded shortcuts with the recorder UI only and hides the old keyCodes editor', () => {
+    render(
+      <KeyboardControlSettings
+        keyboardShortcuts={[
+          {
+            id: 'ks_recorded',
+            triggerWords: ['粘贴'],
+            recordedKeys: ['ControlLeft', 'KeyV'],
+            keyCodes: [],
+            enabled: true,
+          },
+        ]}
+        onKeyboardDriverPathChange={vi.fn()}
+        onKeyboardShortcutsChange={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getAllByText('粘贴')[0])
+
+    expect(screen.getByDisplayValue('CtrlLeft + V')).toBeTruthy()
+    expect(screen.queryByLabelText('名称')).toBeNull()
+    expect(screen.queryByLabelText('Key Codes')).toBeNull()
+  })
+
+  it('does not show legacy compatibility guidance in the keyboard shortcut editor', () => {
     render(
       <KeyboardControlSettings
         keyboardShortcuts={[
           {
             id: 'ks_legacy',
-            name: '粘贴',
             triggerWords: ['粘贴'],
             keyCodes: ['110700E0', '11070019', '10070019', '100700E0'],
             enabled: true,
@@ -81,6 +104,10 @@ describe('KeyboardControlSettings', () => {
       />
     )
 
-    expect(screen.getByText('旧版配置：当前仅保存 keyCodes，重新录制后可升级为真实键名配置')).toBeTruthy()
+    fireEvent.click(screen.getAllByText('粘贴')[0])
+
+    expect(screen.queryByText('旧版配置：当前仅保存 keyCodes，重新录制后可升级为真实键名配置')).toBeNull()
+    expect(screen.queryByRole('button', { name: '重新录制按键组合' })).toBeNull()
+    expect(screen.queryByLabelText('Key Codes')).toBeNull()
   })
 })

@@ -1,20 +1,21 @@
 import { describe, expect, it } from 'vitest'
+import { getDefaultKeyboardShortcuts } from './defaults/keyboard-shortcuts'
 import { SettingsSchema } from './types'
 import { KeyboardShortcutSchema } from './types/voice'
 import { getRecordedKeyDisplayLabel, hasStableHidMapping, orderRecordedKeys } from './voice-key-reference'
 
 describe('KeyboardShortcutSchema', () => {
-  it('accepts recordedKeys as optional keyboard event codes', () => {
-    expect(
-      KeyboardShortcutSchema.parse({
-        id: 'ks_1',
-        name: '粘贴',
-        triggerWords: ['粘贴'],
-        keyCodes: ['110700E0', '11070019', '10070019', '100700E0'],
-        recordedKeys: ['ControlLeft', 'KeyV'],
-        enabled: true,
-      }).recordedKeys
-    ).toEqual(['ControlLeft', 'KeyV'])
+  it('accepts keyboard shortcuts without a name field', () => {
+    const shortcut = KeyboardShortcutSchema.parse({
+      id: 'ks_1',
+      triggerWords: ['粘贴'],
+      keyCodes: [],
+      recordedKeys: ['ControlLeft', 'KeyV'],
+      enabled: true,
+    })
+
+    expect(shortcut.recordedKeys).toEqual(['ControlLeft', 'KeyV'])
+    expect('name' in shortcut).toBe(false)
   })
 
   it('preserves recordedKeys in stored voice keyboard shortcuts', () => {
@@ -34,7 +35,6 @@ describe('KeyboardShortcutSchema', () => {
         keyboardShortcuts: [
           {
             id: 'ks_custom_paste',
-            name: '粘贴',
             triggerWords: ['粘贴'],
             recordedKeys: ['ControlLeft', 'KeyV'],
             keyCodes: [],
@@ -46,11 +46,25 @@ describe('KeyboardShortcutSchema', () => {
 
     expect(settings.voice?.keyboardShortcuts[0].recordedKeys).toEqual(['ControlLeft', 'KeyV'])
   })
+
+  it('builds default keyboard shortcuts directly in recordedKeys form', () => {
+    expect(getDefaultKeyboardShortcuts('win32')[1]).toMatchObject({
+      triggerWords: ['粘贴'],
+      recordedKeys: ['ControlLeft', 'KeyV'],
+      keyCodes: [],
+    })
+    expect(getDefaultKeyboardShortcuts('darwin')[1]).toMatchObject({
+      triggerWords: ['粘贴'],
+      recordedKeys: ['MetaLeft', 'KeyV'],
+      keyCodes: [],
+    })
+  })
 })
 
 describe('voice-key-reference helpers', () => {
   it('maps keyboard event codes to compact display labels', () => {
     expect(getRecordedKeyDisplayLabel('ControlLeft')).toBe('CtrlLeft')
+    expect(getRecordedKeyDisplayLabel('ControlRight')).toBe('CtrlRight')
     expect(getRecordedKeyDisplayLabel('KeyA')).toBe('A')
   })
 
@@ -60,6 +74,7 @@ describe('voice-key-reference helpers', () => {
 
   it('reports stable HID coverage for known keys only', () => {
     expect(hasStableHidMapping(['ControlLeft', 'KeyV'])).toBe(true)
+    expect(hasStableHidMapping(['ControlRight', 'KeyV'])).toBe(true)
     expect(hasStableHidMapping(['IntlRo'])).toBe(false)
   })
 })

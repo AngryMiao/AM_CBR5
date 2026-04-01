@@ -5,7 +5,11 @@ export function handleDeepLink(mainWindow: BrowserWindow, link: string) {
   const normalizedLink = link.replace(/^chatbox-dev:\/\//, 'chatbox://')
   const url = new URL(normalizedLink)
 
-  console.log('🔗 Parsed URL:', { hostname: url.hostname, pathname: url.pathname, params: url.searchParams.toString() })
+  console.log('[DeepLink] Parsed URL:', {
+    hostname: url.hostname,
+    pathname: url.pathname,
+    params: url.searchParams.toString(),
+  })
 
   // handle `chatbox://mcp/install?server=`
   if (url.hostname === 'mcp' && url.pathname === '/install') {
@@ -24,7 +28,7 @@ export function handleDeepLink(mainWindow: BrowserWindow, link: string) {
   // if (url.hostname === 'auth' && url.pathname === '/callback') {
   //   const ticketId = url.searchParams.get('ticket_id') || ''
   //   const status = url.searchParams.get('status') || ''
-  //   log.info('✅ Auth callback received:', { ticketId, status })
+  //   log.info('[Auth] callback received:', { ticketId, status })
   //   mainWindow.webContents.send('navigate-to', `/settings/provider?ticket_id=${ticketId}&status=${status}`)
   // }
 }

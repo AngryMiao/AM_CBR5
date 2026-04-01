@@ -30,7 +30,6 @@ vi.mock('@/stores/settingsStore', () => ({
           keyboardShortcuts: [
             {
               id: 'shortcut-1',
-              name: '自定义输出',
               triggerWords: ['自定义触发词'],
               recordedKeys: ['Digit1', 'Digit2', 'Digit3'],
               keyCodes: [],
