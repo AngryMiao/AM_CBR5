@@ -70,6 +70,8 @@ import {
   showTypelessOverlay,
   updateTypelessOverlay,
 } from './typeless-overlay'
+import { syncVoiceRuntimeDispatch } from './voice-runtime-dispatch'
+import { destroyVoiceRuntimeWindow, ensureVoiceRuntimeWindow } from './voice-runtime-window'
 import { shouldHideMainWindowOnClose } from './window-close-behavior'
 import * as windowState from './window_state'
 
@@ -118,6 +120,47 @@ type FunASRLaunchConfig = {
   launchCommand: string
   launchArgs: string
   launchCwd?: string
+}
+
+type VoiceShortcutOverride = {
+  enabled?: boolean
+  shortcut?: string
+  workMode?: VoiceWorkMode
+}
+
+function getRendererPreloadPath() {
+  return app.isPackaged ? path.join(__dirname, '../preload/index.js') : path.join(__dirname, '../../out/preload/index.js')
+}
+
+function getRendererHtmlPath() {
+  return path.join(__dirname, '../renderer/index.html')
+}
+
+function resolveEffectiveVoiceSettings(voiceOverride?: VoiceShortcutOverride) {
+  const voiceSettings = getSettings().voice
+  return {
+    enabled: voiceOverride?.enabled ?? voiceSettings?.enabled,
+    workMode: voiceOverride?.workMode ?? voiceSettings?.workMode,
+  }
+}
+
+function syncVoiceRuntimeResources(voiceOverride?: VoiceShortcutOverride) {
+  const voiceSettings = resolveEffectiveVoiceSettings(voiceOverride)
+  return syncVoiceRuntimeDispatch({
+    isQuitting,
+    voiceEnabled: voiceSettings.enabled,
+    workMode: voiceSettings.workMode,
+    mainWindow,
+    ensureVoiceRuntimeWindow: () =>
+      ensureVoiceRuntimeWindow({
+        isPackaged: app.isPackaged,
+        rendererURL: process.env['ELECTRON_RENDERER_URL'],
+        preloadPath: getRendererPreloadPath(),
+        rendererHtmlPath: getRendererHtmlPath(),
+      }),
+    destroyVoiceRuntimeWindow,
+    setHotkeyDispatchWindow,
+  })
 }
 
 function parseLaunchArgs(args: string): string[] {
@@ -317,7 +360,7 @@ function isValidShortcut(shortcut: string): boolean {
 
 function registerShortcuts(
   shortcutSetting?: ShortcutSetting,
-  voiceOverride?: { enabled?: boolean; shortcut?: string; workMode?: VoiceWorkMode }
+  voiceOverride?: VoiceShortcutOverride
 ) {
   log.info('registerShortcuts called')
   if (!shortcutSetting) {
@@ -346,9 +389,14 @@ function registerShortcuts(
 
     log.info('Voice registration:', { voiceEnabled, toggleVoiceRaw, hasOverride: !!voiceOverride })
 
+    const effectiveWorkMode = voiceOverride?.workMode ?? voiceSettings?.workMode
+    syncVoiceRuntimeResources({
+      enabled: voiceEnabled,
+      workMode: effectiveWorkMode,
+    })
+
     if (voiceEnabled) {
       const toggleVoice = normalizeStoredVoiceHotkey(toggleVoiceRaw)
-      const effectiveWorkMode = voiceOverride?.workMode ?? voiceSettings?.workMode
       const isTypelessMode = effectiveWorkMode === 'typeless'
       const showWindow = !isTypelessMode
 
@@ -482,19 +530,17 @@ async function createWindow() {
       webSecurity: false, // 其中一个作用是解决跨域问题
       allowRunningInsecureContent: false,
       backgroundThrottling: false,
-      preload: app.isPackaged
-        ? path.join(__dirname, '../preload/index.js')
-        : path.join(__dirname, '../../out/preload/index.js'),
+      preload: getRendererPreloadPath(),
     },
   })
-  setHotkeyDispatchWindow(mainWindow)
+  syncVoiceRuntimeResources()
 
   // Load the local URL for development or the local
   // html file for production
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
+    mainWindow.loadFile(getRendererHtmlPath())
   }
 
   mainWindow.on('ready-to-show', () => {
@@ -533,8 +579,8 @@ async function createWindow() {
   })
 
   mainWindow.on('closed', () => {
-    setHotkeyDispatchWindow(null)
     mainWindow = null
+    syncVoiceRuntimeResources()
   })
 
   // Send maximized state changes to renderer
@@ -740,6 +786,7 @@ if (!gotTheLock) {
         stopFunASRService('app will quit')
         void doubaoASRManager.destroy()
         destroyTypelessOverlay()
+        destroyVoiceRuntimeWindow()
         mcpIpc.closeAllTransports()
         destroyTray()
       })
@@ -922,7 +969,7 @@ ipcMain.handle('ensureShortcutConfig', (event, json) => {
 
 ipcMain.handle(
   'ensureVoiceShortcut',
-  (event, voiceOverride?: { enabled?: boolean; shortcut?: string; workMode?: VoiceWorkMode }) => {
+  (event, voiceOverride?: VoiceShortcutOverride) => {
     log.info('ensureVoiceShortcut called with:', voiceOverride)
     unregisterShortcuts()
     registerShortcuts(undefined, voiceOverride)

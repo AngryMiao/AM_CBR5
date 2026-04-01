@@ -1,3 +1,4 @@
+import { isVoiceRuntimeModeSearch } from '@shared/runtime-mode'
 import { SplashScreen } from '@capacitor/splash-screen'
 import '@mantine/core/styles.css'
 import '@mantine/spotlight/styles.css'
@@ -7,6 +8,7 @@ import { useAtomValue } from 'jotai'
 import 'photoswipe/dist/photoswipe.css'
 import { StrictMode, useState } from 'react'
 import ReactDOM from 'react-dom/client'
+import { VoiceRuntimeApp } from './VoiceRuntimeApp'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import i18n from './i18n'
 import { getLogger } from './lib/utils'
@@ -21,6 +23,7 @@ import queryClient from './stores/queryClient'
 import { CHATBOX_BUILD_PLATFORM, CHATBOX_BUILD_TARGET } from './variables'
 
 const log = getLogger('index')
+const isVoiceRuntimeMode = typeof window !== 'undefined' && isVoiceRuntimeModeSearch(window.location.search)
 
 // 按需加载 polyfill
 import './setup/load_polyfill'
@@ -145,7 +148,7 @@ initializeApp()
       <StrictMode>
         <ErrorBoundary>
           <QueryClientProvider client={queryClient}>
-            <RouterProvider router={router} />
+            {isVoiceRuntimeMode ? <VoiceRuntimeApp /> : <RouterProvider router={router} />}
           </QueryClientProvider>
         </ErrorBoundary>
       </StrictMode>
