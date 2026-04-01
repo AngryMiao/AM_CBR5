@@ -30,11 +30,12 @@ import path from 'path'
 // @ts-expect-error - source-map-support doesn't have type definitions
 import * as sourceMapSupport from 'source-map-support'
 import type { ShortcutSetting } from 'src/shared/types'
-import { normalizeStoredVoiceHotkey } from 'src/shared/voice-hotkey'
 import { getDefaultFunASRLaunchCommand, type VoiceWorkMode } from 'src/shared/types/voice'
+import { normalizeStoredVoiceHotkey } from 'src/shared/voice-hotkey'
 import * as analystic from './analystic-node'
 import * as autoLauncher from './autoLauncher'
 import { handleDeepLink } from './deeplinks'
+import { createDoubaoASRManager } from './doubao-asr'
 import { setHotkeyDispatchWindow, startGlobalKeyboardHook, stopGlobalKeyboardHook } from './global-keyboard-hook'
 import Locale from './locales'
 import * as mcpIpc from './mcp/ipc-stdio-transport'
@@ -55,13 +56,6 @@ import {
   store,
 } from './store-node'
 import {
-  destroyTypelessOverlay,
-  hideTypelessOverlay,
-  type OverlayState,
-  showTypelessOverlay,
-  updateTypelessOverlay,
-} from './typeless-overlay'
-import {
   consumeSuppressMainWindowAutoShowOnActivate,
   destroyTypelessChatResult,
   hideTypelessChatResult,
@@ -69,6 +63,13 @@ import {
   registerTypelessChatResultIpc,
   showTypelessChatResult,
 } from './typeless-chat-result'
+import {
+  destroyTypelessOverlay,
+  hideTypelessOverlay,
+  type OverlayState,
+  showTypelessOverlay,
+  updateTypelessOverlay,
+} from './typeless-overlay'
 import * as windowState from './window_state'
 
 // 这行代码是解决 Windows 通知的标题和图标不正确的问题，标题会错误显示成 electron.app.Angrymiao-Voice-Control
@@ -96,7 +97,7 @@ if (process.defaultApp) {
   app.setAsDefaultProtocolClient(PROTOCOL_SCHEME)
 }
 
-console.log(`📱 URL Scheme registered: ${PROTOCOL_SCHEME}://`)
+console.log(`[Protocol] URL scheme registered: ${PROTOCOL_SCHEME}://`)
 
 // --------- 全局变量 ---------
 
@@ -105,6 +106,7 @@ let tray: Tray | null = null
 let funasrProcess: ChildProcess | null = null
 let funasrStarting = false
 let funasrManagedBaseURL = ''
+const doubaoASRManager = createDoubaoASRManager()
 
 type FunASRLaunchConfig = {
   enabled: boolean
@@ -723,6 +725,7 @@ if (!gotTheLock) {
         cleanupTypelessChatResultIpc()
         destroyTypelessChatResult()
         stopFunASRService('app will quit')
+        void doubaoASRManager.destroy()
         destroyTypelessOverlay()
         mcpIpc.closeAllTransports()
         destroyTray()
@@ -961,6 +964,27 @@ ipcMain.handle('getFunASRServiceStatus', () => {
 
 ipcMain.handle('restartFunASRService', () => {
   return restartFunASRService()
+})
+
+ipcMain.handle('doubaoASR:createSession', async (event, config) => {
+  return doubaoASRManager.createSession(config, (payload) => {
+    if (event.sender.isDestroyed()) {
+      return
+    }
+    event.sender.send('doubaoASR:event', payload)
+  })
+})
+
+ipcMain.handle('doubaoASR:appendAudio', (_event, sessionId: string, chunk: Uint8Array) => {
+  return doubaoASRManager.appendAudio(sessionId, chunk)
+})
+
+ipcMain.handle('doubaoASR:commitSession', (_event, sessionId: string) => {
+  return doubaoASRManager.commitSession(sessionId)
+})
+
+ipcMain.handle('doubaoASR:closeSession', (_event, sessionId: string) => {
+  return doubaoASRManager.closeSession(sessionId)
 })
 
 ipcMain.handle('shouldUseDarkColors', () => nativeTheme.shouldUseDarkColors)

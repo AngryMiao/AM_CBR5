@@ -4,12 +4,37 @@ export type TypelessChatResultPayload = {
   replyText: string
 }
 
+export type DoubaoASRSessionConfig = {
+  apiKey?: string
+  appId: string
+  accessKey: string
+  resourceId?: string
+  model: string
+  baseURL?: string
+}
+
+export type DoubaoASRSessionHandle = {
+  sessionId: string
+}
+
+export type DoubaoASRSessionEvent = {
+  sessionId: string
+  type: 'partial' | 'final' | 'completed' | 'error'
+  text?: string
+  message?: string
+}
+
 export type TypelessChatResultClosedPayload = {
   userMessageId: string
 }
 
 export interface ElectronIPC {
   invoke: (channel: string, ...args: any[]) => Promise<any>
+  createDoubaoASRSession: (config: DoubaoASRSessionConfig) => Promise<DoubaoASRSessionHandle>
+  appendDoubaoASRAudio: (sessionId: string, chunk: Uint8Array) => Promise<boolean>
+  commitDoubaoASRSession: (sessionId: string) => Promise<boolean>
+  closeDoubaoASRSession: (sessionId: string) => Promise<boolean>
+  onDoubaoASREvent: (callback: (event: DoubaoASRSessionEvent) => void) => () => void
   showTypelessChatResult: (payload: TypelessChatResultPayload) => Promise<any>
   hideTypelessChatResult: () => Promise<any>
   onTypelessChatResultClosed: (callback: (payload: TypelessChatResultClosedPayload) => void) => () => void

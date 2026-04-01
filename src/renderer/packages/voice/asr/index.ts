@@ -22,6 +22,26 @@ export interface ASRProvider {
   getName(): string
 }
 
+export type StreamingASRSessionEvent =
+  | { type: 'partial'; text: string }
+  | { type: 'final'; text: string }
+  | { type: 'completed'; text: string }
+  | { type: 'error'; message: string }
+
+export interface StreamingASRSession {
+  appendAudio(chunk: Uint8Array): Promise<void>
+  commit(): Promise<void>
+  close(): Promise<void>
+}
+
+export interface StreamingASRProvider extends ASRProvider {
+  createStreamingSession(options: { onEvent: (event: StreamingASRSessionEvent) => void }): Promise<StreamingASRSession>
+}
+
+export function isStreamingASRProvider(provider: ASRProvider): provider is StreamingASRProvider {
+  return typeof (provider as StreamingASRProvider).createStreamingSession === 'function'
+}
+
 /**
  * ASR 错误类
  */
@@ -36,9 +56,10 @@ export class ASRError extends Error {
   }
 }
 
-export { WhisperLocalProvider } from './whisper-local'
-export { FunASRLocalProvider } from './funasr-local'
-export { OpenAIASRProvider } from './openai'
 export { AliyunASRProvider } from './aliyun'
 export { AzureASRProvider } from './azure'
+export { DoubaoASRProvider } from './doubao'
+export { FunASRLocalProvider } from './funasr-local'
 export { GoogleASRProvider } from './google'
+export { OpenAIASRProvider } from './openai'
+export { WhisperLocalProvider } from './whisper-local'

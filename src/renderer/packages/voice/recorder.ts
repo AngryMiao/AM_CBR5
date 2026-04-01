@@ -12,10 +12,13 @@ export class VoiceRecorder {
   private audioChunks: Blob[] = []
   private stream: MediaStream | null = null
   private audioContext: AudioContext | null = null
+  private sourceNode: MediaStreamAudioSourceNode | null = null
   private analyser: AnalyserNode | null = null
+  private scriptProcessor: ScriptProcessorNode | null = null
   private dataArray: Uint8Array<ArrayBuffer> | null = null
   private animationFrameId: number | null = null
   private onAudioLevelChange: ((level: number) => void) | null = null
+  private onAudioChunk: ((chunk: Uint8Array) => void) | null = null
   private silenceDetectionTimer: NodeJS.Timeout | null = null
   private onSilenceDetected: (() => void) | null = null
   private silenceThreshold: number = 0.01
@@ -27,6 +30,7 @@ export class VoiceRecorder {
    */
   async start(options?: {
     onAudioLevelChange?: (level: number) => void
+    onAudioChunk?: (chunk: Uint8Array) => void
     onSilenceDetected?: () => void
     silenceThreshold?: number
     silenceDuration?: number
@@ -47,13 +51,9 @@ export class VoiceRecorder {
           audio: requestedConstraints,
         })
       } catch (error) {
-        const errorName =
-          error instanceof Error ? error.name : (error as { name?: string } | null | undefined)?.name
+        const errorName = error instanceof Error ? error.name : (error as { name?: string } | null | undefined)?.name
 
-        if (
-          requestedDeviceId &&
-          (errorName === 'NotFoundError' || errorName === 'OverconstrainedError')
-        ) {
+        if (requestedDeviceId && (errorName === 'NotFoundError' || errorName === 'OverconstrainedError')) {
           console.warn('[VoiceRecorder] Requested microphone unavailable, falling back to system default', {
             requestedDeviceId,
             errorName,
@@ -84,7 +84,12 @@ export class VoiceRecorder {
       // 设置音频分析
       if (options?.onAudioLevelChange) {
         this.onAudioLevelChange = options.onAudioLevelChange
-        this.setupAudioAnalysis()
+      }
+      if (options?.onAudioChunk) {
+        this.onAudioChunk = options.onAudioChunk
+      }
+      if (options?.onAudioLevelChange || options?.onAudioChunk) {
+        this.setupAudioAnalysis(Boolean(options?.onAudioChunk))
       }
 
       // 设置静音检测
@@ -193,18 +198,30 @@ export class VoiceRecorder {
   /**
    * 设置音频分析
    */
-  private setupAudioAnalysis(): void {
+  private setupAudioAnalysis(enableAudioChunk: boolean = false): void {
     if (!this.stream) return
 
     try {
       this.audioContext = new AudioContext()
-      const source = this.audioContext.createMediaStreamSource(this.stream)
+      this.sourceNode = this.audioContext.createMediaStreamSource(this.stream)
       this.analyser = this.audioContext.createAnalyser()
       this.analyser.fftSize = 256
       const bufferLength = this.analyser.frequencyBinCount
       this.dataArray = new Uint8Array(new ArrayBuffer(bufferLength))
 
-      source.connect(this.analyser)
+      this.sourceNode.connect(this.analyser)
+
+      if (enableAudioChunk && typeof this.audioContext.createScriptProcessor === 'function') {
+        this.scriptProcessor = this.audioContext.createScriptProcessor(4096, 1, 1)
+        this.scriptProcessor.onaudioprocess = (event) => {
+          const chunk = this.buildPCMChunk(event.inputBuffer.getChannelData(0), this.audioContext?.sampleRate || 16000)
+          if (chunk.byteLength > 0) {
+            this.onAudioChunk?.(chunk)
+          }
+        }
+        this.sourceNode.connect(this.scriptProcessor)
+        this.scriptProcessor.connect(this.audioContext.destination)
+      }
 
       // 开始分析循环
       this.startAnalysisLoop()
@@ -271,6 +288,8 @@ export class VoiceRecorder {
 
     // 关闭音频上下文
     if (this.audioContext) {
+      this.scriptProcessor?.disconnect()
+      this.sourceNode?.disconnect()
       this.audioContext.close()
       this.audioContext = null
     }
@@ -282,9 +301,44 @@ export class VoiceRecorder {
     }
 
     this.analyser = null
+    this.sourceNode = null
+    this.scriptProcessor = null
     this.dataArray = null
     this.onAudioLevelChange = null
+    this.onAudioChunk = null
     this.onSilenceDetected = null
+  }
+
+  private buildPCMChunk(input: Float32Array, sampleRate: number): Uint8Array {
+    const normalizedSamples = sampleRate === 16000 ? input : this.resampleTo16k(input, sampleRate)
+    const pcm = new Int16Array(normalizedSamples.length)
+
+    for (let index = 0; index < normalizedSamples.length; index += 1) {
+      const clamped = Math.max(-1, Math.min(1, normalizedSamples[index]))
+      pcm[index] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff
+    }
+
+    return new Uint8Array(pcm.buffer.slice(0))
+  }
+
+  private resampleTo16k(input: Float32Array, sourceRate: number): Float32Array {
+    if (sourceRate <= 16000) {
+      return input
+    }
+
+    const ratio = sourceRate / 16000
+    const outputLength = Math.max(1, Math.round(input.length / ratio))
+    const output = new Float32Array(outputLength)
+
+    for (let index = 0; index < outputLength; index += 1) {
+      const position = index * ratio
+      const leftIndex = Math.floor(position)
+      const rightIndex = Math.min(leftIndex + 1, input.length - 1)
+      const weight = position - leftIndex
+      output[index] = input[leftIndex] * (1 - weight) + input[rightIndex] * weight
+    }
+
+    return output
   }
 
   /**
@@ -312,8 +366,7 @@ export class VoiceRecorder {
   }
 
   private async logResolvedMicrophone(requestedDeviceId?: string): Promise<void> {
-    const tracks =
-      this.stream && typeof this.stream.getAudioTracks === 'function' ? this.stream.getAudioTracks() : []
+    const tracks = this.stream && typeof this.stream.getAudioTracks === 'function' ? this.stream.getAudioTracks() : []
     const track = tracks[0]
     if (!track) {
       console.warn('[VoiceRecorder] No audio track available after getUserMedia')

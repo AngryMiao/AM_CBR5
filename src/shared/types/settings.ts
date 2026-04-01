@@ -313,7 +313,7 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
       workMode: z.enum(['chat', 'typeless']).default('chat'),
       triggerMode: z.enum(['toggle', 'hold']).default('toggle'),
       asrProvider: z
-        .enum(['whisper-local', 'funasr-local', 'openai', 'aliyun', 'azure', 'google'])
+        .enum(['whisper-local', 'funasr-local', 'openai', 'aliyun', 'azure', 'google', 'doubao'])
         .default('whisper-local'),
       ttsProvider: z.enum(['browser', 'openai', 'azure', 'elevenlabs']).default('browser'),
       asrConfig: z.record(z.string(), z.any()).default({}),
@@ -329,7 +329,6 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
         .array(
           z.object({
             id: z.string(),
-            name: z.string(),
             triggerWords: z.array(z.string()),
             keyCodes: z.array(z.string()),
             recordedKeys: z.array(z.string()).optional(),

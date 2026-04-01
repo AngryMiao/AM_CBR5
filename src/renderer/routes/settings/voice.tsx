@@ -15,6 +15,7 @@ import { useVoiceSettings } from '@/hooks/useVoiceSettings'
 import {
   AliyunASRProvider,
   AzureASRProvider,
+  DoubaoASRProvider,
   FunASRLocalProvider,
   GoogleASRProvider,
   OpenAIASRProvider,
@@ -71,6 +72,16 @@ export function RouteComponent() {
   const funasrRequestTemplateConfig = (settings.asrConfig.funasrLocal?.requestTemplate || {}) as any
   const whisperLocalConfig = (settings.asrConfig.whisperLocal || {}) as any
   const aliyunConfig = (settings.asrConfig.aliyun || {}) as any
+  const doubaoConfig = (settings.asrConfig.doubao || {}) as any
+  const buildDoubaoConfig = (overrides: Record<string, string>) => ({
+    ...doubaoConfig,
+    appId: settings.asrConfig.doubao?.appId || '',
+    accessKey: settings.asrConfig.doubao?.accessKey || settings.asrConfig.doubao?.apiKey || '',
+    resourceId: settings.asrConfig.doubao?.resourceId || 'volc.bigasr.sauc.duration',
+    model: settings.asrConfig.doubao?.model || 'bigmodel',
+    baseURL: settings.asrConfig.doubao?.baseURL || 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+    ...overrides,
+  })
 
   const refreshFunASRServiceStatus = useCallback(async () => {
     if (settings.asrProvider !== 'funasr-local') return
@@ -205,6 +216,18 @@ export function RouteComponent() {
             return
           }
           asrProvider = new GoogleASRProvider(settings.asrConfig.google)
+          break
+        case 'doubao':
+          if (
+            !(
+              settings.asrConfig.doubao?.appId &&
+              (settings.asrConfig.doubao?.accessKey || settings.asrConfig.doubao?.apiKey)
+            )
+          ) {
+            alert(t('请先配置豆包 App Key 和 Access Key'))
+            return
+          }
+          asrProvider = new DoubaoASRProvider(settings.asrConfig.doubao)
           break
       }
 
@@ -349,6 +372,7 @@ export function RouteComponent() {
           <option value="aliyun">{t('阿里云 Qwen ASR')}</option>
           <option value="azure">{t('Azure Speech Services')}</option>
           <option value="google">{t('Google Cloud Speech')}</option>
+          <option value="doubao">{t('豆包 Realtime ASR')}</option>
         </select>
 
         {/* FunASR Local 配置 */}
@@ -1082,6 +1106,107 @@ export function RouteComponent() {
                 }
                 className="w-5 h-5"
               />
+            </div>
+          </div>
+        )}
+
+        {settings.asrProvider === 'doubao' && (
+          <div className="pl-4 space-y-3 border-l-2 border-gray-300 dark:border-gray-700">
+            <div>
+              <label className="text-sm font-medium">{t('App Key')}</label>
+              <input
+                type="password"
+                value={settings.asrConfig.doubao?.appId || ''}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      doubao: buildDoubaoConfig({ appId: e.target.value }),
+                    },
+                  })
+                }
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">{t('对应请求头 X-Api-App-Key。')}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('Access Key')}</label>
+              <input
+                type="password"
+                value={settings.asrConfig.doubao?.accessKey || settings.asrConfig.doubao?.apiKey || ''}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      doubao: buildDoubaoConfig({ accessKey: e.target.value }),
+                    },
+                  })
+                }
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">{t('对应请求头 X-Api-Access-Key。')}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('Resource ID')}</label>
+              <input
+                type="text"
+                value={settings.asrConfig.doubao?.resourceId || 'volc.bigasr.sauc.duration'}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      doubao: buildDoubaoConfig({ resourceId: e.target.value }),
+                    },
+                  })
+                }
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">{t('官方文档示例默认值为 volc.bigasr.sauc.duration。')}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('模型')}</label>
+              <input
+                type="text"
+                value={settings.asrConfig.doubao?.model || 'bigmodel'}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      doubao: buildDoubaoConfig({ model: e.target.value }),
+                    },
+                  })
+                }
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {t('默认使用官方示例中的 bigmodel，可按控制台实际开通模型修改')}
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('双向流式 WebSocket 地址')}</label>
+              <input
+                type="text"
+                value={
+                  settings.asrConfig.doubao?.baseURL || 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async'
+                }
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    asrConfig: {
+                      ...settings.asrConfig,
+                      doubao: buildDoubaoConfig({ baseURL: e.target.value }),
+                    },
+                  })
+                }
+                className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {t('默认使用官方优化版双向流式接口 wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async。')}
+              </p>
             </div>
           </div>
         )}

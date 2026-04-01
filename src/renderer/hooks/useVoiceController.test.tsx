@@ -1,11 +1,12 @@
 /**
  * @vitest-environment jsdom
  */
-import { Provider, createStore } from 'jotai'
+
 import { act, renderHook } from '@testing-library/react'
+import { createStore, Provider } from 'jotai'
 import { createElement, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { typelessRequestAtom } from '@/stores/voiceStore'
+import { streamingTextAtom, typelessRequestAtom } from '@/stores/voiceStore'
 
 const mocks = vi.hoisted(() => {
   const hotkeys = {
@@ -21,6 +22,8 @@ const mocks = vi.hoisted(() => {
     transcribeDelayMs: 0,
     transcribeText: '',
     transcribeCalls: 0,
+    startOptions: null as Record<string, unknown> | null,
+    audioChunkHandler: null as ((chunk: Uint8Array) => void) | null,
   }
 
   const request = {
@@ -31,6 +34,7 @@ const mocks = vi.hoisted(() => {
       asrText: '你好',
       startedAt: 1,
     },
+    lastStartText: null as string | null,
   }
 
   const ipc = {
@@ -43,6 +47,39 @@ const mocks = vi.hoisted(() => {
     session: null as { messages: unknown[] } | null,
   }
 
+  const voiceSettings = {
+    enabled: true,
+    workMode: 'typeless',
+    asrProvider: 'whisper-local',
+    ttsProvider: 'browser',
+    asrConfig: {
+      doubao: {
+        appId: 'test-app',
+        accessKey: 'test-key',
+        model: 'bigmodel',
+        baseURL: 'wss://example.invalid/api/v3/sauc/bigmodel_async',
+      },
+    },
+    ttsConfig: {},
+    autoStopRecording: false,
+    silenceThreshold: 0.02,
+    silenceDuration: 3000,
+    maxRecordingDuration: 60000,
+    microphoneDeviceId: undefined,
+    autoPlayResponse: false,
+    shortcuts: {
+      toggleVoice: 'PageDown',
+    },
+  }
+
+  const doubao = {
+    createSessionCalls: 0,
+    appendCalls: [] as Uint8Array[],
+    commitCalls: 0,
+    closeCalls: 0,
+    onEvent: null as ((event: { type: string; text?: string; message?: string }) => void) | null,
+  }
+
   class MockVoiceRecorder {
     private state: 'inactive' | 'recording' = 'inactive'
 
@@ -50,14 +87,18 @@ const mocks = vi.hoisted(() => {
       return true
     }
 
-    async start() {
+    async start(options?: Record<string, unknown>) {
       recorder.startCalls += 1
+      recorder.startOptions = options ?? null
+      recorder.audioChunkHandler = (options?.onAudioChunk as ((chunk: Uint8Array) => void) | undefined) ?? null
       this.state = 'recording'
     }
 
     async stop() {
       const delayMs = recorder.stopDelays.shift() ?? 0
-      await new Promise((resolve) => setTimeout(resolve, delayMs))
+      if (delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs))
+      }
       recorder.stopCalls += 1
       this.state = 'inactive'
       return new Blob(['voice'])
@@ -82,6 +123,24 @@ const mocks = vi.hoisted(() => {
     }
   }
 
+  class MockDoubaoASRProvider extends MockASRProvider {
+    async createStreamingSession({ onEvent }: { onEvent: (event: { type: string; text?: string }) => void }) {
+      doubao.createSessionCalls += 1
+      doubao.onEvent = onEvent
+      return {
+        appendAudio: vi.fn(async (chunk: Uint8Array) => {
+          doubao.appendCalls.push(chunk)
+        }),
+        commit: vi.fn(async () => {
+          doubao.commitCalls += 1
+        }),
+        close: vi.fn(async () => {
+          doubao.closeCalls += 1
+        }),
+      }
+    }
+  }
+
   class MockTTSProvider {
     async speak() {}
     stop() {}
@@ -89,35 +148,22 @@ const mocks = vi.hoisted(() => {
 
   return {
     chat,
+    doubao,
     hotkeys,
     ipc,
     recorder,
     request,
     MockASRProvider,
+    MockDoubaoASRProvider,
     MockTTSProvider,
     MockVoiceRecorder,
+    voiceSettings,
   }
 })
 
 vi.mock('@/hooks/useVoiceSettings', () => ({
   useVoiceSettings: () => ({
-    settings: {
-      enabled: true,
-      workMode: 'typeless',
-      asrProvider: 'whisper-local',
-      ttsProvider: 'browser',
-      asrConfig: {},
-      ttsConfig: {},
-      autoStopRecording: false,
-      silenceThreshold: 0.02,
-      silenceDuration: 3000,
-      maxRecordingDuration: 60000,
-      microphoneDeviceId: undefined,
-      autoPlayResponse: false,
-      shortcuts: {
-        toggleVoice: 'PageDown',
-      },
-    },
+    settings: mocks.voiceSettings,
   }),
 }))
 
@@ -139,6 +185,9 @@ vi.mock('@/packages/voice/asr', () => ({
   AliyunASRProvider: mocks.MockASRProvider,
   AzureASRProvider: mocks.MockASRProvider,
   GoogleASRProvider: mocks.MockASRProvider,
+  DoubaoASRProvider: mocks.MockDoubaoASRProvider,
+  isStreamingASRProvider: (provider: unknown) =>
+    typeof (provider as { createStreamingSession?: unknown })?.createStreamingSession === 'function',
 }))
 
 vi.mock('@/packages/voice/tts', () => ({
@@ -163,10 +212,13 @@ vi.mock('@/packages/voice/typeless-execution-state', () => ({
 }))
 
 vi.mock('@/packages/voice/typeless-request', () => ({
-  startTypelessRequest: vi.fn(async () => ({
-    context: mocks.request.context,
-    submitPromise: Promise.resolve(),
-  })),
+  startTypelessRequest: vi.fn(async ({ text }: { text: string }) => {
+    mocks.request.lastStartText = text
+    return {
+      context: { ...mocks.request.context, asrText: text },
+      submitPromise: Promise.resolve(),
+    }
+  }),
 }))
 
 vi.mock('@/packages/voice/angrymiao-session', () => ({
@@ -203,13 +255,23 @@ vi.mock('@shared/utils/message', () => ({
     message.contentParts?.map((part) => part.text ?? '').join('') ?? '',
 }))
 
-import { useVoiceController } from './useVoiceController'
+import { startTypelessRequest } from '@/packages/voice/typeless-request'
 import { submitNewUserMessage } from '@/stores/session/messages'
+import { useVoiceController } from './useVoiceController'
 
 function createWrapper(initializer?: (store: ReturnType<typeof createStore>) => void) {
   const store = createStore()
   initializer?.(store)
   return ({ children }: { children: ReactNode }) => createElement(Provider, { store }, children)
+}
+
+function createWrapperWithStore(initializer?: (store: ReturnType<typeof createStore>) => void) {
+  const store = createStore()
+  initializer?.(store)
+  return {
+    store,
+    wrapper: ({ children }: { children: ReactNode }) => createElement(Provider, { store }, children),
+  }
 }
 
 function hasInvokeCall(channel: string) {
@@ -238,8 +300,36 @@ describe('useVoiceController typeless hotkey regressions', () => {
     mocks.recorder.transcribeDelayMs = 0
     mocks.recorder.transcribeText = ''
     mocks.recorder.transcribeCalls = 0
+    mocks.recorder.startOptions = null
+    mocks.recorder.audioChunkHandler = null
     mocks.request.executionPhase = null
+    mocks.request.lastStartText = null
     mocks.chat.session = null
+    mocks.voiceSettings.enabled = true
+    mocks.voiceSettings.workMode = 'typeless'
+    mocks.voiceSettings.asrProvider = 'whisper-local'
+    mocks.voiceSettings.ttsProvider = 'browser'
+    mocks.voiceSettings.asrConfig = {
+      doubao: {
+        appId: 'test-app',
+        accessKey: 'test-key',
+        model: 'bigmodel',
+        baseURL: 'wss://example.invalid/api/v3/sauc/bigmodel_async',
+      },
+    }
+    mocks.voiceSettings.ttsConfig = {}
+    mocks.voiceSettings.autoStopRecording = false
+    mocks.voiceSettings.silenceThreshold = 0.02
+    mocks.voiceSettings.silenceDuration = 3000
+    mocks.voiceSettings.maxRecordingDuration = 60000
+    mocks.voiceSettings.microphoneDeviceId = undefined
+    mocks.voiceSettings.autoPlayResponse = false
+    mocks.voiceSettings.shortcuts = { toggleVoice: 'PageDown' }
+    mocks.doubao.createSessionCalls = 0
+    mocks.doubao.appendCalls = []
+    mocks.doubao.commitCalls = 0
+    mocks.doubao.closeCalls = 0
+    mocks.doubao.onEvent = null
     mocks.ipc.invoke.mockImplementation(async (channel: string) => {
       if (channel === 'ensureMicrophonePermission' || channel === 'ensureAccessibilityPermission') {
         return true
@@ -435,5 +525,47 @@ describe('useVoiceController typeless hotkey regressions', () => {
     expect(mocks.recorder.startCalls).toBe(1)
     expect(mocks.ipc.showTypelessChatResult).toHaveBeenCalledTimes(1)
     expect(mocks.ipc.hideTypelessChatResult).toHaveBeenCalled()
+  })
+
+  it('streams doubao asr partials and submits the completed transcript on stop', async () => {
+    mocks.voiceSettings.asrProvider = 'doubao'
+    const { store, wrapper } = createWrapperWithStore()
+    const { result } = renderHook(() => useVoiceController(), { wrapper })
+
+    await act(async () => {
+      await result.current.startRecording()
+    })
+
+    expect(mocks.doubao.createSessionCalls).toBe(1)
+
+    await act(async () => {
+      mocks.recorder.audioChunkHandler?.(new Uint8Array([1, 2, 3, 4]))
+      await flushAsyncWork()
+      mocks.doubao.onEvent?.({ type: 'partial', text: '你' })
+      await flushAsyncWork()
+    })
+
+    expect(store.get(streamingTextAtom)).toBe('你')
+
+    let stopPromise: Promise<unknown> | null = null
+    await act(async () => {
+      stopPromise = result.current.stopRecording()
+      await flushAsyncWork()
+    })
+
+    expect(mocks.doubao.commitCalls).toBe(1)
+
+    await act(async () => {
+      mocks.doubao.onEvent?.({ type: 'completed', text: '你好' })
+      await flushAsyncWork(20)
+      await stopPromise
+    })
+
+    expect(mocks.request.lastStartText).toBe('你好')
+    expect(vi.mocked(startTypelessRequest)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: '你好',
+      })
+    )
   })
 })

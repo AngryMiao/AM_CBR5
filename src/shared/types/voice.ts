@@ -20,7 +20,15 @@ export const VoiceWorkModeSchema = z.enum(['chat', 'typeless'])
 export type VoiceWorkMode = z.infer<typeof VoiceWorkModeSchema>
 
 // ASR (Automatic Speech Recognition) 提供商
-export const ASRProviderSchema = z.enum(['whisper-local', 'funasr-local', 'openai', 'aliyun', 'azure', 'google'])
+export const ASRProviderSchema = z.enum([
+  'whisper-local',
+  'funasr-local',
+  'openai',
+  'aliyun',
+  'azure',
+  'google',
+  'doubao',
+])
 export type ASRProvider = z.infer<typeof ASRProviderSchema>
 
 // TTS (Text-to-Speech) 提供商
@@ -105,6 +113,16 @@ export const ASRConfigSchema = z.object({
       languageCode: z.string().default('zh-CN'),
     })
     .optional(),
+  doubao: z
+    .object({
+      apiKey: z.string().optional(),
+      appId: z.string().default(''),
+      accessKey: z.string().default(''),
+      resourceId: z.string().default('volc.bigasr.sauc.duration'),
+      model: z.string().default('bigmodel'),
+      baseURL: z.string().default('wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async'),
+    })
+    .optional(),
 })
 export type ASRConfig = z.infer<typeof ASRConfigSchema>
 
@@ -148,7 +166,6 @@ export type TTSConfig = z.infer<typeof TTSConfigSchema>
 // 键盘快捷键映射条目
 export const KeyboardShortcutSchema = z.object({
   id: z.string(),
-  name: z.string(), // 显示名，如 "复制"
   triggerWords: z.array(z.string()), // 语音触发词，如 ["复制", "拷贝"]
   keyCodes: z.array(z.string()), // hex key codes，如 ["110700E0","11070006","10070006","100700E0"]
   recordedKeys: z.array(z.string()).optional(), // 录制得到的 KeyboardEvent.code，如 ["ControlLeft", "KeyV"]

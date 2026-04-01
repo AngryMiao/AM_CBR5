@@ -1,6 +1,6 @@
 import { createMessage, type Settings } from '@shared/types'
-import { normalizeRecordedVoiceHotkey, normalizeStoredVoiceHotkey } from '@shared/voice-hotkey'
 import { getMessageText } from '@shared/utils/message'
+import { normalizeRecordedVoiceHotkey, normalizeStoredVoiceHotkey } from '@shared/voice-hotkey'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { useCallback, useEffect, useRef } from 'react'
 import { useVoiceSettings } from '@/hooks/useVoiceSettings'
@@ -8,24 +8,26 @@ import { ANGRYMIAO_SKILL_BUNDLE_ID, ANGRYMIAO_SKILL_RUNTIME_ID } from '@/package
 import { mcpController } from '@/packages/mcp/controller'
 import { getInstalledSkillBundle, resolveSkillBundleRuntimeServerConfig } from '@/packages/skill-bundles'
 import { ensureAngrymiaoSession } from '@/packages/voice/angrymiao-session'
-import type { ASRProvider } from '@/packages/voice/asr'
+import type { ASRProvider, StreamingASRSession, StreamingASRSessionEvent } from '@/packages/voice/asr'
 import {
   AliyunASRProvider,
   AzureASRProvider,
+  DoubaoASRProvider,
   FunASRLocalProvider,
   GoogleASRProvider,
+  isStreamingASRProvider,
   OpenAIASRProvider,
   WhisperLocalProvider,
 } from '@/packages/voice/asr'
+import { VoiceRecorder } from '@/packages/voice/recorder'
+import type { TTSProvider } from '@/packages/voice/tts'
+import { AzureTTSProvider, BrowserTTSProvider, ElevenLabsTTSProvider, OpenAITTSProvider } from '@/packages/voice/tts'
 import {
   deriveTypelessExecutionState,
   findAssistantMessageForUser,
   mapTypelessExecutionStateToOverlay,
 } from '@/packages/voice/typeless-execution-state'
 import { startTypelessRequest } from '@/packages/voice/typeless-request'
-import { VoiceRecorder } from '@/packages/voice/recorder'
-import type { TTSProvider } from '@/packages/voice/tts'
-import { AzureTTSProvider, BrowserTTSProvider, ElevenLabsTTSProvider, OpenAITTSProvider } from '@/packages/voice/tts'
 import platform from '@/platform'
 import * as chatStore from '@/stores/chatStore'
 import { switchCurrentSession } from '@/stores/session/crud'
@@ -37,8 +39,8 @@ import {
   isSpeakingAtom,
   speakingTextAtom,
   streamingTextAtom,
-  transcriptAtom,
   type TypelessStatus,
+  transcriptAtom,
   typelessChatResultAtom,
   typelessRequestAtom,
   typelessStatusAtom,
@@ -50,6 +52,40 @@ import {
 type TypelessOperationPhase = 'idle' | 'recording' | 'asr' | 'llm' | 'mcp' | 'result'
 
 const HOTKEY_RESTART_THRESHOLD_MS = 180
+
+type PendingStreamingRecognition = {
+  promise: Promise<string>
+  reject: (error: Error) => void
+  resolve: (text: string) => void
+}
+
+function createPendingStreamingRecognition(): PendingStreamingRecognition {
+  let settled = false
+  let resolvePromise!: (text: string) => void
+  let rejectPromise!: (error: Error) => void
+  const promise = new Promise<string>((resolve, reject) => {
+    resolvePromise = resolve
+    rejectPromise = reject
+  })
+
+  return {
+    promise,
+    resolve: (text: string) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      resolvePromise(text)
+    },
+    reject: (error: Error) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      rejectPromise(error)
+    },
+  }
+}
 
 async function ensureAngrymiaoSkillRuntime(settings?: Partial<Settings>): Promise<void> {
   if (platform.type !== 'desktop') return
@@ -124,6 +160,9 @@ export function useVoiceController() {
 
   const recorderRef = useRef<VoiceRecorder | null>(null)
   const asrProviderRef = useRef<ASRProvider | null>(null)
+  const streamingASRSessionRef = useRef<StreamingASRSession | null>(null)
+  const pendingStreamingRecognitionRef = useRef<PendingStreamingRecognition | null>(null)
+  const latestStreamingTranscriptRef = useRef('')
   const ttsProviderRef = useRef<TTSProvider | null>(null)
   const isSpeakingRef = useRef(false)
   const voiceModeRef = useRef(voiceMode)
@@ -176,6 +215,55 @@ export function useVoiceController() {
       interruptedHotkeyRestartTimerRef.current = null
     }
   }, [])
+
+  const rejectPendingStreamingRecognition = useCallback((message: string) => {
+    const pendingRecognition = pendingStreamingRecognitionRef.current
+    if (!pendingRecognition) {
+      return
+    }
+
+    pendingStreamingRecognitionRef.current = null
+    pendingRecognition.reject(new Error(message))
+  }, [])
+
+  const closeStreamingASRSession = useCallback(async () => {
+    const session = streamingASRSessionRef.current
+    streamingASRSessionRef.current = null
+    if (!session) {
+      return
+    }
+
+    try {
+      await session.close()
+    } catch (error) {
+      console.error('Failed to close streaming ASR session:', error)
+    }
+  }, [])
+
+  const handleStreamingASREvent = useCallback(
+    (event: StreamingASRSessionEvent) => {
+      if (event.type === 'error') {
+        const message = event.message || '实时语音识别失败'
+        setError(message)
+        rejectPendingStreamingRecognition(message)
+        return
+      }
+
+      const text = event.text.trim()
+      if (text) {
+        latestStreamingTranscriptRef.current = text
+        setStreamingText(text)
+      }
+
+      if (event.type === 'completed') {
+        const finalText = text || latestStreamingTranscriptRef.current.trim()
+        const pendingRecognition = pendingStreamingRecognitionRef.current
+        pendingStreamingRecognitionRef.current = null
+        pendingRecognition?.resolve(finalText)
+      }
+    },
+    [rejectPendingStreamingRecognition, setError, setStreamingText]
+  )
 
   const clearTypelessResultForNextRound = useCallback(() => {
     if (settings.workMode !== 'typeless') {
@@ -249,6 +337,14 @@ export function useVoiceController() {
   useEffect(() => {
     currentTypelessRequestRef.current = typelessRequest
   }, [typelessRequest])
+
+  useEffect(() => {
+    asrProviderRef.current = null
+  }, [settings.asrProvider, settings.asrConfig])
+
+  useEffect(() => {
+    ttsProviderRef.current = null
+  }, [settings.ttsProvider, settings.ttsConfig])
 
   useEffect(() => {
     if (platform.type !== 'desktop' || settings.workMode !== 'typeless') {
@@ -491,6 +587,17 @@ export function useVoiceController() {
         }
         asrProviderRef.current = new GoogleASRProvider(settings.asrConfig.google)
         break
+      case 'doubao':
+        if (
+          !(
+            settings.asrConfig.doubao?.appId &&
+            (settings.asrConfig.doubao?.accessKey || settings.asrConfig.doubao?.apiKey)
+          )
+        ) {
+          throw new Error('豆包 App Key / Access Key 未配置')
+        }
+        asrProviderRef.current = new DoubaoASRProvider(settings.asrConfig.doubao)
+        break
       default:
         throw new Error(`未知的 ASR 提供商: ${settings.asrProvider}`)
     }
@@ -581,12 +688,14 @@ export function useVoiceController() {
     stopStreamingRecognition()
     clearInterruptedHotkeyRestartTimer()
     clearTypelessOperation()
+    rejectPendingStreamingRecognition('录音已取消')
 
     pendingHotkeyReleaseRef.current = false
     setIsRecording(false)
     setVoiceMode('inactive')
     setPanelVisible(false)
     setStreamingText('')
+    latestStreamingTranscriptRef.current = ''
     setTranscript('')
     setTypelessStatus(null)
     setTypelessRequest(null)
@@ -604,6 +713,8 @@ export function useVoiceController() {
       }
     }
 
+    await closeStreamingASRSession()
+
     return true
   }, [
     settings.workMode,
@@ -612,6 +723,8 @@ export function useVoiceController() {
     stopStreamingRecognition,
     clearInterruptedHotkeyRestartTimer,
     clearTypelessOperation,
+    closeStreamingASRSession,
+    rejectPendingStreamingRecognition,
     setIsRecording,
     setVoiceMode,
     setPanelVisible,
@@ -649,9 +762,23 @@ export function useVoiceController() {
       setVoiceMode('listening')
       setPanelVisible(true)
       setStreamingText('')
+      latestStreamingTranscriptRef.current = ''
 
       const recorder = new VoiceRecorder()
       recorderRef.current = recorder
+      const shouldUseDoubaoStreaming = settings.workMode === 'typeless' && settings.asrProvider === 'doubao'
+      if (shouldUseDoubaoStreaming) {
+        const asrProvider = getASRProvider()
+        if (!isStreamingASRProvider(asrProvider)) {
+          throw new Error('当前 ASR 提供商不支持流式识别')
+        }
+
+        rejectPendingStreamingRecognition('新的实时识别会话已开始')
+        pendingStreamingRecognitionRef.current = createPendingStreamingRecognition()
+        streamingASRSessionRef.current = await asrProvider.createStreamingSession({
+          onEvent: handleStreamingASREvent,
+        })
+      }
 
       console.info('[VoiceController] Starting recording with microphone preference', {
         microphoneDeviceId: settings.microphoneDeviceId ?? 'system-default',
@@ -669,6 +796,15 @@ export function useVoiceController() {
         silenceThreshold: settings.silenceThreshold,
         silenceDuration: settings.silenceDuration,
         microphoneDeviceId: settings.microphoneDeviceId,
+        onAudioChunk: shouldUseDoubaoStreaming
+          ? (chunk) => {
+              void streamingASRSessionRef.current?.appendAudio(chunk).catch((error) => {
+                const message = error instanceof Error ? error.message : String(error)
+                setError(message)
+                rejectPendingStreamingRecognition(message)
+              })
+            }
+          : undefined,
       })
 
       if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
@@ -677,11 +813,12 @@ export function useVoiceController() {
         } catch (error) {
           console.error('Failed to stop stale recorder after typeless restart:', error)
         }
+        await closeStreamingASRSession()
         return false
       }
 
       // Typeless 模式下启动流式识别
-      if (settings.workMode === 'typeless') {
+      if (settings.workMode === 'typeless' && !shouldUseDoubaoStreaming) {
         startStreamingRecognition(recorder)
       }
 
@@ -700,6 +837,8 @@ export function useVoiceController() {
       if (operationId !== null) {
         clearTypelessOperation(operationId)
       }
+      rejectPendingStreamingRecognition(message)
+      await closeStreamingASRSession()
       recorderRef.current = null
       setError(message)
       setVoiceMode('inactive')
@@ -715,6 +854,7 @@ export function useVoiceController() {
     settings.silenceThreshold,
     settings.silenceDuration,
     settings.maxRecordingDuration,
+    settings.asrProvider,
     settings.microphoneDeviceId,
     settings.workMode,
     setError,
@@ -726,10 +866,14 @@ export function useVoiceController() {
     setTypelessStatus,
     setTypelessChatResult,
     clearRecordingTimeout,
+    closeStreamingASRSession,
     beginTypelessOperation,
     clearTypelessOperation,
     clearTypelessResultForNextRound,
+    getASRProvider,
+    handleStreamingASREvent,
     isCurrentTypelessOperation,
+    rejectPendingStreamingRecognition,
     startStreamingRecognition,
   ])
 
@@ -749,20 +893,42 @@ export function useVoiceController() {
         setTypelessOperationPhase('asr', operationId)
       }
 
-      const audioBlob = await recorder.stop()
-      if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
-        return null
-      }
-
-      // 执行语音识别
       const asrProvider = getASRProvider()
-      const text = await asrProvider.transcribe(audioBlob)
-      if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
-        return null
+      const shouldUseDoubaoStreaming =
+        settings.workMode === 'typeless' && settings.asrProvider === 'doubao' && isStreamingASRProvider(asrProvider)
+
+      let text = ''
+      if (shouldUseDoubaoStreaming) {
+        await recorder.stop()
+        if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
+          await closeStreamingASRSession()
+          return null
+        }
+
+        const pendingRecognition = pendingStreamingRecognitionRef.current
+        const streamingSession = streamingASRSessionRef.current
+        if (!pendingRecognition || !streamingSession) {
+          throw new Error('豆包实时识别会话未初始化')
+        }
+
+        await streamingSession.commit()
+        text = (await pendingRecognition.promise).trim()
+        await closeStreamingASRSession()
+      } else {
+        const audioBlob = await recorder.stop()
+        if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
+          return null
+        }
+
+        text = await asrProvider.transcribe(audioBlob)
+        if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
+          return null
+        }
       }
 
       setTranscript(text)
       setStreamingText('')
+      latestStreamingTranscriptRef.current = ''
 
       // 根据工作模式决定输出目标
       if (text) {
@@ -885,6 +1051,8 @@ export function useVoiceController() {
       return text
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      await closeStreamingASRSession()
+      rejectPendingStreamingRecognition(message)
       if (operationId !== null && isCurrentTypelessOperation(operationId)) {
         setTypelessOperationPhase('result', operationId)
       }
@@ -907,9 +1075,12 @@ export function useVoiceController() {
     setError,
     setTypelessStatus,
     settings.autoPlayResponse,
+    settings.asrProvider,
     settings.workMode,
     clearRecordingTimeout,
+    closeStreamingASRSession,
     isCurrentTypelessOperation,
+    rejectPendingStreamingRecognition,
     setTypelessOperationPhase,
     stopStreamingRecognition,
     setTypelessRequest,
@@ -1191,6 +1362,8 @@ export function useVoiceController() {
       interruptedHotkeyPressStartedAtRef.current = null
       clearInterruptedHotkeyRestartTimer()
       clearRecordingTimeout()
+      rejectPendingStreamingRecognition('语音控制已清理')
+      void closeStreamingASRSession()
       if (settings.workMode === 'typeless') {
         void window.electronAPI?.invoke('typelessOverlay:hide')
       }
@@ -1211,7 +1384,9 @@ export function useVoiceController() {
     clearTypelessResultForNextRound,
     clearInterruptedHotkeyRestartTimer,
     clearRecordingTimeout,
+    closeStreamingASRSession,
     isTypelessInterruptibleState,
+    rejectPendingStreamingRecognition,
     triggerInterruptedHotkeyRestart,
   ])
 

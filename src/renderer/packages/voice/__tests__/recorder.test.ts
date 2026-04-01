@@ -1,9 +1,17 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { VoiceRecorder } from '../recorder'
+
+const mockTrack = {
+  stop: vi.fn(),
+  label: 'Mock Mic',
+  readyState: 'live',
+  getSettings: vi.fn(() => ({ deviceId: 'mock-device', groupId: 'mock-group' })),
+}
 
 // Mock MediaDevices API
 const mockMediaStream = {
-  getTracks: vi.fn(() => [{ stop: vi.fn() }]),
+  getTracks: vi.fn(() => [mockTrack]),
+  getAudioTracks: vi.fn(() => [mockTrack]),
 } as unknown as MediaStream
 
 const mockMediaRecorder = {
@@ -17,9 +25,19 @@ const mockMediaRecorder = {
   onerror: null,
 } as unknown as MediaRecorder
 
-global.navigator.mediaDevices = {
-  getUserMedia: vi.fn().mockResolvedValue(mockMediaStream),
-} as any
+Object.defineProperty(global.navigator, 'mediaDevices', {
+  configurable: true,
+  value: {
+    getUserMedia: vi.fn().mockResolvedValue(mockMediaStream),
+    enumerateDevices: vi.fn().mockResolvedValue([
+      {
+        kind: 'audioinput',
+        deviceId: 'mock-device',
+        label: 'Mock Mic',
+      },
+    ]),
+  },
+})
 
 const getUserMediaMock = navigator.mediaDevices.getUserMedia as unknown as ReturnType<typeof vi.fn>
 
@@ -31,17 +49,52 @@ global.MediaRecorder = Object.assign(MediaRecorderMock, {
   isTypeSupported: vi.fn(() => true),
 }) as any
 
-global.AudioContext = vi.fn(() => ({
-  createMediaStreamSource: vi.fn(() => ({
-    connect: vi.fn(),
-  })),
-  createAnalyser: vi.fn(() => ({
-    fftSize: 256,
-    frequencyBinCount: 128,
-    getByteFrequencyData: vi.fn(),
-  })),
-  close: vi.fn(),
-})) as any
+const audioProcessing = {
+  processorNode: null as {
+    connect: ReturnType<typeof vi.fn>
+    disconnect: ReturnType<typeof vi.fn>
+    onaudioprocess: ((event: { inputBuffer: { getChannelData: (channel: number) => Float32Array } }) => void) | null
+  } | null,
+}
+
+global.AudioContext = vi.fn(function MockAudioContext() {
+  return {
+    sampleRate: 48000,
+    destination: {},
+    createMediaStreamSource: vi.fn(() => ({
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    })),
+    createAnalyser: vi.fn(() => ({
+      fftSize: 256,
+      frequencyBinCount: 128,
+      getByteFrequencyData: vi.fn(),
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    })),
+    createScriptProcessor: vi.fn(() => {
+      audioProcessing.processorNode = {
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        onaudioprocess: null,
+      }
+      return audioProcessing.processorNode
+    }),
+    close: vi.fn(),
+  }
+}) as any
+
+global.requestAnimationFrame = vi.fn(() => 1) as any
+global.cancelAnimationFrame = vi.fn() as any
+
+function emitAudioProcessFrame(sampleCount = 4800) {
+  const samples = Float32Array.from({ length: sampleCount }, (_, index) => Math.sin(index / 8))
+  audioProcessing.processorNode?.onaudioprocess?.({
+    inputBuffer: {
+      getChannelData: () => samples,
+    },
+  })
+}
 
 describe('VoiceRecorder', () => {
   let recorder: VoiceRecorder
@@ -51,6 +104,8 @@ describe('VoiceRecorder', () => {
     vi.clearAllMocks()
     getUserMediaMock.mockReset()
     getUserMediaMock.mockResolvedValue(mockMediaStream)
+    mockTrack.getSettings.mockReturnValue({ deviceId: 'mock-device', groupId: 'mock-group' })
+    audioProcessing.processorNode = null
   })
 
   it('should start recording', async () => {
@@ -102,7 +157,7 @@ describe('VoiceRecorder', () => {
           autoGainControl: true,
         },
       })
-    },
+    }
   )
 
   it('should reject immediately without fallback for non-fallback error', async () => {
@@ -130,5 +185,20 @@ describe('VoiceRecorder', () => {
     await recorder.start()
     const state = recorder.getState()
     expect(state).toBe('inactive')
+  })
+
+  it('emits pcm chunks when onAudioChunk is provided', async () => {
+    const onAudioChunk = vi.fn()
+
+    await recorder.start({ onAudioChunk } as any)
+    expect(global.AudioContext).toHaveBeenCalled()
+    expect(typeof (global.AudioContext as any).mock.results[0]?.value?.createScriptProcessor).toBe('function')
+    expect(audioProcessing.processorNode).toBeTruthy()
+    expect(typeof audioProcessing.processorNode?.onaudioprocess).toBe('function')
+    emitAudioProcessFrame()
+
+    expect(onAudioChunk).toHaveBeenCalled()
+    expect(onAudioChunk.mock.calls[0][0]).toBeInstanceOf(Uint8Array)
+    expect(onAudioChunk.mock.calls[0][0].length).toBeGreaterThan(0)
   })
 })

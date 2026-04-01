@@ -1,7 +1,7 @@
 // Disable no-unused-vars, broken for spread args
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer } from 'electron'
-import type { ElectronIPC } from 'src/shared/electron-types'
+import type { DoubaoASRSessionEvent, ElectronIPC } from 'src/shared/electron-types'
 
 // export type Channels = 'ipc-example';
 
@@ -26,6 +26,17 @@ const electronHandler: ElectronIPC = {
   //     },
   // },
   invoke: ipcRenderer.invoke,
+  createDoubaoASRSession: (config) => ipcRenderer.invoke('doubaoASR:createSession', config),
+  appendDoubaoASRAudio: (sessionId, chunk) => ipcRenderer.invoke('doubaoASR:appendAudio', sessionId, chunk),
+  commitDoubaoASRSession: (sessionId) => ipcRenderer.invoke('doubaoASR:commitSession', sessionId),
+  closeDoubaoASRSession: (sessionId) => ipcRenderer.invoke('doubaoASR:closeSession', sessionId),
+  onDoubaoASREvent: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: DoubaoASRSessionEvent) => {
+      callback(payload)
+    }
+    ipcRenderer.on('doubaoASR:event', listener)
+    return () => ipcRenderer.off('doubaoASR:event', listener)
+  },
   showTypelessChatResult: (payload) => ipcRenderer.invoke('typelessChatResult:show', payload),
   hideTypelessChatResult: () => ipcRenderer.invoke('typelessChatResult:hide'),
   onTypelessChatResultClosed: (callback) => {
