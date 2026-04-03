@@ -4,6 +4,7 @@ import { gunzipSync, gzipSync } from 'node:zlib'
 import log from 'electron-log/main'
 import type { DoubaoASRSessionConfig, DoubaoASRSessionEvent, DoubaoASRSessionHandle } from 'src/shared/electron-types'
 import type WebSocketClientType from 'ws'
+import { repairLikelyMojibake } from './log-text'
 
 type SessionEmitter = (event: DoubaoASRSessionEvent) => void
 
@@ -13,6 +14,9 @@ type ActiveSession = {
   ws: WebSocketClientType
   closedByClient: boolean
   completed: boolean
+  lastFinalText: string
+  lastPartialText: string
+  lastPartialLoggedAt: number
 }
 
 type ParsedFrame = {
@@ -32,6 +36,8 @@ const DEFAULT_BASE_URL = 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_as
 const DEFAULT_MODEL = 'bigmodel'
 const DEFAULT_RESOURCE_ID = 'volc.bigasr.sauc.duration'
 const SUCCESS_CODE = 20000000
+const PARTIAL_LOG_INTERVAL_MS = 700
+const PARTIAL_LOG_MIN_DELTA_CHARS = 6
 
 const PROTOCOL_VERSION = 0x1
 const HEADER_SIZE_WORDS = 0x1
@@ -319,6 +325,41 @@ function extractTranscriptText(payload: Record<string, unknown>) {
     .trim()
 }
 
+function extractDefiniteTranscriptText(payload: Record<string, unknown>) {
+  const definiteText = collectTranscriptSegments(payload)
+    .filter((segment) => segment.definite)
+    .map((segment) => segment.text)
+    .join('')
+    .trim()
+
+  return definiteText
+}
+
+function formatTranscriptForLog(text: string) {
+  return JSON.stringify(repairLikelyMojibake(text))
+}
+
+function shouldLogPartialTranscript(session: ActiveSession, text: string) {
+  if (!text || text === session.lastPartialText) {
+    return false
+  }
+
+  const now = Date.now()
+  const lengthDelta = Math.abs(text.length - session.lastPartialText.length)
+  const shouldLog =
+    !session.lastPartialText ||
+    now - session.lastPartialLoggedAt >= PARTIAL_LOG_INTERVAL_MS ||
+    lengthDelta >= PARTIAL_LOG_MIN_DELTA_CHARS
+
+  if (!shouldLog) {
+    return false
+  }
+
+  session.lastPartialText = text
+  session.lastPartialLoggedAt = now
+  return true
+}
+
 function extractErrorMessage(payload: unknown, errorCode?: number) {
   if (payload && typeof payload === 'object') {
     const record = payload as Record<string, unknown>
@@ -452,14 +493,26 @@ export function createDoubaoASRManager() {
         }
 
         const text = extractTranscriptText(payload)
+        const definiteText = extractDefiniteTranscriptText(payload)
         const completed = isCompletedResponse(frame)
+        if (definiteText && definiteText !== session.lastFinalText) {
+          log.info(`[DoubaoASR] transcript final sessionId=${sessionId} text=${formatTranscriptForLog(definiteText)}`)
+          session.lastFinalText = definiteText
+          emit({ sessionId, type: 'final', text: definiteText })
+        }
         if (completed) {
           session.completed = true
+          if (text) {
+            log.info(`[DoubaoASR] transcript completed sessionId=${sessionId} text=${formatTranscriptForLog(text)}`)
+          }
           emit({ sessionId, type: 'completed', text })
           return
         }
 
         if (text) {
+          if (shouldLogPartialTranscript(session, text)) {
+            log.info(`[DoubaoASR] transcript partial sessionId=${sessionId} text=${formatTranscriptForLog(text)}`)
+          }
           emit({ sessionId, type: 'partial', text })
         }
       } catch (error) {
@@ -487,6 +540,9 @@ export function createDoubaoASRManager() {
       closedByClient: false,
       completed: false,
       emit,
+      lastFinalText: '',
+      lastPartialText: '',
+      lastPartialLoggedAt: 0,
       readyPromise,
       ws,
     })

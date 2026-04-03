@@ -1,13 +1,24 @@
 import { arrayMove } from '@dnd-kit/sortable'
+import { isVoiceRuntimeModeSearch } from '@shared/runtime-mode'
 import { copyMessagesWithMapping, copyThreads, type Session, type SessionMeta } from '@shared/types'
 import { getDefaultStore } from 'jotai'
 import { omit } from 'lodash'
+import { getLogger } from '@/lib/utils'
 import { router } from '@/router'
 import { sortSessions } from '@/utils/session-utils'
 import * as atoms from '../atoms'
 import * as chatStore from '../chatStore'
 import * as scrollActions from '../scrollActions'
 import { initEmptyChatSession, initEmptyPictureSession } from '../sessionHelpers'
+
+const log = getLogger('session-crud')
+
+function getRendererRole() {
+  if (typeof window === 'undefined') {
+    return 'unknown'
+  }
+  return isVoiceRuntimeModeSearch(window.location.search) ? 'voice-runtime' : 'chatbox'
+}
 
 /**
  * Create a new session and switch to it
@@ -104,6 +115,7 @@ export async function copyAndSwitchSession(source: SessionMeta) {
  * Switch current session by id
  */
 export function switchCurrentSession(sessionId: string) {
+  log.info(`[session-crud] switchCurrentSession role=${getRendererRole()} sessionId=${sessionId}`)
   const store = getDefaultStore()
   store.set(atoms.currentSessionIdAtom, sessionId)
   router.navigate({

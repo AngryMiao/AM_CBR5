@@ -70,6 +70,7 @@ import {
   showTypelessOverlay,
   updateTypelessOverlay,
 } from './typeless-overlay'
+import { repairLikelyMojibake } from './log-text'
 import { syncVoiceRuntimeDispatch } from './voice-runtime-dispatch'
 import { destroyVoiceRuntimeWindow, ensureVoiceRuntimeWindow } from './voice-runtime-window'
 import { shouldHideMainWindowOnClose } from './window-close-behavior'
@@ -1101,7 +1102,7 @@ ipcMain.handle('shouldShowAboutDialogWhenStartUp', (event) => {
 
 ipcMain.handle('appLog', (event, dataJson) => {
   const data: { level: string; message: string } = JSON.parse(dataJson)
-  data.message = 'APP_LOG: ' + data.message
+  data.message = 'APP_LOG: ' + repairLikelyMojibake(data.message)
   switch (data.level) {
     case 'info':
       log.info(data.message)

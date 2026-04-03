@@ -169,4 +169,15 @@ describe('buildAngrymiaoAgentSkillPrompt', () => {
     )
     expect(markdown).not.toContain('1. Text input\n2. Shortcut execution')
   })
+
+  it('adds current-turn priority rules to avoid historical context polluting the current command', () => {
+    const prompt = buildAngrymiaoAgentSkillPrompt('win32')
+    const skillPath = path.resolve(__dirname, '../../../../skill-bundles/angrymiao-voice-control/SKILL.md')
+    const markdown = readFileSync(skillPath, 'utf8')
+
+    expect(prompt).toContain('Current-turn priority')
+    expect(prompt).toContain('若当前轮指令已经明确，只根据当前轮内容决定动作')
+    expect(markdown).toContain('Prefer the current-turn user utterance over any historical conversation context.')
+    expect(markdown).toContain('Do not reuse previous turns')
+  })
 })

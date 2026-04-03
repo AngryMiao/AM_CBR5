@@ -16,6 +16,7 @@ import platform from '@/platform'
 import * as chatStore from '../chatStore'
 import * as settingActions from '../settingActions'
 import { settingsStore } from '../settingsStore'
+import type { PromptContextMode } from './prompt-context'
 
 /**
  * 在当前主题的最后插入一条消息。
@@ -95,7 +96,12 @@ export async function removeMessage(sessionId: string, messageId: string) {
  */
 export async function submitNewUserMessage(
   sessionId: string,
-  params: { newUserMsg: Message; needGenerating: boolean; onUserMessageReady?: () => void }
+  params: {
+    newUserMsg: Message
+    needGenerating: boolean
+    onUserMessageReady?: () => void
+    contextMode?: PromptContextMode
+  }
 ) {
   // Import generate lazily to avoid circular dependency
   // generate will be moved to generation.ts in US-006, then this import will change
@@ -204,6 +210,9 @@ export async function submitNewUserMessage(
   }
   // 根据需要，生成这条回复消息
   if (needGenerating) {
-    return generate(sessionId, newAssistantMsg, { operationType: 'send_message' })
+    return generate(sessionId, newAssistantMsg, {
+      operationType: 'send_message',
+      contextMode: params.contextMode ?? 'full',
+    })
   }
 }

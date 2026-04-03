@@ -14,6 +14,13 @@ description: Control the user's computer through voice-command-style text using 
 5. Prefer direct tool calls over explanatory text.
 6. Only ask follow-up questions when the intent is unclear or a destructive action needs confirmation.
 
+## Current-turn priority
+
+- Prefer the current-turn user utterance over any historical conversation context.
+- Do not reuse previous turns' targets, actions, parameters, typed text, or tool results unless the current turn explicitly asks to continue or repeat them.
+- If the current turn is already clear, decide the action from the current turn only.
+- If historical context conflicts with the current turn, always follow the current turn.
+
 ## Tool Mapping
 
 - Text input:

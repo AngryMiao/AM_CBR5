@@ -213,4 +213,14 @@ describe('UpdateQueue async onChange handler', () => {
     ])
     // expect(onChange).toHaveBeenCalledTimes(1)
   })
+
+  test('allows external state replacement so later updates do not revive stale state', async () => {
+    const queue = new UpdateQueue<State>({ value: 200 })
+
+    await expect(queue.set((prev) => ({ value: prev?.value ?? 0 }))).resolves.toEqual({ value: 200 })
+
+    queue.replaceState({ value: 204 })
+
+    await expect(queue.set((prev) => ({ value: (prev?.value ?? 0) + 1 }))).resolves.toEqual({ value: 205 })
+  })
 })

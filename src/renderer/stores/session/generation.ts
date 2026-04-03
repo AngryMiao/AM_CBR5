@@ -8,7 +8,6 @@ import {
   type Message,
   type MessageImagePart,
   type MessagePicture,
-  ModelProviderEnum,
   type SessionSettings,
   type SessionType,
   type Settings,
@@ -16,6 +15,7 @@ import {
 import { cloneMessage, getMessageText, mergeMessages } from '@shared/utils/message'
 import { identity, pickBy } from 'lodash'
 import { createModelDependencies } from '@/adapters'
+import { getLogger } from '@/lib/utils'
 import * as appleAppStore from '@/packages/apple_app_store'
 import { buildContextForAI } from '@/packages/context-management'
 import {
@@ -35,12 +35,26 @@ import * as chatStore from '../chatStore'
 import { settingsStore } from '../settingsStore'
 import { createNewFork, findMessageLocation } from './forks'
 import { insertMessageAfter, modifyMessage } from './messages'
+import { type PromptContextMode, selectMessagesForPromptContext } from './prompt-context'
+
+const log = getLogger('typeless-debug')
+const ANGRYMIAO_SESSION_NAME = 'angrymiao'
+const ANGRYMIAO_SINGLETON_KEY = 'angrymiao-voice'
+const SLOW_PROMPT_BUILD_MS = 1500
+const SLOW_GENERATE_TOTAL_MS = 10000
+
+function isTypelessVoiceSession(session?: { name?: string; singletonKey?: string } | null) {
+  if (!session) {
+    return false
+  }
+  return session.singletonKey === ANGRYMIAO_SINGLETON_KEY || session.name === ANGRYMIAO_SESSION_NAME
+}
 
 /**
  * Track generation event
  */
 function trackGenerateEvent(
-  sessionId: string,
+  _sessionId: string,
   settings: SessionSettings,
   globalSettings: Settings,
   sessionType: SessionType | undefined,
@@ -91,16 +105,22 @@ export function createLoadingPictures(n: number): MessagePicture[] {
 export async function generate(
   sessionId: string,
   targetMsg: Message,
-  options?: { operationType?: 'send_message' | 'regenerate' }
-) {
+  options?: {
+    operationType?: 'send_message' | 'regenerate'
+    toolExecutionMode?: 'preview' | 'execute'
+    contextMode?: PromptContextMode
+  }
+): Promise<Message | undefined> {
+  const generateStartAt = Date.now()
   // Get dependent data
   const session = await chatStore.getSession(sessionId)
   const settings = await chatStore.getSessionSettings(sessionId)
   const globalSettings = settingsStore.getState().getSettings()
   const configs = await platform.getConfig()
   if (!session || !settings) {
-    return
+    return undefined
   }
+  const shouldDebugTypeless = isTypelessVoiceSession(session)
 
   // Track generation event
   trackGenerateEvent(sessionId, settings, globalSettings, session.type, options)
@@ -134,7 +154,7 @@ export async function generate(
   let targetMsgIx = messages.findIndex((m) => m.id === targetMsg.id)
   if (targetMsgIx <= 0) {
     if (!session.threads) {
-      return
+      return undefined
     }
     for (const t of session.threads) {
       messages = t.messages
@@ -144,13 +164,23 @@ export async function generate(
       }
     }
     if (targetMsgIx <= 0) {
-      return
+      return undefined
     }
   }
 
   try {
     const dependencies = await createModelDependencies()
     const model = getModel(settings, globalSettings, configs, dependencies)
+    let targetMsgWriteChain: Promise<void> = Promise.resolve()
+    const queueTargetMsgWrite = (message: Message, refreshCounting?: boolean, updateOnlyCache?: boolean) => {
+      const snapshot = cloneMessage(message)
+      targetMsgWriteChain = targetMsgWriteChain
+        .catch(() => undefined)
+        .then(async () => {
+          await modifyMessage(sessionId, snapshot, refreshCounting, updateOnlyCache)
+        })
+      return targetMsgWriteChain
+    }
     switch (session.type) {
       // Chat message generation
       case 'chat':
@@ -159,16 +189,34 @@ export async function generate(
         let firstTokenLatency: number | undefined
         const persistInterval = 2000
         let lastPersistTimestamp = Date.now()
+        const buildPromptStartAt = Date.now()
         const promptMsgs = await genMessageContext(
           settings,
           messages.slice(0, targetMsgIx),
           model.isSupportToolUse('read-file'),
-          { compactionPoints: session.compactionPoints }
+          {
+            compactionPoints: session.compactionPoints,
+            contextMode: options?.contextMode ?? 'full',
+          }
         )
+        const promptBuildDurationMs = Date.now() - buildPromptStartAt
+        if (
+          shouldDebugTypeless &&
+          (options?.toolExecutionMode === 'execute' || promptBuildDurationMs >= SLOW_PROMPT_BUILD_MS)
+        ) {
+          log.info(
+            `prompt-ready sessionId=${sessionId} targetMsgId=${targetMsg.id} mode=${options?.toolExecutionMode ?? 'execute'} promptMessageCount=${promptMsgs.length} durationMs=${promptBuildDurationMs}`
+          )
+        }
         const modifyMessageCache: OnResultChangeWithCancel = async (updated) => {
           const textLength = getMessageText(targetMsg, true, true).length
           if (!firstTokenLatency && textLength > 0) {
             firstTokenLatency = Date.now() - startTime
+            if (shouldDebugTypeless) {
+              log.info(
+                `assistant-first-token sessionId=${sessionId} targetMsgId=${targetMsg.id} mode=${options?.toolExecutionMode ?? 'execute'} latencyMs=${firstTokenLatency}`
+              )
+            }
           }
           targetMsg = {
             ...targetMsg,
@@ -178,7 +226,7 @@ export async function generate(
           }
           // update cache on each chunk and persist to storage periodically
           const shouldPersist = Date.now() - lastPersistTimestamp >= persistInterval
-          await modifyMessage(sessionId, targetMsg, false, !shouldPersist)
+          await queueTargetMsgWrite(targetMsg, false, !shouldPersist)
           if (shouldPersist) {
             lastPersistTimestamp = Date.now()
           }
@@ -189,14 +237,21 @@ export async function generate(
           messages: promptMsgs,
           onResultChangeWithCancel: modifyMessageCache,
           onStatusChange: (status) => {
+            if (shouldDebugTypeless && status) {
+              log.info(
+                `assistant-status sessionId=${sessionId} targetMsgId=${targetMsg.id} mode=${options?.toolExecutionMode ?? 'execute'} statusType=${status.type}`
+              )
+            }
             targetMsg = {
               ...targetMsg,
               status: status ? [status] : [],
             }
-            void modifyMessage(sessionId, targetMsg, false, true)
+            void queueTargetMsgWrite(targetMsg, false, true)
           },
           providerOptions: settings.providerOptions,
+          toolExecutionMode: options?.toolExecutionMode ?? 'execute',
         })
+        const streamDurationMs = Date.now() - startTime
         targetMsg = {
           ...targetMsg,
           generating: false,
@@ -206,7 +261,16 @@ export async function generate(
           finishReason: result.finishReason,
           usage: result.usage,
         }
-        await modifyMessage(sessionId, targetMsg, true)
+        await queueTargetMsgWrite(targetMsg, true)
+        const totalDurationMs = Date.now() - generateStartAt
+        if (
+          shouldDebugTypeless &&
+          (options?.toolExecutionMode === 'execute' || totalDurationMs >= SLOW_GENERATE_TOTAL_MS)
+        ) {
+          log.info(
+            `assistant-finished sessionId=${sessionId} targetMsgId=${targetMsg.id} mode=${options?.toolExecutionMode ?? 'execute'} streamDurationMs=${streamDurationMs} totalDurationMs=${totalDurationMs} finishReason=${result.finishReason ?? 'unknown'}`
+          )
+        }
         break
       }
       // Picture message generation
@@ -249,6 +313,7 @@ export async function generate(
         throw new Error(`Unknown session type: ${session.type}, generate failed`)
     }
     appleAppStore.tickAfterMessageGenerated()
+    return targetMsg
   } catch (err: unknown) {
     const error = !(err instanceof Error) ? new Error(`${err}`) : err
     const isExpectedOCRError = error instanceof OCRError && error.cause instanceof BaseError
@@ -287,7 +352,13 @@ export async function generate(
       },
       status: [],
     }
-    await modifyMessage(sessionId, targetMsg, true)
+    await queueTargetMsgWrite(targetMsg, true)
+    if (shouldDebugTypeless) {
+      log.info(
+        `assistant-error sessionId=${sessionId} targetMsgId=${targetMsg.id} mode=${options?.toolExecutionMode ?? 'execute'} totalDurationMs=${Date.now() - generateStartAt} error=${error.message}`
+      )
+    }
+    return targetMsg
   }
 }
 
@@ -359,10 +430,12 @@ export async function genMessageContext(
   options?: {
     storageAdapter?: { getBlob: (key: string) => Promise<string> }
     compactionPoints?: CompactionPoint[]
+    contextMode?: PromptContextMode
   }
 ) {
   const storageAdapter = options?.storageAdapter
   const compactionPoints = options?.compactionPoints
+  const contextMode = options?.contextMode ?? 'full'
   const storageGetBlob = storageAdapter?.getBlob ?? ((key: string) => storage.getBlob(key).catch(() => ''))
   const {
     // openaiMaxContextTokens,
@@ -378,10 +451,10 @@ export async function genMessageContext(
   // Step 1: Apply compaction-based context building if compactionPoints are provided
   // This will return messages starting from the latest compaction point (with summary prepended)
   // and apply tool-call cleanup for older messages
-  let contextMessages = msgs
-  if (compactionPoints && compactionPoints.length > 0) {
+  let contextMessages = selectMessagesForPromptContext(msgs, contextMode)
+  if (contextMode === 'full' && compactionPoints && compactionPoints.length > 0) {
     contextMessages = buildContextForAI({
-      messages: msgs,
+      messages: contextMessages,
       compactionPoints,
       keepToolCallRounds: 2,
       sessionSettings: settings,
@@ -411,7 +484,7 @@ export async function genMessageContext(
     const keys = Array.from(allStorageKeys)
     const contents = await Promise.all(keys.map((key) => storageGetBlob(key)))
     keys.forEach((key, index) => {
-      blobContents.set(key, contents[index])
+      blobContents.set(key, contents[index] ?? '')
     })
   }
 

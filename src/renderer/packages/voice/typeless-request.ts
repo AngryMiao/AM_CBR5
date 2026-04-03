@@ -1,18 +1,32 @@
 import { createMessage, type Message } from '@shared/types'
+import type { PromptContextMode } from '@/stores/session/prompt-context'
 
 export interface TypelessRequestContext {
   sessionId: string
   userMessageId: string
+  assistantMessageId?: string
   asrText: string
   startedAt: number
+  finalized?: boolean
+  isLiveStreaming?: boolean
+}
+
+export function isTypelessRequestFinalized(context: TypelessRequestContext | null | undefined) {
+  if (!context) {
+    return false
+  }
+  return context.finalized !== false
 }
 
 export async function startTypelessRequest(args: {
   text: string
   ensureSession: (options: { purgeOthers: boolean }) => Promise<{ id: string }>
-  submit: (sessionId: string, params: { newUserMsg: Message; needGenerating: boolean }) => Promise<unknown>
+  submit: (
+    sessionId: string,
+    params: { newUserMsg: Message; needGenerating: boolean; contextMode?: PromptContextMode }
+  ) => Promise<Message | undefined>
   now?: () => number
-}): Promise<{ context: TypelessRequestContext; submitPromise: Promise<unknown> }> {
+}): Promise<{ context: TypelessRequestContext; submitPromise: Promise<Message | undefined> }> {
   const session = await args.ensureSession({
     purgeOthers: false,
   })
@@ -28,6 +42,7 @@ export async function startTypelessRequest(args: {
   const submitPromise = args.submit(session.id, {
     newUserMsg,
     needGenerating: true,
+    contextMode: 'current-turn-only',
   })
 
   return { context, submitPromise }

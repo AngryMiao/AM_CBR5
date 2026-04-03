@@ -1,6 +1,7 @@
 import { getMessageText } from '@shared/utils/message'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { deriveTypelessExecutionState, findAssistantMessageForUser } from '@/packages/voice/typeless-execution-state'
+import { isTypelessRequestFinalized } from '@/packages/voice/typeless-request'
 import { useSession } from '@/stores/chatStore'
 import { closeTypelessChatResult, typelessRequestAtom } from '@/stores/voiceStore'
 
@@ -13,6 +14,7 @@ export function TypelessChatResult() {
   const { session } = useSession(request?.sessionId ?? null)
 
   if (!request) return null
+  if (!isTypelessRequestFinalized(request)) return null
 
   const messages = session?.messages ?? []
   const assistantMessage = findAssistantMessageForUser(messages, request.userMessageId)

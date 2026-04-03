@@ -1,10 +1,11 @@
-import { createMessage, type Settings } from '@shared/types'
+import { createMessage, type Message, type Settings } from '@shared/types'
 import { getMessageText } from '@shared/utils/message'
 import { normalizeRecordedVoiceHotkey, normalizeStoredVoiceHotkey } from '@shared/voice-hotkey'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useVoiceSettings } from '@/hooks/useVoiceSettings'
 import { ANGRYMIAO_SKILL_BUNDLE_ID, ANGRYMIAO_SKILL_RUNTIME_ID } from '@/packages/agent-skills'
+import { runCompactionWithUIState } from '@/packages/context-management'
 import { mcpController } from '@/packages/mcp/controller'
 import { getInstalledSkillBundle, resolveSkillBundleRuntimeServerConfig } from '@/packages/skill-bundles'
 import { ensureAngrymiaoSession } from '@/packages/voice/angrymiao-session'
@@ -19,6 +20,7 @@ import {
   OpenAIASRProvider,
   WhisperLocalProvider,
 } from '@/packages/voice/asr'
+import { createLiveTypelessRequestController } from '@/packages/voice/live-typeless-request'
 import { VoiceRecorder } from '@/packages/voice/recorder'
 import type { TTSProvider } from '@/packages/voice/tts'
 import { AzureTTSProvider, BrowserTTSProvider, ElevenLabsTTSProvider, OpenAITTSProvider } from '@/packages/voice/tts'
@@ -27,11 +29,16 @@ import {
   findAssistantMessageForUser,
   mapTypelessExecutionStateToOverlay,
 } from '@/packages/voice/typeless-execution-state'
-import { startTypelessRequest } from '@/packages/voice/typeless-request'
+import {
+  isTypelessRequestFinalized,
+  startTypelessRequest,
+  type TypelessRequestContext,
+} from '@/packages/voice/typeless-request'
 import platform from '@/platform'
 import * as chatStore from '@/stores/chatStore'
 import { switchCurrentSession } from '@/stores/session/crud'
-import { submitNewUserMessage } from '@/stores/session/messages'
+import { generate } from '@/stores/session/generation'
+import { insertMessage, modifyMessage, removeMessage, submitNewUserMessage } from '@/stores/session/messages'
 import {
   audioLevelAtom,
   closeTypelessChatResult,
@@ -52,11 +59,17 @@ import {
 type TypelessOperationPhase = 'idle' | 'recording' | 'asr' | 'llm' | 'mcp' | 'result'
 
 const HOTKEY_RESTART_THRESHOLD_MS = 180
+const ENABLE_STREAMING_TYPELESS_PREVIEW = false
 
 type PendingStreamingRecognition = {
   promise: Promise<string>
   reject: (error: Error) => void
   resolve: (text: string) => void
+}
+
+type SettledTypelessAssistantSnapshot = {
+  userMessageId: string
+  assistantMessage: Message
 }
 
 function createPendingStreamingRecognition(): PendingStreamingRecognition {
@@ -155,6 +168,8 @@ export function useVoiceController() {
   const closeTypelessChatResultState = useSetAtom(closeTypelessChatResult)
   const setStreamingText = useSetAtom(streamingTextAtom)
   const streamingText = useAtomValue(streamingTextAtom)
+  const [settledTypelessAssistantSnapshot, setSettledTypelessAssistantSnapshot] =
+    useState<SettledTypelessAssistantSnapshot | null>(null)
   const { settings } = useVoiceSettings()
   const { session: typelessSession } = chatStore.useSession(typelessRequest?.sessionId ?? null)
 
@@ -163,6 +178,7 @@ export function useVoiceController() {
   const streamingASRSessionRef = useRef<StreamingASRSession | null>(null)
   const pendingStreamingRecognitionRef = useRef<PendingStreamingRecognition | null>(null)
   const latestStreamingTranscriptRef = useRef('')
+  const liveTypelessControllerRef = useRef<ReturnType<typeof createLiveTypelessRequestController> | null>(null)
   const ttsProviderRef = useRef<TTSProvider | null>(null)
   const isSpeakingRef = useRef(false)
   const voiceModeRef = useRef(voiceMode)
@@ -182,15 +198,32 @@ export function useVoiceController() {
   const typelessOperationPhaseRef = useRef<TypelessOperationPhase>('idle')
   const completedTypelessOperationIdRef = useRef<number | null>(null)
 
-  const trackedAssistantMessage = typelessRequest
-    ? findAssistantMessageForUser(typelessSession?.messages ?? [], typelessRequest.userMessageId)
+  const sessionTrackedAssistantMessage = typelessRequest
+    ? typelessRequest.assistantMessageId
+      ? ((typelessSession?.messages ?? []).find(
+          (message) => message.id === typelessRequest.assistantMessageId && message.role === 'assistant'
+        ) ?? findAssistantMessageForUser(typelessSession?.messages ?? [], typelessRequest.userMessageId))
+      : findAssistantMessageForUser(typelessSession?.messages ?? [], typelessRequest.userMessageId)
     : null
+  const trackedAssistantMessage =
+    typelessRequest &&
+    settledTypelessAssistantSnapshot?.userMessageId === typelessRequest.userMessageId &&
+    settledTypelessAssistantSnapshot.assistantMessage.role === 'assistant'
+      ? settledTypelessAssistantSnapshot.assistantMessage
+      : sessionTrackedAssistantMessage
   const typelessExecutionState = typelessRequest
     ? deriveTypelessExecutionState({ assistantMessage: trackedAssistantMessage })
     : null
   const typelessOverlayState = typelessExecutionState
     ? mapTypelessExecutionStateToOverlay(typelessExecutionState)
     : null
+  const isTrackedTypelessRequestFinalized = isTypelessRequestFinalized(typelessRequest)
+  const trackedAssistantReplyText = trackedAssistantMessage ? getMessageText(trackedAssistantMessage).trim() : ''
+  const isTypelessChatResultReady =
+    !!typelessRequest &&
+    isTrackedTypelessRequestFinalized &&
+    typelessExecutionState?.phase === 'chat_result' &&
+    !!trackedAssistantReplyText
   const derivedTypelessStatus =
     typelessOverlayState?.visibility === 'visible'
       ? {
@@ -198,7 +231,9 @@ export function useVoiceController() {
           message: typelessOverlayState.message,
         }
       : null
-  const activeTypelessStatus = typelessRequest ? derivedTypelessStatus : typelessStatus
+  const normalizedDerivedTypelessStatus =
+    !isTrackedTypelessRequestFinalized && derivedTypelessStatus?.type === 'success' ? null : derivedTypelessStatus
+  const activeTypelessStatus = typelessRequest ? normalizedDerivedTypelessStatus : typelessStatus
   const activeTypelessStatusType = activeTypelessStatus?.type ?? null
   const activeTypelessStatusMessage = activeTypelessStatus?.message ?? null
 
@@ -223,7 +258,22 @@ export function useVoiceController() {
     }
 
     pendingStreamingRecognitionRef.current = null
+    void pendingRecognition.promise.catch(() => undefined)
     pendingRecognition.reject(new Error(message))
+  }, [])
+
+  const abortLiveTypelessController = useCallback(async () => {
+    const controller = liveTypelessControllerRef.current
+    liveTypelessControllerRef.current = null
+    if (!controller) {
+      return
+    }
+
+    try {
+      await controller.abort()
+    } catch (error) {
+      console.error('Failed to abort live typeless controller:', error)
+    }
   }, [])
 
   const closeStreamingASRSession = useCallback(async () => {
@@ -241,7 +291,11 @@ export function useVoiceController() {
   }, [])
 
   const handleStreamingASREvent = useCallback(
-    (event: StreamingASRSessionEvent) => {
+    (event: StreamingASRSessionEvent, operationId: number) => {
+      if (typelessOperationIdRef.current !== operationId) {
+        return
+      }
+
       if (event.type === 'error') {
         const message = event.message || '实时语音识别失败'
         setError(message)
@@ -249,10 +303,22 @@ export function useVoiceController() {
         return
       }
 
-      const text = event.text.trim()
+      const text = (event.text ?? '').trim()
       if (text) {
         latestStreamingTranscriptRef.current = text
         setStreamingText(text)
+      }
+
+      if (ENABLE_STREAMING_TYPELESS_PREVIEW && text && event.type === 'final') {
+        void liveTypelessControllerRef.current
+          ?.enqueueTranscript(text, {
+            toolExecutionMode: 'preview',
+          })
+          .catch((error) => {
+            const message = error instanceof Error ? error.message : String(error)
+            setError(message)
+            setTypelessStatus({ type: 'error', message })
+          })
       }
 
       if (event.type === 'completed') {
@@ -262,7 +328,7 @@ export function useVoiceController() {
         pendingRecognition?.resolve(finalText)
       }
     },
-    [rejectPendingStreamingRecognition, setError, setStreamingText]
+    [rejectPendingStreamingRecognition, setError, setStreamingText, setTypelessStatus]
   )
 
   const clearTypelessResultForNextRound = useCallback(() => {
@@ -271,10 +337,25 @@ export function useVoiceController() {
     }
 
     void window.electronAPI?.hideTypelessChatResult?.()
+    setSettledTypelessAssistantSnapshot(null)
     setTypelessChatResult(null)
     setTypelessRequest(null)
     setTypelessStatus(null)
   }, [settings.workMode, setTypelessChatResult, setTypelessRequest, setTypelessStatus])
+
+  const rememberSettledTypelessAssistant = useCallback(
+    (context: TypelessRequestContext | null | undefined, assistantMessage: Message | null | undefined) => {
+      if (!context || context.finalized === false || !assistantMessage || assistantMessage.role !== 'assistant') {
+        return
+      }
+
+      setSettledTypelessAssistantSnapshot({
+        userMessageId: context.userMessageId,
+        assistantMessage,
+      })
+    },
+    []
+  )
 
   const isCurrentTypelessOperation = useCallback((operationId: number) => {
     return typelessOperationIdRef.current === operationId
@@ -353,6 +434,7 @@ export function useVoiceController() {
 
     return window.electronAPI?.onTypelessChatResultClosed?.((payload) => {
       closeTypelessChatResultState(payload)
+      setSettledTypelessAssistantSnapshot(null)
       setTypelessStatus(null)
       const completedOperationId = completedTypelessOperationIdRef.current
       if (completedOperationId !== null) {
@@ -375,25 +457,41 @@ export function useVoiceController() {
         setTypelessOperationPhase('mcp')
         return
       case 'success':
-      case 'error':
       case 'chat_result':
+        if (!isTrackedTypelessRequestFinalized) {
+          return
+        }
+        setTypelessOperationPhase('result')
+        return
+      case 'error':
         setTypelessOperationPhase('result')
         return
       default:
         return
     }
-  }, [settings.workMode, typelessRequest, typelessExecutionState?.phase, setTypelessOperationPhase])
+  }, [
+    settings.workMode,
+    typelessRequest,
+    typelessExecutionState?.phase,
+    setTypelessOperationPhase,
+    isTrackedTypelessRequestFinalized,
+  ])
 
   useEffect(() => {
     if (platform.type !== 'desktop' || settings.workMode !== 'typeless') {
       return
     }
 
-    if (!typelessRequest || !trackedAssistantMessage || typelessExecutionState?.phase !== 'chat_result') {
+    if (
+      !typelessRequest ||
+      !isTrackedTypelessRequestFinalized ||
+      !trackedAssistantMessage ||
+      typelessExecutionState?.phase !== 'chat_result'
+    ) {
       return
     }
 
-    const replyText = getMessageText(trackedAssistantMessage).trim()
+    const replyText = trackedAssistantReplyText
     if (!replyText || typelessChatResult?.userMessageId === typelessRequest.userMessageId) {
       return
     }
@@ -417,6 +515,7 @@ export function useVoiceController() {
     void window.electronAPI?.showTypelessChatResult?.(payload)
   }, [
     settings.workMode,
+    isTrackedTypelessRequestFinalized,
     trackedAssistantMessage,
     typelessExecutionState?.phase,
     typelessChatResult?.userMessageId,
@@ -433,6 +532,7 @@ export function useVoiceController() {
     return () => {
       void window.electronAPI?.hideTypelessChatResult?.()
       closeTypelessChatResultState()
+      setSettledTypelessAssistantSnapshot(null)
       setTypelessStatus(null)
     }
   }, [settings.workMode, closeTypelessChatResultState, setTypelessStatus])
@@ -442,10 +542,10 @@ export function useVoiceController() {
       return
     }
 
-    if (!isSameTypelessStatus(typelessStatus, derivedTypelessStatus)) {
-      setTypelessStatus(derivedTypelessStatus)
+    if (!isSameTypelessStatus(typelessStatus, normalizedDerivedTypelessStatus)) {
+      setTypelessStatus(normalizedDerivedTypelessStatus)
     }
-  }, [settings.workMode, typelessRequest, typelessStatus, derivedTypelessStatus, setTypelessStatus])
+  }, [settings.workMode, typelessRequest, typelessStatus, normalizedDerivedTypelessStatus, setTypelessStatus])
 
   useEffect(() => {
     if (platform.type !== 'desktop') {
@@ -453,6 +553,16 @@ export function useVoiceController() {
     }
 
     if (settings.workMode !== 'typeless') {
+      void window.electronAPI?.invoke('typelessOverlay:hide')
+      return
+    }
+
+    const shouldHideForVisibleResult =
+      !!typelessChatResult?.userMessageId &&
+      !!typelessRequest?.userMessageId &&
+      typelessChatResult.userMessageId === typelessRequest.userMessageId
+
+    if (isTypelessChatResultReady || shouldHideForVisibleResult) {
       void window.electronAPI?.invoke('typelessOverlay:hide')
       return
     }
@@ -484,7 +594,7 @@ export function useVoiceController() {
     if (voiceMode === 'listening' && isRecording) {
       void window.electronAPI?.invoke('typelessOverlay:show', {
         mode: 'listening',
-        text: streamingText?.trim() || '正在聆听...',
+        text: streamingText?.trim() || '正在识别...',
       })
       return
     }
@@ -492,15 +602,17 @@ export function useVoiceController() {
     if (voiceMode === 'listening' && !isRecording) {
       void window.electronAPI?.invoke('typelessOverlay:show', {
         mode: 'listening',
-        text: '正在唤起麦克风...',
+        text: '正在启动识别...',
       })
       return
     }
 
     if (voiceMode === 'processing') {
+      const processingText =
+        settings.workMode === 'typeless' && typelessOperationPhaseRef.current === 'asr' ? '正在识别...' : '正在思考...'
       void window.electronAPI?.invoke('typelessOverlay:show', {
         mode: 'processing',
-        text: '正在识别...',
+        text: settings.workMode === 'typeless' ? processingText : '正在识别...',
       })
       return
     }
@@ -519,6 +631,8 @@ export function useVoiceController() {
     isRecording,
     streamingText,
     typelessRequest?.userMessageId,
+    typelessChatResult?.userMessageId,
+    isTypelessChatResultReady,
     clearTypelessOperation,
     setTypelessRequest,
     setTypelessStatus,
@@ -689,6 +803,7 @@ export function useVoiceController() {
     clearInterruptedHotkeyRestartTimer()
     clearTypelessOperation()
     rejectPendingStreamingRecognition('录音已取消')
+    await abortLiveTypelessController()
 
     pendingHotkeyReleaseRef.current = false
     setIsRecording(false)
@@ -697,6 +812,7 @@ export function useVoiceController() {
     setStreamingText('')
     latestStreamingTranscriptRef.current = ''
     setTranscript('')
+    setSettledTypelessAssistantSnapshot(null)
     setTypelessStatus(null)
     setTypelessRequest(null)
     setTypelessChatResult(null)
@@ -723,6 +839,7 @@ export function useVoiceController() {
     stopStreamingRecognition,
     clearInterruptedHotkeyRestartTimer,
     clearTypelessOperation,
+    abortLiveTypelessController,
     closeStreamingASRSession,
     rejectPendingStreamingRecognition,
     setIsRecording,
@@ -730,6 +847,7 @@ export function useVoiceController() {
     setPanelVisible,
     setStreamingText,
     setTranscript,
+    setSettledTypelessAssistantSnapshot,
     setTypelessStatus,
     setTypelessRequest,
     setTypelessChatResult,
@@ -743,6 +861,7 @@ export function useVoiceController() {
       setError(null)
 
       clearTypelessResultForNextRound()
+      await abortLiveTypelessController()
 
       if (!VoiceRecorder.isSupported()) {
         throw new Error('当前环境不支持麦克风录音')
@@ -776,8 +895,38 @@ export function useVoiceController() {
         rejectPendingStreamingRecognition('新的实时识别会话已开始')
         pendingStreamingRecognitionRef.current = createPendingStreamingRecognition()
         streamingASRSessionRef.current = await asrProvider.createStreamingSession({
-          onEvent: handleStreamingASREvent,
+          onEvent: (event) => handleStreamingASREvent(event, operationId),
         })
+        const controller = createLiveTypelessRequestController({
+          ensureSession: ensureAngrymiaoSession,
+          prepareSession: async (sessionId) => {
+            const compactionResult = await runCompactionWithUIState(sessionId)
+            if (!compactionResult.success) {
+              throw compactionResult.error ?? new Error('Compaction failed')
+            }
+          },
+          getSession: chatStore.getSession,
+          insertMessage,
+          updateMessage: async (sessionId, message) => {
+            await modifyMessage(sessionId, message, true)
+          },
+          removeMessage,
+          generate,
+          onContextChange: (context) => {
+            if (liveTypelessControllerRef.current !== controller) {
+              return
+            }
+            setTypelessRequest(context)
+          },
+          onGenerationSettled: ({ context, assistantMessage, toolExecutionMode }) => {
+            if (liveTypelessControllerRef.current !== controller || toolExecutionMode !== 'execute') {
+              return
+            }
+
+            rememberSettledTypelessAssistant(context, assistantMessage)
+          },
+        })
+        liveTypelessControllerRef.current = controller
       }
 
       console.info('[VoiceController] Starting recording with microphone preference', {
@@ -838,6 +987,7 @@ export function useVoiceController() {
         clearTypelessOperation(operationId)
       }
       rejectPendingStreamingRecognition(message)
+      await abortLiveTypelessController()
       await closeStreamingASRSession()
       recorderRef.current = null
       setError(message)
@@ -865,9 +1015,11 @@ export function useVoiceController() {
     setStreamingText,
     setTypelessStatus,
     setTypelessChatResult,
+    setTypelessRequest,
     clearRecordingTimeout,
     closeStreamingASRSession,
     beginTypelessOperation,
+    abortLiveTypelessController,
     clearTypelessOperation,
     clearTypelessResultForNextRound,
     getASRProvider,
@@ -913,6 +1065,11 @@ export function useVoiceController() {
 
         await streamingSession.commit()
         text = (await pendingRecognition.promise).trim()
+        if (text) {
+          await liveTypelessControllerRef.current?.enqueueTranscript(text, {
+            toolExecutionMode: 'execute',
+          })
+        }
         await closeStreamingASRSession()
       } else {
         const audioBlob = await recorder.stop()
@@ -937,24 +1094,37 @@ export function useVoiceController() {
             if (operationId !== null) {
               setTypelessOperationPhase('llm', operationId)
             }
-            const { context, submitPromise } = await startTypelessRequest({
-              text,
-              ensureSession: ensureAngrymiaoSession,
-              submit: submitNewUserMessage,
-            })
-            if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
-              return text
-            }
-            setTypelessRequest(context)
-            void submitPromise.catch((err) => {
+            if (shouldUseDoubaoStreaming) {
               if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
-                return
+                return text
               }
-              const message = err instanceof Error ? err.message : String(err)
-              setTypelessStatus({ type: 'error', message })
-              setTypelessRequest(null)
-              setError(message)
-            })
+            } else {
+              const { context, submitPromise } = await startTypelessRequest({
+                text,
+                ensureSession: ensureAngrymiaoSession,
+                submit: submitNewUserMessage,
+              })
+              if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
+                return text
+              }
+              setTypelessRequest(context)
+              void submitPromise
+                .then((assistantMessage) => {
+                  if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
+                    return
+                  }
+                  rememberSettledTypelessAssistant(context, assistantMessage)
+                })
+                .catch((err) => {
+                  if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
+                    return
+                  }
+                  const message = err instanceof Error ? err.message : String(err)
+                  setTypelessStatus({ type: 'error', message })
+                  setTypelessRequest(null)
+                  setError(message)
+                })
+            }
           } catch (err) {
             if (operationId !== null && !isCurrentTypelessOperation(operationId)) {
               return text
@@ -1053,6 +1223,7 @@ export function useVoiceController() {
       const message = error instanceof Error ? error.message : String(error)
       await closeStreamingASRSession()
       rejectPendingStreamingRecognition(message)
+      await abortLiveTypelessController()
       if (operationId !== null && isCurrentTypelessOperation(operationId)) {
         setTypelessOperationPhase('result', operationId)
       }
@@ -1079,8 +1250,10 @@ export function useVoiceController() {
     settings.workMode,
     clearRecordingTimeout,
     closeStreamingASRSession,
+    abortLiveTypelessController,
     isCurrentTypelessOperation,
     rejectPendingStreamingRecognition,
+    rememberSettledTypelessAssistant,
     setTypelessOperationPhase,
     stopStreamingRecognition,
     setTypelessRequest,
@@ -1157,18 +1330,16 @@ export function useVoiceController() {
       }
     })()
 
-    if (settings.workMode !== 'typeless') {
-      void (async () => {
-        try {
-          const session = await ensureAngrymiaoSession({
-            purgeOthers: true,
-          })
-          switchCurrentSession(session.id)
-        } catch (e) {
-          console.error('Failed to switch to voice session:', e)
-        }
-      })()
-    }
+    void (async () => {
+      try {
+        const session = await ensureAngrymiaoSession({
+          purgeOthers: settings.workMode !== 'typeless',
+        })
+        switchCurrentSession(session.id)
+      } catch (e) {
+        console.error('Failed to switch to voice session:', e)
+      }
+    })()
   }, [settings, startRecording])
 
   const activateVoiceInputRef = useRef(activateVoiceInput)
@@ -1363,6 +1534,7 @@ export function useVoiceController() {
       clearInterruptedHotkeyRestartTimer()
       clearRecordingTimeout()
       rejectPendingStreamingRecognition('语音控制已清理')
+      void abortLiveTypelessController()
       void closeStreamingASRSession()
       if (settings.workMode === 'typeless') {
         void window.electronAPI?.invoke('typelessOverlay:hide')
@@ -1384,6 +1556,7 @@ export function useVoiceController() {
     clearTypelessResultForNextRound,
     clearInterruptedHotkeyRestartTimer,
     clearRecordingTimeout,
+    abortLiveTypelessController,
     closeStreamingASRSession,
     isTypelessInterruptibleState,
     rejectPendingStreamingRecognition,

@@ -135,4 +135,34 @@ describe('streamText', () => {
       '帮我输出自定义触发词'
     )
   })
+
+  it('passes the tool execution mode through to the MCP tool resolver', async () => {
+    const model: ModelInterface = {
+      name: 'Mock Model',
+      modelId: 'mock-model',
+      isSupportVision: () => true,
+      isSupportToolUse: () => true,
+      isSupportSystemMessage: () => true,
+      chat: vi.fn().mockResolvedValue({ contentParts: [] }),
+      paint: vi.fn(),
+    }
+
+    getSessionMock.mockResolvedValue({
+      id: 'session-1',
+      messages: [],
+      agentSkill: null,
+    })
+
+    await streamText(model, {
+      sessionId: 'session-1',
+      messages: [createTextMessage('user-1', 'user', '按住A')],
+      onResultChangeWithCancel: vi.fn(),
+      toolExecutionMode: 'preview',
+    })
+
+    expect(getAvailableToolsMock).toHaveBeenCalledWith({
+      skillBundleId: '',
+      executionMode: 'preview',
+    })
+  })
 })

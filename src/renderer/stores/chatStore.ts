@@ -17,25 +17,47 @@ import compact from 'lodash/compact'
 import isEmpty from 'lodash/isEmpty'
 import { useMemo } from 'react'
 import { v4 as uuidv4 } from 'uuid'
+import { clearScrollPositionCache } from '@/components/chat/MessageList'
 import storage, { StorageKey } from '@/storage'
 import { StorageKeyGenerator } from '@/storage/StoreStorage'
 import * as defaults from '../../shared/defaults'
 import { getLogger } from '../lib/utils'
 import { migrateSession, sortSessions } from '../utils/session-utils'
-const log = getLogger('chat-store')
-
-import { clearScrollPositionCache } from '@/components/chat/MessageList'
 import { cleanupSessionAtomCache } from './atoms/throttleWriteSessionAtom'
+import { createChatStoreSync } from './chatStoreSync'
 import { lastUsedModelStore } from './lastUsedModelStore'
 import queryClient from './queryClient'
 import { getSessionMeta } from './sessionHelpers'
 import { settingsStore, useSettingsStore } from './settingsStore'
 import { UpdateQueue } from './updateQueue'
 
+const log = getLogger('chat-store')
+
 const QueryKeys = {
   ChatSessionsList: ['chat-sessions-list'],
   ChatSession: (id: string) => ['chat-session', id],
 }
+
+function syncSessionListQueueState(sessionMetaList: SessionMeta[]) {
+  sessionListUpdateQueue?.replaceState(sessionMetaList)
+}
+
+function syncSessionQueueState(sessionId: string, session: Session | null) {
+  sessionUpdateQueues[sessionId]?.replaceState(session)
+}
+
+const chatStoreSync = createChatStoreSync({
+  onRemoteSession: (sessionId, session, options) => {
+    if (options.persisted) {
+      syncSessionQueueState(sessionId, session)
+    }
+    queryClient.setQueryData(QueryKeys.ChatSession(sessionId), session)
+  },
+  onRemoteSessionList: (sessionMetaList) => {
+    syncSessionListQueueState(sessionMetaList)
+    queryClient.setQueryData(QueryKeys.ChatSessionsList, sortSessions(sessionMetaList))
+  },
+})
 
 // MARK: session list operations
 
@@ -81,7 +103,9 @@ export async function updateSessionList(updater: UpdaterFn<SessionMeta[]>) {
   }
   console.debug('chatStore', 'updateSessionList', updater)
   const result = await sessionListUpdateQueue.set(updater)
-  queryClient.setQueryData(QueryKeys.ChatSessionsList, sortSessions(result))
+  const sortedSessionMetaList = sortSessions(result)
+  queryClient.setQueryData(QueryKeys.ChatSessionsList, sortedSessionMetaList)
+  chatStoreSync.broadcastSessionList(sortedSessionMetaList)
 }
 
 // MARK: session operations
@@ -195,6 +219,7 @@ export async function updateSessionWithMessages(sessionId: string, updater: Upda
     })
   }
   _setSessionCache(sessionId, updated)
+  chatStoreSync.broadcastSession(sessionId, updated, { persisted: true })
   return updated
 }
 
@@ -219,22 +244,25 @@ export async function updateSessionCache(sessionId: string, updater: Updater<Ses
   if (!session) {
     throw new Error(`Session ${sessionId} not found`)
   }
+  let updatedSession: Session | null = session
   queryClient.setQueryData(QueryKeys.ChatSession(sessionId), (old: Session | undefined | null) => {
-    if (!old) {
-      return old
-    }
+    const base = old ?? session
     if (typeof updater === 'function') {
-      return updater(old)
+      updatedSession = updater(base)
+      return updatedSession
     } else {
-      return { ...old, ...updater }
+      updatedSession = { ...base, ...updater }
+      return updatedSession
     }
   })
+  chatStoreSync.broadcastSession(sessionId, updatedSession, { persisted: false })
 }
 
 export async function deleteSession(id: string) {
   console.debug('chatStore', 'deleteSession', id)
   await storage.removeItem(StorageKeyGenerator.session(id))
   _setSessionCache(id, null)
+  chatStoreSync.broadcastSession(id, null, { persisted: true })
   await updateSessionList((sessions) => {
     if (!sessions) {
       throw new Error('Session list not found')

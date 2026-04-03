@@ -73,6 +73,13 @@ For Windows:
 | 切换窗口 | ["110700E2","1107002B","1007002B","100700E2"] |
 | 取消 / 退出 | ["11070029","10070029"] |`
 
+const CURRENT_TURN_PRIORITY_BLOCK = `## Current-turn priority
+
+- 当前轮用户指令优先于任何历史对话内容。
+- 若当前轮指令已经明确，只根据当前轮内容决定动作，不要复用上一轮的对象、动作、参数、目标文本或工具结果。
+- 只有当当前轮明确要求“继续上一轮”“接着刚才”“重复上一步”时，才参考历史内容。
+- 如果历史内容与当前轮冲突，始终以当前轮为准。`
+
 function escapeTableCell(value: string): string {
   return value.replace(/\|/g, '\\|')
 }
@@ -254,6 +261,8 @@ export function buildAngrymiaoAgentSkillPrompt(
 - macOS 优先使用 Command 体系快捷键；Windows 优先使用 Ctrl / Alt 体系快捷键。
 - 如果当前环境与用户说法冲突，优先相信运行时检测到的系统环境。
 </runtime_environment>
+
+${CURRENT_TURN_PRIORITY_BLOCK}
 
 ${currentTurnShortcutDirective ? `${currentTurnShortcutDirective}\n\n` : ''}${template}${keyboardShortcutOverrides ? `\n\n${keyboardShortcutOverrides}` : ''}${hidReferenceBlock ? `\n\n${hidReferenceBlock}` : ''}`
 }

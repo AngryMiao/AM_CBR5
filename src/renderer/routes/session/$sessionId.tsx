@@ -1,5 +1,6 @@
 import NiceModal from '@ebay/nice-modal-react'
 import type { Message, ModelProvider } from '@shared/types'
+import { getMessageText } from '@shared/utils/message'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { getDefaultStore } from 'jotai'
 import { ForwardedRef, useCallback, useEffect, useMemo, useRef } from 'react'
@@ -9,7 +10,9 @@ import MessageList, { type MessageListRef } from '@/components/chat/MessageList'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import InputBox from '@/components/InputBox/InputBox'
 import Header from '@/components/layout/Header'
+import { getLogger } from '@/lib/utils'
 import { ANGRYMIAO_SINGLETON_KEY, ensureAngrymiaoSession } from '@/packages/voice/angrymiao-session'
+import { buildSessionRouteLogMessage, buildSessionRouteSnapshot } from './session-route-log'
 import { currentSessionIdAtom } from '@/stores/atoms/sessionAtoms'
 import { updateSession as updateSessionStore, useSession } from '@/stores/chatStore'
 import { lastUsedModelStore } from '@/stores/lastUsedModelStore'
@@ -20,6 +23,8 @@ import { getAllMessageList } from '@/stores/sessionHelpers'
 export const Route = createFileRoute('/session/$sessionId')({
   component: RouteComponent,
 })
+
+const log = getLogger('session-route')
 
 function RouteComponent() {
   const { t } = useTranslation()
@@ -36,6 +41,7 @@ function RouteComponent() {
   )
 
   const messageListRef = useRef<MessageListRef>(null)
+  const lastRouteSnapshotRef = useRef<string | null>(null)
 
   useEffect(() => {
     setTimeout(() => {
@@ -48,12 +54,39 @@ function RouteComponent() {
   }, [currentSessionId])
 
   useEffect(() => {
+    const lastMessage = currentMessageList.at(-1)
+    const state = {
+      routeSessionId: currentSessionId,
+      loadedSessionId: currentSession?.id ?? 'null',
+      singletonKey: currentSession?.singletonKey ?? 'none',
+      messageCount: currentMessageList.length,
+      lastMessageId: lastMessage?.id ?? 'none',
+      lastMessageRole: lastMessage?.role ?? 'none',
+      lastMessageTextLength: lastMessage ? getMessageText(lastMessage).length : 0,
+      lastMessageGenerating: lastMessage?.generating === true,
+      isFetching,
+    }
+    const snapshot = buildSessionRouteSnapshot(state)
+
+    if (lastRouteSnapshotRef.current === snapshot) {
+      return
+    }
+    lastRouteSnapshotRef.current = snapshot
+
+    log.info(buildSessionRouteLogMessage(state))
+  }, [currentSession, currentSessionId, currentMessageList, isFetching])
+
+  useEffect(() => {
     if (currentSession?.singletonKey === ANGRYMIAO_SINGLETON_KEY) {
       return
     }
     if (!isFetching) {
+      log.info(
+        `[session-route] ensureAngrymiaoSession currentRouteSessionId=${currentSessionId} loadedSessionId=${currentSession?.id ?? 'null'} singletonKey=${currentSession?.singletonKey ?? 'none'}`
+      )
       void ensureAngrymiaoSession({ purgeOthers: true }).then((session) => {
         if (session.id !== currentSessionId) {
+          log.info(`[session-route] navigate-to-angrymiao from=${currentSessionId} to=${session.id}`)
           navigate({ to: `/session/${session.id}`, replace: true })
         }
       })

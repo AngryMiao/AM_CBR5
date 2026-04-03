@@ -6,7 +6,7 @@ import { act, renderHook } from '@testing-library/react'
 import { createStore, Provider } from 'jotai'
 import { createElement, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { streamingTextAtom, typelessRequestAtom } from '@/stores/voiceStore'
+import { streamingTextAtom, typelessChatResultAtom, typelessRequestAtom, voiceModeAtom } from '@/stores/voiceStore'
 
 const mocks = vi.hoisted(() => {
   const hotkeys = {
@@ -27,14 +27,41 @@ const mocks = vi.hoisted(() => {
   }
 
   const request = {
-    executionPhase: null as 'chat_result' | null,
+    executionPhase: null as 'thinking' | 'chat_result' | null,
     context: {
       sessionId: 'session-1',
       userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
       asrText: '你好',
       startedAt: 1,
     },
     lastStartText: null as string | null,
+  }
+
+  const live = {
+    createCalls: 0,
+    enqueueCalls: [] as Array<{ text: string; toolExecutionMode: 'preview' | 'execute' }>,
+    abortCalls: 0,
+    onGenerationSettled: null as
+      | ((payload: {
+          context: {
+            sessionId: string
+            userMessageId: string
+            assistantMessageId?: string
+            asrText: string
+            startedAt: number
+            finalized: boolean
+          }
+          assistantMessage: {
+            id: string
+            role: 'assistant'
+            generating?: boolean
+            error?: string
+            contentParts: Array<{ type: 'text'; text: string }>
+          } | null
+          toolExecutionMode: 'preview' | 'execute'
+        }) => void)
+      | null,
   }
 
   const ipc = {
@@ -78,6 +105,7 @@ const mocks = vi.hoisted(() => {
     commitCalls: 0,
     closeCalls: 0,
     onEvent: null as ((event: { type: string; text?: string; message?: string }) => void) | null,
+    eventHandlers: [] as Array<(event: { type: string; text?: string; message?: string }) => void>,
   }
 
   class MockVoiceRecorder {
@@ -127,6 +155,7 @@ const mocks = vi.hoisted(() => {
     async createStreamingSession({ onEvent }: { onEvent: (event: { type: string; text?: string }) => void }) {
       doubao.createSessionCalls += 1
       doubao.onEvent = onEvent
+      doubao.eventHandlers.push(onEvent)
       return {
         appendAudio: vi.fn(async (chunk: Uint8Array) => {
           doubao.appendCalls.push(chunk)
@@ -151,6 +180,7 @@ const mocks = vi.hoisted(() => {
     doubao,
     hotkeys,
     ipc,
+    live,
     recorder,
     request,
     MockASRProvider,
@@ -198,7 +228,30 @@ vi.mock('@/packages/voice/tts', () => ({
 }))
 
 vi.mock('@/packages/voice/typeless-execution-state', () => ({
-  deriveTypelessExecutionState: () => (mocks.request.executionPhase ? { phase: mocks.request.executionPhase } : null),
+  deriveTypelessExecutionState: ({
+    assistantMessage,
+  }: {
+    assistantMessage: {
+      generating?: boolean
+      error?: string
+      contentParts?: Array<{ type: string; text?: string }>
+    } | null
+  }) => {
+    if (mocks.request.executionPhase) {
+      return { phase: mocks.request.executionPhase }
+    }
+    if (!assistantMessage) {
+      return null
+    }
+    if (assistantMessage.error) {
+      return { phase: 'error', message: assistantMessage.error }
+    }
+    const hasText = assistantMessage.contentParts?.some((part) => part.type === 'text' && part.text?.trim()) ?? false
+    if (assistantMessage.generating) {
+      return { phase: 'thinking' }
+    }
+    return hasText ? { phase: 'chat_result' } : null
+  },
   findAssistantMessageForUser: () =>
     mocks.request.executionPhase
       ? {
@@ -208,10 +261,15 @@ vi.mock('@/packages/voice/typeless-execution-state', () => ({
         }
       : null,
   mapTypelessExecutionStateToOverlay: (state: { phase: string } | null) =>
-    state?.phase === 'chat_result' ? { visibility: 'hidden' } : null,
+    state?.phase === 'chat_result'
+      ? { visibility: 'hidden' }
+      : state?.phase === 'thinking'
+        ? { visibility: 'visible', type: 'thinking', message: '正在思考...' }
+        : null,
 }))
 
 vi.mock('@/packages/voice/typeless-request', () => ({
+  isTypelessRequestFinalized: (context: { finalized?: boolean } | null | undefined) => context?.finalized !== false,
   startTypelessRequest: vi.fn(async ({ text }: { text: string }) => {
     mocks.request.lastStartText = text
     return {
@@ -221,11 +279,67 @@ vi.mock('@/packages/voice/typeless-request', () => ({
   }),
 }))
 
+vi.mock('@/packages/voice/live-typeless-request', () => ({
+  createLiveTypelessRequestController: vi.fn((args?: {
+    onContextChange?: (context: {
+      sessionId: string
+      userMessageId: string
+      assistantMessageId: string
+      asrText: string
+      startedAt: number
+      finalized: boolean
+    } | null) => void
+    onGenerationSettled?: (payload: {
+      context: {
+        sessionId: string
+        userMessageId: string
+        assistantMessageId?: string
+        asrText: string
+        startedAt: number
+        finalized: boolean
+      }
+      assistantMessage: {
+        id: string
+        role: 'assistant'
+        generating?: boolean
+        error?: string
+        contentParts: Array<{ type: 'text'; text: string }>
+      } | null
+      toolExecutionMode: 'preview' | 'execute'
+    }) => void
+  }) => {
+    mocks.live.createCalls += 1
+    mocks.live.onGenerationSettled = args?.onGenerationSettled ?? null
+    return {
+      enqueueTranscript: vi.fn(async (text: string, options?: { toolExecutionMode?: 'preview' | 'execute' }) => {
+        mocks.live.enqueueCalls.push({
+          text,
+          toolExecutionMode: options?.toolExecutionMode ?? 'preview',
+        })
+        const context = {
+          ...mocks.request.context,
+          asrText: text,
+          finalized: (options?.toolExecutionMode ?? 'preview') === 'execute',
+        }
+        args?.onContextChange?.(context)
+        return context
+      }),
+      abort: vi.fn(async () => {
+        mocks.live.abortCalls += 1
+        args?.onContextChange?.(null)
+      }),
+    }
+  }),
+}))
+
 vi.mock('@/packages/voice/angrymiao-session', () => ({
   ensureAngrymiaoSession: vi.fn(async () => ({ id: 'session-1' })),
 }))
 
 vi.mock('@/stores/session/messages', () => ({
+  insertMessage: vi.fn(async () => undefined),
+  modifyMessage: vi.fn(async () => undefined),
+  removeMessage: vi.fn(async () => undefined),
   submitNewUserMessage: vi.fn(async () => undefined),
 }))
 
@@ -256,6 +370,7 @@ vi.mock('@shared/utils/message', () => ({
 }))
 
 import { startTypelessRequest } from '@/packages/voice/typeless-request'
+import { switchCurrentSession } from '@/stores/session/crud'
 import { submitNewUserMessage } from '@/stores/session/messages'
 import { useVoiceController } from './useVoiceController'
 
@@ -282,10 +397,21 @@ function countInvokeCalls(channel: string) {
   return mocks.ipc.invoke.mock.calls.filter(([currentChannel]) => currentChannel === channel).length
 }
 
+function getInvokeCalls(channel: string) {
+  return mocks.ipc.invoke.mock.calls.filter(([currentChannel]) => currentChannel === channel)
+}
+
 async function flushAsyncWork(iterations = 5) {
   for (let index = 0; index < iterations; index += 1) {
     await Promise.resolve()
   }
+}
+
+async function settleAsyncFlow(options?: { advanceMs?: number; iterations?: number }) {
+  if ((options?.advanceMs ?? 0) > 0) {
+    vi.advanceTimersByTime(options?.advanceMs ?? 0)
+  }
+  await flushAsyncWork(options?.iterations ?? 20)
 }
 
 describe('useVoiceController typeless hotkey regressions', () => {
@@ -304,6 +430,10 @@ describe('useVoiceController typeless hotkey regressions', () => {
     mocks.recorder.audioChunkHandler = null
     mocks.request.executionPhase = null
     mocks.request.lastStartText = null
+    mocks.live.createCalls = 0
+    mocks.live.enqueueCalls = []
+    mocks.live.abortCalls = 0
+    mocks.live.onGenerationSettled = null
     mocks.chat.session = null
     mocks.voiceSettings.enabled = true
     mocks.voiceSettings.workMode = 'typeless'
@@ -330,6 +460,7 @@ describe('useVoiceController typeless hotkey regressions', () => {
     mocks.doubao.commitCalls = 0
     mocks.doubao.closeCalls = 0
     mocks.doubao.onEvent = null
+    mocks.doubao.eventHandlers = []
     mocks.ipc.invoke.mockImplementation(async (channel: string) => {
       if (channel === 'ensureMicrophonePermission' || channel === 'ensureAccessibilityPermission') {
         return true
@@ -368,6 +499,17 @@ describe('useVoiceController typeless hotkey regressions', () => {
     vi.clearAllTimers()
     vi.useRealTimers()
     vi.clearAllMocks()
+  })
+
+  it('switches to the angrymiao session when typeless recording starts', async () => {
+    const { result } = renderHook(() => useVoiceController(), { wrapper: createWrapper() })
+
+    await act(async () => {
+      await result.current.toggleVoice()
+      await flushAsyncWork(20)
+    })
+
+    expect(vi.mocked(switchCurrentSession)).toHaveBeenCalledWith('session-1')
   })
 
   it('cancels the active typeless operation on short tap without starting a new recording', async () => {
@@ -460,14 +602,18 @@ describe('useVoiceController typeless hotkey regressions', () => {
     await act(async () => {
       mocks.hotkeys.down?.()
       vi.advanceTimersByTime(190)
-      await flushAsyncWork()
+      await flushAsyncWork(20)
+    })
+
+    await act(async () => {
+      await settleAsyncFlow({ advanceMs: 300, iterations: 40 })
     })
 
     expect(mocks.recorder.startCalls).toBe(2)
     await act(async () => {
       mocks.hotkeys.up?.()
       vi.advanceTimersByTime(50)
-      await flushAsyncWork()
+      await flushAsyncWork(20)
     })
 
     expect(mocks.recorder.startCalls).toBe(2)
@@ -527,25 +673,141 @@ describe('useVoiceController typeless hotkey regressions', () => {
     expect(mocks.ipc.hideTypelessChatResult).toHaveBeenCalled()
   })
 
-  it('streams doubao asr partials and submits the completed transcript on stop', async () => {
+  it('keeps the overlay hidden once a finalized chat result is ready even if voiceMode is still processing', async () => {
+    mocks.request.executionPhase = 'chat_result'
+    const wrapper = createWrapper((store) => {
+      store.set(typelessRequestAtom, {
+        ...mocks.request.context,
+        finalized: true,
+      })
+      store.set(voiceModeAtom, 'processing')
+    })
+
+    renderHook(() => useVoiceController(), { wrapper })
+
+    await act(async () => {
+      await flushAsyncWork(20)
+    })
+
+    expect(mocks.ipc.showTypelessChatResult).toHaveBeenCalledTimes(1)
+    expect(
+      getInvokeCalls('typelessOverlay:show').some(
+        ([, payload]) => payload && typeof payload === 'object' && (payload as { mode?: string }).mode === 'processing'
+      )
+    ).toBe(false)
+  })
+
+  it('keeps the overlay hidden after the chat result window is shown even if status falls back to thinking', async () => {
+    mocks.request.executionPhase = 'thinking'
+    const wrapper = createWrapper((store) => {
+      store.set(typelessRequestAtom, {
+        ...mocks.request.context,
+        finalized: true,
+      })
+      store.set(typelessChatResultAtom, {
+        sessionId: mocks.request.context.sessionId,
+        userMessageId: mocks.request.context.userMessageId,
+        asrText: mocks.request.context.asrText,
+        replyText: '已完成',
+        shownAt: Date.now(),
+      })
+    })
+
+    renderHook(() => useVoiceController(), { wrapper })
+
+    await act(async () => {
+      await flushAsyncWork(20)
+    })
+
+    expect(
+      getInvokeCalls('typelessOverlay:show').some(
+        ([, payload]) => payload && typeof payload === 'object' && (payload as { mode?: string }).mode === 'thinking'
+      )
+    ).toBe(false)
+  })
+
+  it('shows the chat result when execute generation settles even if the session snapshot has no assistant', async () => {
     mocks.voiceSettings.asrProvider = 'doubao'
-    const { store, wrapper } = createWrapperWithStore()
-    const { result } = renderHook(() => useVoiceController(), { wrapper })
+    mocks.chat.session = {
+      messages: [],
+    }
+    const { result } = renderHook(() => useVoiceController(), { wrapper: createWrapper() })
 
     await act(async () => {
       await result.current.startRecording()
     })
 
+    let stopPromise: Promise<unknown> | null = null
+    await act(async () => {
+      stopPromise = result.current.stopRecording()
+      await flushAsyncWork(20)
+    })
+
+    await act(async () => {
+      mocks.doubao.onEvent?.({ type: 'completed', text: '你好' })
+      await flushAsyncWork(20)
+      await stopPromise
+    })
+
+    expect(mocks.live.onGenerationSettled).toBeTypeOf('function')
+
+    await act(async () => {
+      mocks.live.onGenerationSettled?.({
+        context: {
+          ...mocks.request.context,
+          asrText: '你好',
+          finalized: true,
+        },
+        assistantMessage: {
+          id: 'assistant-final',
+          role: 'assistant',
+          generating: false,
+          contentParts: [{ type: 'text', text: '直接结果' }],
+        },
+        toolExecutionMode: 'execute',
+      })
+      await flushAsyncWork(20)
+    })
+
+    expect(mocks.ipc.showTypelessChatResult).toHaveBeenCalledWith({
+      userMessageId: mocks.request.context.userMessageId,
+      asrText: '你好',
+      replyText: '直接结果',
+    })
+    expect(
+      getInvokeCalls('typelessOverlay:show').some(
+        ([, payload]) => payload && typeof payload === 'object' && (payload as { mode?: string }).mode === 'thinking'
+      )
+    ).toBe(false)
+  })
+
+  it('defers doubao typeless processing until the final transcript is confirmed on stop', async () => {
+    mocks.voiceSettings.asrProvider = 'doubao'
+    const { store, wrapper } = createWrapperWithStore()
+    const { result } = renderHook(() => useVoiceController(), { wrapper })
+    let started = false
+
+    await act(async () => {
+      started = await result.current.startRecording()
+    })
+
+    expect(started).toBe(true)
     expect(mocks.doubao.createSessionCalls).toBe(1)
+    expect(mocks.live.createCalls).toBe(1)
+    expect(mocks.live.abortCalls).toBe(0)
 
     await act(async () => {
       mocks.recorder.audioChunkHandler?.(new Uint8Array([1, 2, 3, 4]))
-      await flushAsyncWork()
+      await flushAsyncWork(20)
       mocks.doubao.onEvent?.({ type: 'partial', text: '你' })
-      await flushAsyncWork()
+      await flushAsyncWork(20)
+      mocks.doubao.onEvent?.({ type: 'final', text: '你' })
+      await settleAsyncFlow({ iterations: 40 })
     })
 
     expect(store.get(streamingTextAtom)).toBe('你')
+    expect(mocks.live.abortCalls).toBe(0)
+    expect(mocks.live.enqueueCalls).toEqual([])
 
     let stopPromise: Promise<unknown> | null = null
     await act(async () => {
@@ -561,11 +823,124 @@ describe('useVoiceController typeless hotkey regressions', () => {
       await stopPromise
     })
 
-    expect(mocks.request.lastStartText).toBe('你好')
-    expect(vi.mocked(startTypelessRequest)).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(mocks.live.enqueueCalls).toEqual([
+      {
         text: '你好',
-      })
+        toolExecutionMode: 'execute',
+      },
+    ])
+    expect(vi.mocked(startTypelessRequest)).not.toHaveBeenCalled()
+  })
+
+  it('keeps showing recognition until the final transcript is confirmed, then switches to thinking', async () => {
+    mocks.voiceSettings.asrProvider = 'doubao'
+    const { result } = renderHook(() => useVoiceController(), { wrapper: createWrapper() })
+
+    await act(async () => {
+      await result.current.startRecording()
+    })
+
+    let stopPromise: Promise<unknown> | null = null
+    await act(async () => {
+      stopPromise = result.current.stopRecording()
+      await flushAsyncWork(20)
+    })
+
+    const processingOverlayShownBeforeCompleted = getInvokeCalls('typelessOverlay:show').some(
+      ([, payload]) =>
+        payload &&
+        typeof payload === 'object' &&
+        (payload as { mode?: string; text?: string }).mode === 'processing' &&
+        (payload as { mode?: string; text?: string }).text === '正在识别...'
     )
+
+    expect(processingOverlayShownBeforeCompleted).toBe(true)
+
+    mocks.request.executionPhase = 'thinking'
+    await act(async () => {
+      mocks.doubao.onEvent?.({ type: 'completed', text: '你好' })
+      await flushAsyncWork(20)
+      await stopPromise
+    })
+
+    const thinkingOverlayShownAfterCompleted = getInvokeCalls('typelessOverlay:show').some(
+      ([, payload]) =>
+        payload &&
+        typeof payload === 'object' &&
+        (payload as { mode?: string; text?: string }).mode === 'thinking' &&
+        (payload as { mode?: string; text?: string }).text === '正在思考...'
+    )
+
+    expect(thinkingOverlayShownAfterCompleted).toBe(true)
+  })
+
+  it('ignores stale doubao streaming events from a cancelled round after a new round starts', async () => {
+    mocks.voiceSettings.asrProvider = 'doubao'
+    const { result } = renderHook(() => useVoiceController(), { wrapper: createWrapper() })
+
+    await act(async () => {
+      await result.current.startRecording()
+    })
+
+    const firstOnEvent = mocks.doubao.onEvent
+    expect(firstOnEvent).toBeTypeOf('function')
+
+    let firstStopPromise: Promise<unknown> | null = null
+    await act(async () => {
+      firstStopPromise = result.current.stopRecording()
+      await flushAsyncWork()
+    })
+
+    expect(mocks.doubao.commitCalls).toBe(1)
+
+    await act(async () => {
+      mocks.hotkeys.down?.()
+      vi.advanceTimersByTime(50)
+      mocks.hotkeys.up?.()
+      await flushAsyncWork(40)
+      await firstStopPromise
+    })
+
+    expect(result.current.voiceMode).toBe('inactive')
+    expect(mocks.live.abortCalls).toBeGreaterThanOrEqual(1)
+
+    await act(async () => {
+      await result.current.startRecording()
+    })
+
+    const secondOnEvent = mocks.doubao.onEvent
+    expect(secondOnEvent).toBeTypeOf('function')
+    expect(secondOnEvent).not.toBe(firstOnEvent)
+
+    await act(async () => {
+      firstOnEvent?.({ type: 'final', text: '上一轮内容' })
+      await flushAsyncWork(30)
+    })
+
+    expect(mocks.live.enqueueCalls).toEqual([])
+
+    let secondStopPromise: Promise<unknown> | null = null
+    await act(async () => {
+      secondStopPromise = result.current.stopRecording()
+      await flushAsyncWork()
+    })
+
+    expect(mocks.doubao.commitCalls).toBe(2)
+
+    await act(async () => {
+      firstOnEvent?.({ type: 'completed', text: '上一轮内容' })
+      await flushAsyncWork(20)
+      secondOnEvent?.({ type: 'completed', text: '第二轮内容' })
+      await flushAsyncWork(20)
+      await secondStopPromise
+    })
+
+    expect(mocks.live.enqueueCalls).toEqual([
+      {
+        text: '第二轮内容',
+        toolExecutionMode: 'execute',
+      },
+    ])
+    expect(vi.mocked(startTypelessRequest)).not.toHaveBeenCalled()
   })
 })

@@ -4,6 +4,7 @@ import type { ToolSet } from 'ai'
 import Emittery from 'emittery'
 import { isEqual } from 'lodash'
 import { IPCStdioTransport } from './ipc-stdio-transport'
+import { type ToolExecutionMode, wrapToolSetForExecutionMode } from './tool-execution-mode'
 import type { MCPServerConfig, MCPServerStatus } from './types'
 
 type TransportConfig = MCPServerConfig['transport']
@@ -194,12 +195,8 @@ export const mcpController = {
     }
   },
 
-  getAvailableTools(options?: { skillBundleId?: string }): ToolSet {
-    const DEFERRED_EXECUTION_TOOLS = new Set([
-      'system_sleep',
-      'system_shutdown',
-      'system_restart',
-    ])
+  getAvailableTools(options?: { skillBundleId?: string; executionMode?: ToolExecutionMode }): ToolSet {
+    const DEFERRED_EXECUTION_TOOLS = new Set(['system_sleep', 'system_shutdown', 'system_restart'])
     const toolSet: ToolSet = {}
     for (const { instance, config } of this.servers.values()) {
       const isSkillScoped = config.scope === 'skill-bundle' || !!config.skillBundleId
@@ -216,24 +213,20 @@ export const mcpController = {
         toolSet[normalizeToolName(config.name, toolName)] = {
           ...tool,
           execute: async (args, options) => {
-            try {
-              if (DEFERRED_EXECUTION_TOOLS.has(toolName)) {
-                setTimeout(() => {
-                  rawExecute?.(args, options).catch((err: unknown) => {
-                    console.error(`Deferred tool ${toolName} failed:`, err)
-                  })
-                }, 3000)
-                return { success: true, message: `${toolName} will execute in 3 seconds` }
-              }
-              return await rawExecute?.(args, options)
-            } catch (err) {
-              throw err
+            if (DEFERRED_EXECUTION_TOOLS.has(toolName)) {
+              setTimeout(() => {
+                rawExecute?.(args, options).catch((err: unknown) => {
+                  console.error(`Deferred tool ${toolName} failed:`, err)
+                })
+              }, 3000)
+              return { success: true, message: `${toolName} will execute in 3 seconds` }
             }
+            return await rawExecute?.(args, options)
           },
         }
       }
     }
-    return toolSet
+    return wrapToolSetForExecutionMode(toolSet, options?.executionMode ?? 'execute')
   },
 }
 

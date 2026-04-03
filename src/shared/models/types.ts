@@ -44,6 +44,7 @@ export interface CallChatCompletionOptions<Tools extends ToolSet = ToolSet> {
   tools?: Tools
   providerOptions?: ProviderOptions
   maxSteps?: number
+  toolExecutionMode?: 'preview' | 'execute'
 }
 
 export interface ResultChange {

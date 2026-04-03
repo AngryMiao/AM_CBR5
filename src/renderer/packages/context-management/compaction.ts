@@ -1,5 +1,6 @@
 import type { CompactionPoint, Message, SessionSettings, Settings } from '@shared/types'
 import { createMessage } from '@shared/types'
+import { getLogger } from '@/lib/utils'
 import { getTokenizerType } from '@/packages/token-estimation'
 import { setCompactionUIState } from '@/stores/atoms/compactionAtoms'
 import * as chatStore from '@/stores/chatStore'
@@ -15,6 +16,18 @@ import {
   getLatestCompactionBoundaryId,
 } from './context-tokens'
 import { generateSummaryWithStream } from './summary-generator'
+
+const log = getLogger('typeless-debug')
+const ANGRYMIAO_SESSION_NAME = 'angrymiao'
+const ANGRYMIAO_SINGLETON_KEY = 'angrymiao-voice'
+const SLOW_COMPACTION_MS = 1500
+
+function isTypelessVoiceSession(session?: { name?: string; singletonKey?: string } | null) {
+  if (!session) {
+    return false
+  }
+  return session.singletonKey === ANGRYMIAO_SINGLETON_KEY || session.name === ANGRYMIAO_SESSION_NAME
+}
 
 function getModelContextWindowFromSettings(
   providerId: string | undefined,
@@ -55,21 +68,18 @@ export async function needsCompaction(sessionId: string): Promise<boolean> {
   // ===== Keep existing early returns (do not modify) =====
   const session = await chatStore.getSession(sessionId)
   if (!session) {
-    console.log('[DEBUG needsCompaction] session not found')
     return false
   }
 
   const globalSettings = settingsStore.getState().getSettings()
 
   if (!isAutoCompactionEnabled(session.settings, globalSettings)) {
-    console.log('[DEBUG needsCompaction] auto compaction disabled')
     return false
   }
 
   const providerId = session.settings?.provider ?? globalSettings.defaultChatModel?.provider
   const modelId = session.settings?.modelId ?? globalSettings.defaultChatModel?.model
   if (!modelId) {
-    console.log('[DEBUG needsCompaction] no modelId')
     return false
   }
 
@@ -125,11 +135,19 @@ export async function runCompactionWithUIState(
   sessionId: string,
   options: CompactionOptions = {}
 ): Promise<CompactionResult> {
+  const session = await chatStore.getSession(sessionId)
+  const shouldDebugTypeless = isTypelessVoiceSession(session)
+  const compactionStartAt = Date.now()
+
   if (!options.force) {
     const shouldCompact = await needsCompaction(sessionId)
     if (!shouldCompact) {
       return { success: true, compacted: false }
     }
+  }
+
+  if (shouldDebugTypeless) {
+    log.info(`compaction-start sessionId=${sessionId} force=${options.force === true ? 'true' : 'false'}`)
   }
 
   setCompactionUIState(sessionId, { status: 'running', error: null, streamingText: '' })
@@ -144,6 +162,15 @@ export async function runCompactionWithUIState(
       error: result.error?.message ?? 'Compaction failed',
       streamingText: '',
     })
+  }
+
+  if (shouldDebugTypeless) {
+    const durationMs = Date.now() - compactionStartAt
+    if (durationMs >= SLOW_COMPACTION_MS || result.success !== true || result.compacted) {
+      log.info(
+        `compaction-finished sessionId=${sessionId} success=${result.success ? 'true' : 'false'} compacted=${result.compacted ? 'true' : 'false'} durationMs=${durationMs} error=${result.error?.message ?? 'none'}`
+      )
+    }
   }
 
   return result

@@ -118,7 +118,7 @@ export function mapTypelessExecutionStateToOverlay(state: TypelessExecutionState
     case 'thinking':
       return { visibility: 'visible', type: 'thinking', message: '正在思考...' }
     case 'inserting':
-      return { visibility: 'visible', type: 'inserting', message: '正在插入...' }
+      return { visibility: 'visible', type: 'inserting', message: '正在输出...' }
     case 'executing':
       return { visibility: 'visible', type: 'executing', message: '正在执行...' }
     case 'success':
