@@ -1,0 +1,13 @@
+[workspace]
+members = [
+  "apps/desktop/src-tauri",
+  "crates/ipc-contract",
+  "crates/settings-core",
+  "crates/history-core",
+  "crates/logging-core",
+  "crates/voice-core",
+  "crates/platform-core",
+  "crates/automation-core",
+  "crates/asr-core",
+]
+resolver = "2"
