@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Voice App",
+  "version": "0.1.0",
+  "identifier": "xyz.angrymiao.voiceapp",
+  "build": {
+    "beforeDevCommand": "pnpm --dir .. dev -- --host 127.0.0.1 --port 1420",
+    "beforeBuildCommand": "pnpm --dir .. build",
+    "devUrl": "http://127.0.0.1:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Voice App",
+        "width": 1100,
+        "height": 760
+      }
+    ]
+  },
+  "bundle": {
+    "active": false
+  }
+}

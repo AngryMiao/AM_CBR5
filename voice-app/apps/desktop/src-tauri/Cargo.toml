@@ -1,0 +1,24 @@
+[package]
+name = "voice-app-desktop"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "voice_app_desktop"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ipc-contract = { path = "../../../crates/ipc-contract" }
+settings-core = { path = "../../../crates/settings-core" }
+history-core = { path = "../../../crates/history-core" }
+logging-core = { path = "../../../crates/logging-core" }
+voice-core = { path = "../../../crates/voice-core" }
+platform-core = { path = "../../../crates/platform-core" }
+automation-core = { path = "../../../crates/automation-core" }
+asr-core = { path = "../../../crates/asr-core" }
