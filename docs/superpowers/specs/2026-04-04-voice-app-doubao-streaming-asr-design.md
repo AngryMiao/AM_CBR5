@@ -17,6 +17,7 @@
 3. 采用豆包流式语音输入输出链路
 4. 本阶段不做 TTS
 5. 状态流使用中文标识
+6. 不考虑其他平台或其他厂商的 ASR
 
 本设计文档的目标，是把 `voice-app` 从“batch 占位识别”重定向为“豆包 WebSocket 流式 ASR”。
 
@@ -48,6 +49,8 @@
 
 否则实现后仍会残留 `OpenAI + batch + 英文 phase` 的旧语义。
 
+本阶段不仅要“停止使用”这些残留，还要把 **`voice-app` 内已有的 OpenAI ASR 相关实现和配置彻底移除**，避免形成死代码、假兼容或双路线并存。
+
 ## 目标
 
 本阶段只实现以下闭环：
@@ -65,10 +68,20 @@
 本阶段不做：
 
 1. TTS / 语音播报
-2. OpenAI / FunASR / Whisper / Azure / Google 等其他 ASR provider
-3. 录音结束后再一次性 batch 转写
-4. LLM / MCP / 文本注入
-5. 完整 provider UI 管理界面
+2. OpenAI / FunASR / Whisper / Azure / Google / Aliyun 等任何其他 ASR
+3. 任何面向“未来多 provider / 多平台 ASR”的抽象层
+4. 录音结束后再一次性 batch 转写
+5. LLM / MCP / 文本注入
+6. 完整 provider UI 管理界面
+
+### 明确移除项
+
+本阶段 implementation 必须删除以下现有残留，而不是保留为备用路径：
+
+1. `asr-core` 中的 OpenAI transcription service / config / HTTP 调用
+2. `settings-core` 中默认 `openai` / `gpt-4o-mini-transcribe`
+3. 前端 `VoiceSettings`、mock、tests 中的 OpenAI provider 文案
+4. 任何“以后也许切回 OpenAI”的保留分支
 
 ## 结论
 
@@ -82,6 +95,8 @@
 2. 继续保留 Rust 侧热路径，不让前端进入实时识别主链
 3. 识别文本以流式事件驱动更新，而不是等待固定延时后完成
 4. `.env` 由 Rust runtime 统一加载，前端只读取安全快照
+5. 豆包 ASR 是唯一目标能力，不为其他 ASR provider 或其他平台 ASR 预留实现抽象
+6. `voice-app` 中现有 OpenAI ASR 代码、默认值、测试文案和 mock 必须删除，而不是保留为兼容实现
 
 ## 状态流
 
@@ -207,6 +222,7 @@ VOICE_APP_DOUBAO_ASR_CONTEXT_JSON=
    - 音频采样率
    - 当前资源 ID
 4. 缺少必要配置时，任务必须进入 `识别失败`
+5. 不新增 `provider registry`、`provider switch`、`fallback provider` 等配置
 
 ## 架构设计
 
@@ -220,8 +236,10 @@ VOICE_APP_DOUBAO_ASR_CONTEXT_JSON=
 4. partial / final / completed / error 事件解析
 5. `.env` 配置读取与校验
 
-本阶段不再让 `asr-core` 承担多 provider 选择。  
-它只负责豆包流式 ASR。
+本阶段 `asr-core` 不承担多 provider 选择，也不承担平台兼容抽象。  
+它只负责豆包流式 ASR，而且这不是“默认 provider”，而是**唯一 provider**。
+
+因此当前 `asr-core` 里已有的 OpenAI batch service 必须删除，不能以 dead code 形式保留。
 
 ### 2. `app_state`
 
@@ -393,12 +411,20 @@ src-tauri::run()
 4. `settings-core` 默认值 tests
 5. `voice-core` runtime machine tests
 
+### 需要同步清理的代码层
+
+1. `settings-core` 的 OpenAI 默认值
+2. `asr-core` 的 OpenAI 服务实现
+3. `app_state` 的 batch transcription 路径
+4. 前端 `setup.ts` / `app-shell.test.tsx` 的 OpenAI mock 文案
+
 ### 必须移除的旧测试语义
 
 1. `openai`
 2. `gpt-4o-mini-transcribe`
 3. `idle / listening / processing / done / error`
 4. batch `Saved WAV to ...` 作为识别主结果
+5. “OpenAI 仍保留但暂时不用”的兼容分支
 
 ### 必须新增的测试语义
 
@@ -461,12 +487,14 @@ src-tauri::run()
 本设计被认为满足需求，需要同时满足：
 
 1. 只保留豆包流式 ASR
-2. 配置改为 `.env`
-3. 不做 TTS
-4. 状态流改为中文
-5. 热路径改为流式识别，而不是 batch 占位转写
-6. 前端继续只做观察层
-7. `OpenAI + batch + 英文 phase` 残留已经从运行时合同、窗口控制和测试层同步清除
+2. 不考虑其他平台或其他厂商的 ASR
+3. 配置改为 `.env`
+4. 不做 TTS
+5. 状态流改为中文
+6. 热路径改为流式识别，而不是 batch 占位转写
+7. 前端继续只做观察层
+8. `OpenAI + batch + 英文 phase` 残留已经从运行时合同、窗口控制和测试层同步清除
+9. `voice-app` 内不再保留 OpenAI ASR 相关实现、默认值和 mock
 
 ## 下一步
 
