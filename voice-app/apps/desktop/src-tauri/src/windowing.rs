@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::Duration;
 #[cfg(target_os = "windows")]
@@ -12,16 +12,14 @@ use tauri::{
 const MAIN_WINDOW_LABEL: &str = "main";
 const OVERLAY_WINDOW_LABEL: &str = "overlay";
 const RESULT_WINDOW_LABEL: &str = "result";
-const OVERLAY_WIDTH: f64 = 420.0;
-const OVERLAY_HEIGHT: f64 = 96.0;
+const OVERLAY_WIDTH: f64 = 300.0;
+const OVERLAY_HEIGHT: f64 = 128.0;
 const RESULT_WIDTH: f64 = 720.0;
 const RESULT_HEIGHT: f64 = 520.0;
 const OVERLAY_BOTTOM_MARGIN: i32 = 30;
 const OVERLAY_AUTO_HIDE_MS: u64 = 4_500;
 
 static OVERLAY_HIDE_TOKEN: AtomicU64 = AtomicU64::new(0);
-static MAIN_WINDOW_VISIBILITY_LOCKED_BY_RUNTIME: AtomicBool = AtomicBool::new(false);
-static MAIN_WINDOW_VISIBLE_BEFORE_RUNTIME: AtomicBool = AtomicBool::new(true);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct WindowVisibility {
@@ -70,8 +68,9 @@ pub fn handle_global_window_event<R: Runtime>(window: &Window<R>, event: &Window
 pub fn sync_runtime_windows(app: &AppHandle, phase: &str) -> tauri::Result<()> {
     let visibility = window_visibility_for_phase(phase);
     relayout_runtime_windows(app)?;
-    sync_main_window_visibility(app, visibility.overlay_visible || visibility.result_visible)?;
 
+    // overlay/result 是独立 runtime 窗口，不接管主窗口显隐；
+    // 否则关闭结果窗或短按中断时会把主窗口重新拉到前台。
     apply_window_visibility(
         app.get_webview_window(OVERLAY_WINDOW_LABEL),
         visibility.overlay_visible,
@@ -83,38 +82,6 @@ pub fn sync_runtime_windows(app: &AppHandle, phase: &str) -> tauri::Result<()> {
         true,
     )?;
     sync_overlay_auto_hide(app.clone(), phase, visibility.overlay_visible);
-
-    Ok(())
-}
-
-fn sync_main_window_visibility(app: &AppHandle, runtime_window_visible: bool) -> tauri::Result<()> {
-    let Some(main_window) = app.get_webview_window(MAIN_WINDOW_LABEL) else {
-        return Ok(());
-    };
-
-    if runtime_window_visible {
-        if !MAIN_WINDOW_VISIBILITY_LOCKED_BY_RUNTIME.load(Ordering::SeqCst) {
-            MAIN_WINDOW_VISIBLE_BEFORE_RUNTIME
-                .store(main_window.is_visible().unwrap_or(false), Ordering::SeqCst);
-            MAIN_WINDOW_VISIBILITY_LOCKED_BY_RUNTIME.store(true, Ordering::SeqCst);
-        }
-
-        if main_window.is_visible().unwrap_or(false) {
-            main_window.hide()?;
-        }
-
-        return Ok(());
-    }
-
-    if !MAIN_WINDOW_VISIBILITY_LOCKED_BY_RUNTIME.swap(false, Ordering::SeqCst) {
-        return Ok(());
-    }
-
-    if MAIN_WINDOW_VISIBLE_BEFORE_RUNTIME.load(Ordering::SeqCst) {
-        show_main_window(app)?;
-    } else if main_window.is_visible().unwrap_or(false) {
-        main_window.hide()?;
-    }
 
     Ok(())
 }
@@ -458,8 +425,8 @@ mod tests {
             height: 900,
         });
 
-        assert_eq!(bounds.x, 690);
-        assert_eq!(bounds.y, 824);
+        assert_eq!(bounds.x, 750);
+        assert_eq!(bounds.y, 792);
     }
 
     #[test]

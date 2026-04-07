@@ -1,5 +1,5 @@
 # Logs
-logs
+/logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -137,7 +137,7 @@ next-env.d.ts
 tmp
 
 # Logs
-logs
+/logs/
 *.log
 
 # Runtime data

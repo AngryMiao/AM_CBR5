@@ -1,34 +1,36 @@
 import { useRuntimeSnapshot } from './useRuntimeSnapshot'
 import { getRuntimePhaseTone } from '../../lib/runtimePhase'
 
+const WAVE_BARS = [0, 1, 2, 3, 4]
+
 export function OverlayWindow() {
-  const { phase, transcript, detail, error } = useRuntimeSnapshot()
+  const { phase, transcript, error } = useRuntimeSnapshot()
   const phaseTone = getRuntimePhaseTone(phase)
   const phaseMeta = getOverlayPhaseMeta(phaseTone)
-  const primary = resolveOverlayPrimary(phaseTone, transcript, detail, error)
-  const secondary = resolveOverlaySecondary(phaseTone, transcript, error)
+  const primary = resolveOverlayPrimary(phaseTone, transcript, error)
+  const secondary = resolveOverlaySecondary(phaseTone, error)
+  const announcement = [phaseMeta.phase, primary, secondary].filter(Boolean).join('，')
 
   return (
     <main className="overlay-shell">
-      <section className={`typeless-overlay-card typeless-overlay-card-${phaseTone}`}>
-        <div className="typeless-overlay-status">
-          <span aria-hidden="true" className="typeless-overlay-icon">
+      <section
+        aria-label={announcement}
+        aria-live="polite"
+        className={`typeless-overlay-card typeless-overlay-card-${phaseTone}`}
+        role="status"
+        title={announcement}
+      >
+        <div className="typeless-overlay-recorder" aria-hidden="true">
+          <span className="typeless-overlay-handle typeless-overlay-handle-left">
             {phaseMeta.icon}
           </span>
-          <div className="typeless-overlay-status-copy">
-            <p className="typeless-overlay-eyebrow">{phaseMeta.eyebrow}</p>
-            <strong>{phaseMeta.phase}</strong>
+          <div className="typeless-overlay-wave-shell">
+            <span className="typeless-overlay-wave">
+              {WAVE_BARS.map((bar) => (
+                <span key={bar} className="typeless-overlay-wave-bar" />
+              ))}
+            </span>
           </div>
-        </div>
-        <div className="typeless-overlay-body">
-          <p className={error ? 'typeless-overlay-primary typeless-overlay-primary-error' : 'typeless-overlay-primary'}>
-            {primary}
-          </p>
-          {secondary ? (
-            <p className={error ? 'typeless-overlay-secondary typeless-overlay-secondary-error' : 'typeless-overlay-secondary'}>
-              {secondary}
-            </p>
-          ) : null}
         </div>
       </section>
     </main>
@@ -38,7 +40,6 @@ export function OverlayWindow() {
 function resolveOverlayPrimary(
   phaseTone: ReturnType<typeof getRuntimePhaseTone>,
   transcript: string,
-  detail: string,
   error: string | null,
 ) {
   if (error) {
@@ -49,8 +50,8 @@ function resolveOverlayPrimary(
     return transcript
   }
 
-  if (detail.trim()) {
-    return detail
+  if (phaseTone === 'idle' || phaseTone === 'loading') {
+    return '等待语音输入'
   }
 
   return phaseMetaFallbackText(phaseTone)
@@ -58,19 +59,18 @@ function resolveOverlayPrimary(
 
 function resolveOverlaySecondary(
   phaseTone: ReturnType<typeof getRuntimePhaseTone>,
-  transcript: string,
   error: string | null,
 ) {
   if (error) {
     return null
   }
 
-  if (phaseTone === 'idle' || phaseTone === 'loading') {
+  if (phaseTone === 'listening') {
     return '按住语音快捷键开始输入'
   }
 
-  if (phaseTone === 'listening') {
-    return transcript.trim() ? '松开热键开始识别' : '按住语音快捷键开始输入'
+  if (phaseTone === 'idle' || phaseTone === 'loading') {
+    return '按住语音快捷键开始输入'
   }
 
   return null
@@ -79,23 +79,23 @@ function resolveOverlaySecondary(
 function getOverlayPhaseMeta(phaseTone: ReturnType<typeof getRuntimePhaseTone>) {
   switch (phaseTone) {
     case 'listening':
-      return { eyebrow: '实时识别', icon: '●', phase: '正在聆听' }
+      return { icon: '●', phase: '正在聆听' }
     case 'processing':
-      return { eyebrow: '实时识别', icon: '⋯', phase: '正在识别' }
+      return { icon: '⋯', phase: '正在识别' }
     case 'thinking':
-      return { eyebrow: '实时识别', icon: '✦', phase: '正在生成' }
+      return { icon: '✦', phase: '正在生成' }
     case 'executing':
-      return { eyebrow: '实时识别', icon: '⌘', phase: '正在执行' }
+      return { icon: '⌘', phase: '正在执行' }
     case 'inserting':
-      return { eyebrow: '实时识别', icon: '⌨', phase: '正在输出' }
+      return { icon: '⌨', phase: '正在输出' }
     case 'done':
-      return { eyebrow: '实时识别', icon: '✓', phase: '已完成' }
+      return { icon: '✓', phase: '已完成' }
     case 'error':
-      return { eyebrow: '实时识别', icon: '!', phase: '识别失败' }
+      return { icon: '!', phase: '识别失败' }
     case 'idle':
-      return { eyebrow: '实时识别', icon: '●', phase: '待命中' }
+      return { icon: '●', phase: '待命中' }
     default:
-      return { eyebrow: '实时识别', icon: '●', phase: '加载中' }
+      return { icon: '●', phase: '加载中' }
   }
 }
 

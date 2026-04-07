@@ -120,9 +120,14 @@ describe('App shell', () => {
   it('renders overlay chrome instead of the main shell in the overlay window', async () => {
     vi.mocked(getCurrentWindow).mockImplementation(() => ({ label: 'overlay' } as never))
 
-    render(<App />)
+    const { container } = render(<App />)
 
-    expect(await screen.findByText('按住语音快捷键开始输入')).toBeInTheDocument()
+    expect(await screen.findByRole('status')).toBeInTheDocument()
+    expect(screen.queryByText('按住语音快捷键开始输入')).toBeNull()
+    expect(screen.queryByText('实时识别')).toBeNull()
+    expect(screen.queryByText('LISTEN')).toBeNull()
+    expect(container.querySelector('.typeless-overlay-handle-right')).toBeNull()
+    expect(container.querySelectorAll('.typeless-overlay-wave-bar')).toHaveLength(5)
     expect(screen.queryByText('历史记录')).toBeNull()
     expect(screen.queryByText('设置')).toBeNull()
   })
@@ -134,8 +139,10 @@ describe('App shell', () => {
 
     render(<App />)
 
-    expect(await screen.findByText('等待下一次语音任务。')).toBeInTheDocument()
-    expect(screen.getByText('待命中')).toBeInTheDocument()
+    expect(await screen.findByText('识别内容')).toBeInTheDocument()
+    expect(screen.queryByText('等待下一次语音任务。')).toBeNull()
+    expect(screen.queryByText('待命中')).toBeNull()
+    expect(screen.queryByText('结果会自动写入历史记录，供后续预览和重试。')).toBeNull()
     expect(screen.getByText('识别内容')).toBeInTheDocument()
     expect(screen.getByText('执行结果')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '关闭结果窗口' })).toBeInTheDocument()
@@ -626,8 +633,9 @@ describe('App shell', () => {
       await stopMicrophoneCapture()
     })
 
-    expect(
-      await screen.findByText('正在等待 OpenAI-compatible LLM 输出。'),
-    ).toBeInTheDocument()
+    await waitFor(() => {
+      const overlay = screen.getByRole('status')
+      expect(overlay.getAttribute('aria-label')).toMatch(/正在生成|已完成/)
+    })
   })
 })
