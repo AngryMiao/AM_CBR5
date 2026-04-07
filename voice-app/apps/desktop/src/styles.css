@@ -1189,7 +1189,6 @@ html[data-window='result'] #root {
   border-radius: 20px;
   background: #0c1219;
   color: #f8fafc;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24);
   border: 1px solid rgba(255, 255, 255, 0.1);
   user-select: none;
 }
@@ -1319,7 +1318,6 @@ html[data-window='result'] #root {
   border-radius: 28px;
   background: #0c1219;
   color: #f8fafc;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }

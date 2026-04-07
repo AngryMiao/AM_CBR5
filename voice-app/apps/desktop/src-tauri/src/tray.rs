@@ -1,5 +1,5 @@
 use tauri::{
-    menu::{MenuBuilder, MenuEvent, SubmenuBuilder},
+    menu::{MenuBuilder, MenuEvent},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     App, AppHandle,
 };
@@ -50,12 +50,6 @@ pub fn route_tray_icon_action(event: &TrayIconEvent) -> Option<TrayIconAction> {
     }
 }
 
-pub fn handle_app_menu_event(app: &AppHandle, event: MenuEvent) {
-    if let Some(action) = route_tray_menu_action(event.id().as_ref()) {
-        handle_menu_action(app, action);
-    }
-}
-
 pub fn configure_system_tray(app: &mut App) -> tauri::Result<()> {
     if app.tray_by_id(TRAY_ID).is_some() {
         return Ok(());
@@ -89,34 +83,6 @@ pub fn configure_system_tray(app: &mut App) -> tauri::Result<()> {
     }
 
     let _ = builder.build(app)?;
-    Ok(())
-}
-
-pub fn configure_application_menu(app: &mut App) -> tauri::Result<()> {
-    let menu = MenuBuilder::new(app)
-        .item(
-            &SubmenuBuilder::new(app, "Voice App")
-                .text(SHOW_MAIN_MENU_ID, "打开主界面")
-                .text(HIDE_MAIN_MENU_ID, "隐藏主界面")
-                .text(TOGGLE_MAIN_MENU_ID, "切换主界面")
-                .separator()
-                .text(QUIT_APP_MENU_ID, "退出 Voice App")
-                .build()?,
-        )
-        .item(
-            &SubmenuBuilder::new(app, "编辑")
-                .undo()
-                .redo()
-                .separator()
-                .cut()
-                .copy()
-                .paste()
-                .select_all()
-                .build()?,
-        )
-        .build()?;
-
-    app.set_menu(menu)?;
     Ok(())
 }
 

@@ -344,6 +344,8 @@ fn main_window_visible(app: &AppHandle) -> bool {
 
 fn apply_runtime_window_chrome(window: tauri::WebviewWindow) -> tauri::Result<()> {
     let _ = window.set_shadow(false);
+    let _ = window.hide_menu();
+    let _ = window.remove_menu();
 
     #[cfg(target_os = "windows")]
     suppress_windows_runtime_window_border(&window);

@@ -29,13 +29,11 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_autostart::Builder::new().build())
-        .on_menu_event(tray::handle_app_menu_event)
         .on_window_event(windowing::handle_global_window_event)
         .manage(app_state)
         .manage(hotkeys::HotkeyRuntimeState::default())
         .setup(|app| {
             windowing::configure_main_window(app)?;
-            tray::configure_application_menu(app)?;
             let app_data_dir = app.path().app_data_dir()?;
             let history_store = history_store_path(&app_data_dir);
             let settings_store = settings_store_path(&app_data_dir);
