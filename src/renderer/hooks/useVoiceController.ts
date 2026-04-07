@@ -192,6 +192,7 @@ export function useVoiceController() {
   const interruptedHotkeyRestartRequestedRef = useRef(false)
   const interruptedHotkeyRestartTriggeredRef = useRef(false)
   const interruptedHotkeyRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const activationHotkeyStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentTypelessRequestRef = useRef(typelessRequest)
   const typelessOperationIdRef = useRef(0)
@@ -248,6 +249,13 @@ export function useVoiceController() {
     if (interruptedHotkeyRestartTimerRef.current) {
       clearTimeout(interruptedHotkeyRestartTimerRef.current)
       interruptedHotkeyRestartTimerRef.current = null
+    }
+  }, [])
+
+  const clearActivationHotkeyStartTimer = useCallback(() => {
+    if (activationHotkeyStartTimerRef.current) {
+      clearTimeout(activationHotkeyStartTimerRef.current)
+      activationHotkeyStartTimerRef.current = null
     }
   }, [])
 
@@ -1354,6 +1362,7 @@ export function useVoiceController() {
 
   const beginHoldRecordingStart = useCallback(async () => {
     holdActivationPendingRef.current = true
+    activationHotkeyStartTimerRef.current = null
     pendingHotkeyReleaseRef.current = false
 
     try {
@@ -1374,6 +1383,17 @@ export function useVoiceController() {
       holdActivationPendingRef.current = false
     }
   }, [cancelCurrentOperation])
+
+  const scheduleHoldRecordingStart = useCallback(() => {
+    clearActivationHotkeyStartTimer()
+    activationHotkeyStartTimerRef.current = setTimeout(() => {
+      activationHotkeyStartTimerRef.current = null
+      if (!holdShortcutActiveRef.current) {
+        return
+      }
+      void beginHoldRecordingStart()
+    }, HOTKEY_RESTART_THRESHOLD_MS)
+  }, [beginHoldRecordingStart, clearActivationHotkeyStartTimer])
 
   const triggerInterruptedHotkeyRestart = useCallback(() => {
     if (interruptedHotkeyRestartTriggeredRef.current || holdActivationPendingRef.current) {
@@ -1453,7 +1473,7 @@ export function useVoiceController() {
           activationHotkeyPressStartedAtRef.current = Date.now()
           pendingHotkeyReleaseShouldCancelRef.current = false
           clearTypelessResultForNextRound()
-          await beginHoldRecordingStart()
+          scheduleHoldRecordingStart()
         } else if (voiceModeRef.current === 'speaking' && isSpeakingRef.current) {
           stopSpeakingRef.current()
         }
@@ -1498,17 +1518,18 @@ export function useVoiceController() {
       const activationPressStartedAt = activationHotkeyPressStartedAtRef.current
       const activationPressDurationMs = activationPressStartedAt === null ? 0 : Date.now() - activationPressStartedAt
       activationHotkeyPressStartedAtRef.current = null
-      pendingHotkeyReleaseShouldCancelRef.current =
-        settings.workMode === 'typeless' && activationPressDurationMs < HOTKEY_RESTART_THRESHOLD_MS
+      clearActivationHotkeyStartTimer()
 
+      if (activationPressDurationMs < HOTKEY_RESTART_THRESHOLD_MS) {
+        pendingHotkeyReleaseRef.current = false
+        pendingHotkeyReleaseShouldCancelRef.current = false
+        return
+      }
+
+      pendingHotkeyReleaseShouldCancelRef.current = false
       pendingHotkeyReleaseRef.current = true
       if (recorderRef.current && recorderRef.current.getState() === 'recording') {
         pendingHotkeyReleaseRef.current = false
-        if (pendingHotkeyReleaseShouldCancelRef.current) {
-          pendingHotkeyReleaseShouldCancelRef.current = false
-          void cancelCurrentOperation()
-          return
-        }
         void stopRecordingRef.current()
       }
     }
@@ -1532,6 +1553,7 @@ export function useVoiceController() {
       interruptedHotkeyRestartTriggeredRef.current = false
       interruptedHotkeyPressStartedAtRef.current = null
       clearInterruptedHotkeyRestartTimer()
+      clearActivationHotkeyStartTimer()
       clearRecordingTimeout()
       rejectPendingStreamingRecognition('语音控制已清理')
       void abortLiveTypelessController()
@@ -1555,11 +1577,13 @@ export function useVoiceController() {
     cancelCurrentOperation,
     clearTypelessResultForNextRound,
     clearInterruptedHotkeyRestartTimer,
+    clearActivationHotkeyStartTimer,
     clearRecordingTimeout,
     abortLiveTypelessController,
     closeStreamingASRSession,
     isTypelessInterruptibleState,
     rejectPendingStreamingRecognition,
+    scheduleHoldRecordingStart,
     triggerInterruptedHotkeyRestart,
   ])
 

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { JSDOM } from 'jsdom'
 
 const mocks = vi.hoisted(() => {
   class MockBrowserWindow {
@@ -48,6 +49,9 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('electron', () => ({
+  app: {
+    isPackaged: false,
+  },
   BrowserWindow: mocks.MockBrowserWindow,
   screen: mocks.screen,
 }))
@@ -55,6 +59,8 @@ vi.mock('electron', () => ({
 import {
   consumeSuppressMainWindowAutoShowOnActivate,
   destroyTypelessChatResult,
+  getTypelessChatResultHtml,
+  registerTypelessChatResultIpc,
   showTypelessChatResult,
 } from './typeless-chat-result'
 
@@ -126,5 +132,67 @@ describe('typeless chat result window visibility', () => {
     expect(window?.hide).toHaveBeenCalledTimes(1)
     expect(restoreMainWindowVisibility).toHaveBeenCalledTimes(1)
     expect(consumeSuppressMainWindowAutoShowOnActivate()).toBe(false)
+  })
+
+  it('matches the original TS result window structure and copy hierarchy', () => {
+    const html = getTypelessChatResultHtml()
+
+    expect(html).toContain('result-shell')
+    expect(html).toContain('result-card')
+    expect(html).toContain('result-topline')
+    expect(html).toContain('result-close')
+    expect(html).toContain('任务结果')
+    expect(html).toContain('识别内容')
+    expect(html).toContain('执行结果')
+    expect(html).toContain('关闭结果窗口')
+  })
+
+  it('registers an explicit close ipc handler for the result window', async () => {
+    const handles = new Map<string, (event: unknown, payload?: unknown) => unknown>()
+    const show = vi.fn()
+    const hide = vi.fn()
+    const close = vi.fn()
+    const dispose = registerTypelessChatResultIpc({
+      ipcMain: {
+        handle: (channel, listener) => {
+          handles.set(channel, listener)
+        },
+      },
+      show,
+      hide,
+      close,
+      onClosed: () => () => undefined,
+      sendToMainWindow: vi.fn(),
+    } as never)
+
+    expect(handles.has('typelessChatResult:close')).toBe(true)
+
+    await handles.get('typelessChatResult:close')?.({})
+
+    expect(close).toHaveBeenCalledTimes(1)
+    dispose()
+  })
+
+  it('falls back to window.close when the close ipc request fails', async () => {
+    const dom = new JSDOM(getTypelessChatResultHtml(), {
+      runScripts: 'dangerously',
+      beforeParse(window) {
+        window.electronAPI = {
+          closeTypelessChatResult: vi.fn(async () => {
+            throw new Error('ipc unavailable')
+          }),
+        } as typeof window.electronAPI
+        window.close = vi.fn()
+      },
+    })
+
+    const closeButton = dom.window.document.getElementById('close')
+    expect(closeButton).toBeTruthy()
+
+    closeButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(dom.window.close).toHaveBeenCalledTimes(1)
   })
 })

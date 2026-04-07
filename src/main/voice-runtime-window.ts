@@ -16,6 +16,20 @@ export function getVoiceRuntimeWindow() {
   return voiceRuntimeWindow
 }
 
+export function collectVoiceRuntimeNotificationWindows(mainWindow: BrowserWindow | null | undefined) {
+  const candidates = [mainWindow, voiceRuntimeWindow]
+  const windows: BrowserWindow[] = []
+
+  for (const window of candidates) {
+    if (!window || window.isDestroyed() || windows.includes(window)) {
+      continue
+    }
+    windows.push(window)
+  }
+
+  return windows
+}
+
 export function buildVoiceRuntimeWindowOptions(preloadPath: string): BrowserWindowConstructorOptions {
   return {
     title: VOICE_RUNTIME_WINDOW_NAME,

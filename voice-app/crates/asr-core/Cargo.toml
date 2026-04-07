@@ -2,3 +2,20 @@
 name = "asr-core"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+cpal = "0.15"
+flate2 = "1"
+futures-util = "0.3"
+hound = "3"
+http = "1"
+rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+settings-core = { path = "../settings-core" }
+tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }

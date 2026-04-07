@@ -111,7 +111,10 @@ vi.mock('./typeless-overlay', () => ({
   updateTypelessOverlay: vi.fn(),
 }))
 
+import { UiohookKey } from 'uiohook-napi'
 import { startGlobalKeyboardHook, stopGlobalKeyboardHook } from './global-keyboard-hook'
+import { resolveHotkeyDispatchWindow } from './hotkey-dispatch'
+import { showTypelessOverlay, updateTypelessOverlay } from './typeless-overlay'
 
 describe('global keyboard hook suppression', () => {
   beforeEach(() => {
@@ -126,5 +129,52 @@ describe('global keyboard hook suppression', () => {
     startGlobalKeyboardHook('PageDown', false)
 
     expect(mocks.globalShortcut.register).toHaveBeenCalledWith('PageDown', expect.any(Function))
+  })
+
+  it('does not show or update the typeless overlay directly from the main process hotkey hook', () => {
+    const dispatchWindow = {
+      isDestroyed: () => false,
+      isFocused: () => false,
+      isMinimized: () => false,
+      restore: vi.fn(),
+      show: vi.fn(),
+      focus: vi.fn(),
+      webContents: {
+        send: vi.fn(),
+      },
+    }
+    vi.mocked(resolveHotkeyDispatchWindow).mockReturnValue(dispatchWindow as never)
+
+    startGlobalKeyboardHook('PageDown', false)
+
+    const keydownHandler = mocks.uIOhook.on.mock.calls.find(([eventName]) => eventName === 'keydown')?.[1] as
+      | ((event: { keycode: number; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }) => void)
+      | undefined
+    const keyupHandler = mocks.uIOhook.on.mock.calls.find(([eventName]) => eventName === 'keyup')?.[1] as
+      | ((event: { keycode: number; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }) => void)
+      | undefined
+
+    expect(keydownHandler).toBeTypeOf('function')
+    expect(keyupHandler).toBeTypeOf('function')
+
+    keydownHandler?.({
+      keycode: UiohookKey.PageDown,
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+      altKey: false,
+    })
+    keyupHandler?.({
+      keycode: UiohookKey.PageDown,
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+      altKey: false,
+    })
+
+    expect(dispatchWindow.webContents.send).toHaveBeenNthCalledWith(1, 'hotkey:down')
+    expect(dispatchWindow.webContents.send).toHaveBeenNthCalledWith(2, 'hotkey:up')
+    expect(showTypelessOverlay).not.toHaveBeenCalled()
+    expect(updateTypelessOverlay).not.toHaveBeenCalled()
   })
 })

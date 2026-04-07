@@ -39,6 +39,7 @@ const electronHandler: ElectronIPC = {
   },
   showTypelessChatResult: (payload) => ipcRenderer.invoke('typelessChatResult:show', payload),
   hideTypelessChatResult: () => ipcRenderer.invoke('typelessChatResult:hide'),
+  closeTypelessChatResult: () => ipcRenderer.invoke('typelessChatResult:close'),
   onTypelessChatResultClosed: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: { userMessageId: string }) => {
       callback(payload)

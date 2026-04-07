@@ -9,5 +9,13 @@ members = [
   "crates/platform-core",
   "crates/automation-core",
   "crates/asr-core",
+  "crates/llm-core",
+  "crates/mcp-core",
 ]
 resolver = "2"
+
+[profile.dev]
+incremental = false
+
+[profile.test]
+incremental = false

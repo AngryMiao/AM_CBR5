@@ -37,6 +37,7 @@ export interface ElectronIPC {
   onDoubaoASREvent: (callback: (event: DoubaoASRSessionEvent) => void) => () => void
   showTypelessChatResult: (payload: TypelessChatResultPayload) => Promise<any>
   hideTypelessChatResult: () => Promise<any>
+  closeTypelessChatResult: () => Promise<any>
   onTypelessChatResultClosed: (callback: (payload: TypelessChatResultClosedPayload) => void) => () => void
   onSystemThemeChange: (callback: () => void) => () => void
   onWindowMaximizedChanged: (callback: (_: Electron.IpcRendererEvent, windowMaximized: boolean) => void) => () => void

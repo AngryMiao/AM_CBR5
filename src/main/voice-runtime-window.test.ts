@@ -34,6 +34,7 @@ vi.mock('electron', () => ({
 }))
 
 import {
+  collectVoiceRuntimeNotificationWindows,
   VOICE_RUNTIME_WINDOW_NAME,
   buildVoiceRuntimeWindowOptions,
   destroyVoiceRuntimeWindow,
@@ -87,5 +88,22 @@ describe('voice runtime window', () => {
         search: '?voice-runtime=1',
       })
     )
+  })
+
+  it('includes both main and hidden runtime windows when broadcasting runtime notifications', () => {
+    const mainWindow = new mocks.MockBrowserWindow({ label: 'main' }) as never
+
+    ensureVoiceRuntimeWindow({
+      isPackaged: false,
+      rendererURL: 'http://localhost:1212',
+      preloadPath: 'E:/code/AM_CBR5/out/preload/index.js',
+      rendererHtmlPath: 'E:/code/AM_CBR5/out/renderer/index.html',
+    })
+
+    const targets = collectVoiceRuntimeNotificationWindows(mainWindow)
+
+    expect(targets).toHaveLength(2)
+    expect(targets[0]).toBe(mainWindow)
+    expect(targets[1]).toBe(mocks.MockBrowserWindow.instances.at(-1))
   })
 })

@@ -4,16 +4,17 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "voice_app_desktop"
+name = "voice_app_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+url = "2"
 ipc-contract = { path = "../../../crates/ipc-contract" }
 settings-core = { path = "../../../crates/settings-core" }
 history-core = { path = "../../../crates/history-core" }
@@ -22,3 +23,14 @@ voice-core = { path = "../../../crates/voice-core" }
 platform-core = { path = "../../../crates/platform-core" }
 automation-core = { path = "../../../crates/automation-core" }
 asr-core = { path = "../../../crates/asr-core" }
+llm-core = { path = "../../../crates/llm-core" }
+mcp-core = { path = "../../../crates/mcp-core" }
+
+[target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+
+[dev-dependencies]
+tempfile = "3"

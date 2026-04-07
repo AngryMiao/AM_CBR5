@@ -9,7 +9,7 @@ export type OverlayState = {
 }
 
 const OVERLAY_WIDTH = 300
-const OVERLAY_HEIGHT = 58
+const OVERLAY_HEIGHT = 128
 
 let overlayWindow: BrowserWindow | null = null
 let overlayReady = false
@@ -80,94 +80,191 @@ export function getOverlayHtml(): string {
         height: 100%;
         background: transparent;
         overflow: hidden;
-        font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
       }
-      #root {
-        width: 100%;
-        height: 100%;
+      body {
+        overflow: hidden;
+      }
+      .overlay-shell {
+        min-height: 100vh;
         display: flex;
         align-items: center;
         justify-content: center;
-      }
-      #panel {
-        min-width: 196px;
-        max-width: 280px;
-        height: 42px;
-        border-radius: 14px;
+        padding: 24px;
         overflow: hidden;
-        display: inline-flex;
-        align-items: center;
-        gap: 9px;
-        padding: 0 12px;
-        color: #f8fafc;
-        background: #1a1f28;
-        border: 0;
-        box-shadow: none;
-        user-select: none;
-        white-space: nowrap;
       }
-      #icon {
-        width: 18px;
-        height: 18px;
-        border-radius: 999px;
+      .overlay-bar {
+        width: min(100%, 340px);
+        display: grid;
+        gap: 14px;
+        padding: 16px 18px;
+        border-radius: 22px;
+        background: rgba(9, 14, 20, 0.82);
+        box-shadow: 0 22px 48px rgba(0, 0, 0, 0.22);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(18px);
+        user-select: none;
+      }
+      .overlay-bar-listening { border-color: rgba(34, 197, 94, 0.2); }
+      .overlay-bar-processing { border-color: rgba(245, 158, 11, 0.22); }
+      .overlay-bar-thinking { border-color: rgba(167, 139, 250, 0.22); }
+      .overlay-bar-executing { border-color: rgba(96, 165, 250, 0.22); }
+      .overlay-bar-inserting { border-color: rgba(56, 189, 248, 0.22); }
+      .overlay-bar-done { border-color: rgba(34, 197, 94, 0.24); }
+      .overlay-bar-error { border-color: rgba(248, 113, 113, 0.24); }
+      .overlay-status {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .overlay-icon {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 11px;
-        font-weight: 700;
-        line-height: 1;
         flex-shrink: 0;
-        color: var(--icon-color, #ffffff);
-        background: var(--icon-bg, rgba(255, 255, 255, 0.14));
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        color: #f8fafc;
+        font-size: 16px;
+        font-weight: 700;
       }
-      #text {
+      .overlay-status-copy {
+        display: grid;
+        gap: 4px;
+      }
+      .overlay-status-copy strong {
+        font-size: 15px;
+        font-weight: 700;
+        color: #f8fafc;
+      }
+      .overlay-eyebrow {
+        margin: 0;
+        color: #9fb0c3;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
         font-size: 12px;
-        letter-spacing: 0.2px;
-        line-height: 1;
-        max-width: 226px;
-        overflow: hidden;
-        text-overflow: ellipsis;
       }
-      .listening { --icon-bg: rgba(34, 197, 94, 0.24); --icon-color: #bbf7d0; }
-      .processing { --icon-bg: rgba(245, 158, 11, 0.24); --icon-color: #fde68a; }
-      .executing { --icon-bg: rgba(96, 165, 250, 0.24); --icon-color: #bfdbfe; }
-      .inserting { --icon-bg: rgba(56, 189, 248, 0.24); --icon-color: #bae6fd; }
-      .thinking { --icon-bg: rgba(167, 139, 250, 0.24); --icon-color: #ddd6fe; }
-      .success { --icon-bg: rgba(74, 222, 128, 0.24); --icon-color: #bbf7d0; }
-      .error { --icon-bg: rgba(248, 113, 113, 0.24); --icon-color: #fecaca; }
+      .overlay-body {
+        display: grid;
+        gap: 6px;
+      }
+      .overlay-primary {
+        margin: 0;
+        color: #f8fafc;
+        font-size: 15px;
+        font-weight: 600;
+        line-height: 1.45;
+        word-break: break-word;
+      }
+      .overlay-secondary {
+        margin: 0;
+        color: #9fb0c3;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .overlay-secondary-error {
+        color: #fca5a5;
+      }
     </style>
   </head>
   <body>
-    <div id="root">
-      <div id="panel" class="listening">
-        <span id="icon">🎤</span>
-        <span id="text">正在聆听...</span>
-      </div>
-    </div>
+    <main class="overlay-shell">
+      <section id="panel" class="overlay-bar overlay-bar-listening">
+        <div class="overlay-status">
+          <span id="icon" aria-hidden="true" class="overlay-icon">●</span>
+          <div class="overlay-status-copy">
+            <p class="overlay-eyebrow">实时识别</p>
+            <strong id="phase">正在聆听</strong>
+          </div>
+        </div>
+        <div class="overlay-body">
+          <p id="primary" class="overlay-primary">等待语音输入</p>
+          <p id="secondary" class="overlay-secondary">按住语音快捷键开始输入</p>
+        </div>
+      </section>
+    </main>
     <script>
       const MODE_META = {
-        listening: { icon: '●' },
-        processing: { icon: '⋯' },
-        executing: { icon: '⌘' },
-        inserting: { icon: '⌨' },
-        thinking: { icon: '✦' },
-        success: { icon: '✓' },
-        error: { icon: '!' }
+        listening: {
+          tone: 'listening',
+          icon: '●',
+          phase: '正在聆听',
+          primary: '等待语音输入',
+          secondary: '按住语音快捷键开始输入'
+        },
+        processing: {
+          tone: 'processing',
+          icon: '⋯',
+          phase: '正在识别',
+          primary: '正在识别...',
+          secondary: null
+        },
+        thinking: {
+          tone: 'thinking',
+          icon: '✦',
+          phase: '正在生成',
+          primary: '正在思考...',
+          secondary: null
+        },
+        executing: {
+          tone: 'executing',
+          icon: '⌘',
+          phase: '正在执行',
+          primary: '正在执行...',
+          secondary: null
+        },
+        inserting: {
+          tone: 'inserting',
+          icon: '⌨',
+          phase: '正在输出',
+          primary: '正在输出...',
+          secondary: null
+        },
+        success: {
+          tone: 'done',
+          icon: '✓',
+          phase: '已完成',
+          primary: '任务已完成',
+          secondary: null
+        },
+        error: {
+          tone: 'error',
+          icon: '!',
+          phase: '识别失败',
+          primary: '任务执行失败',
+          secondary: null
+        }
       };
 
       window.__setTypelessOverlayState = (payload) => {
         if (!payload || typeof payload !== 'object') return;
         const mode = payload.mode || 'listening';
-        const text = payload.text || '正在聆听...';
+        const text = typeof payload.text === 'string' ? payload.text.trim() : '';
+        const meta = MODE_META[mode] || MODE_META.listening;
 
         const panel = document.getElementById('panel');
         const icon = document.getElementById('icon');
-        const textNode = document.getElementById('text');
-        if (!panel || !icon || !textNode) return;
+        const phaseNode = document.getElementById('phase');
+        const primaryNode = document.getElementById('primary');
+        const secondaryNode = document.getElementById('secondary');
+        if (!panel || !icon || !phaseNode || !primaryNode || !secondaryNode) return;
 
-        panel.className = mode;
-        icon.textContent = (MODE_META[mode] && MODE_META[mode].icon) || '●';
-        textNode.textContent = text;
+        panel.className = 'overlay-bar overlay-bar-' + meta.tone;
+        icon.textContent = meta.icon;
+        phaseNode.textContent = meta.phase;
+        primaryNode.textContent = text || meta.primary;
+
+        if (meta.secondary) {
+          secondaryNode.textContent = meta.secondary;
+          secondaryNode.className = 'overlay-secondary';
+          secondaryNode.style.display = '';
+        } else {
+          secondaryNode.textContent = '';
+          secondaryNode.className = mode === 'error' ? 'overlay-secondary overlay-secondary-error' : 'overlay-secondary';
+          secondaryNode.style.display = 'none';
+        }
       };
     </script>
   </body>

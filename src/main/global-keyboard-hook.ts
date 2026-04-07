@@ -3,11 +3,10 @@
  * 使用 uiohook-napi 监听全局键盘事件，支持长按录音功能
  */
 
+import { DEFAULT_VOICE_HOTKEY, normalizeStoredVoiceHotkey } from '@shared/voice-hotkey'
 import { BrowserWindow, globalShortcut } from 'electron'
 import { UiohookKey, uIOhook } from 'uiohook-napi'
-import { DEFAULT_VOICE_HOTKEY, normalizeStoredVoiceHotkey } from '@shared/voice-hotkey'
 import { resolveHotkeyDispatchWindow } from './hotkey-dispatch'
-import { showTypelessOverlay, updateTypelessOverlay } from './typeless-overlay'
 
 const log = {
   info: (...args: unknown[]) => console.log('[GlobalKeyboardHook]', ...args),
@@ -424,14 +423,6 @@ function handleKeyUp(event: {
 function notifyRenderer(event: 'hotkey:down' | 'hotkey:up'): void {
   // Typeless overlay 也是 BrowserWindow，热键事件必须优先发给真正的主窗口，否则 renderer 无法启动录音链路。
   const mainWindow = resolveHotkeyDispatchWindow(hotkeyDispatchWindow, BrowserWindow.getAllWindows())
-
-  if (!showWindowOnHotkey) {
-    if (event === 'hotkey:down') {
-      showTypelessOverlay({ mode: 'listening', text: '正在聆听...' })
-    } else {
-      updateTypelessOverlay({ mode: 'processing', text: '正在识别...' })
-    }
-  }
 
   if (mainWindow) {
     // Chat 模式下显示窗口

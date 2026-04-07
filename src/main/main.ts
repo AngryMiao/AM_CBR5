@@ -56,6 +56,7 @@ import {
   store,
 } from './store-node'
 import {
+  closeTypelessChatResult,
   consumeSuppressMainWindowAutoShowOnActivate,
   destroyTypelessChatResult,
   hideTypelessChatResult,
@@ -72,7 +73,7 @@ import {
 } from './typeless-overlay'
 import { repairLikelyMojibake } from './log-text'
 import { syncVoiceRuntimeDispatch } from './voice-runtime-dispatch'
-import { destroyVoiceRuntimeWindow, ensureVoiceRuntimeWindow } from './voice-runtime-window'
+import { collectVoiceRuntimeNotificationWindows, destroyVoiceRuntimeWindow, ensureVoiceRuntimeWindow } from './voice-runtime-window'
 import { shouldHideMainWindowOnClose } from './window-close-behavior'
 import * as windowState from './window_state'
 
@@ -1007,12 +1008,12 @@ const cleanupTypelessChatResultIpc = registerTypelessChatResultIpc({
     })
   },
   hide: hideTypelessChatResult,
+  close: closeTypelessChatResult,
   onClosed: onTypelessChatResultClosed,
   sendToMainWindow: (channel, payload) => {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      return
+    for (const window of collectVoiceRuntimeNotificationWindows(mainWindow)) {
+      window.webContents.send(channel, payload)
     }
-    mainWindow.webContents.send(channel, payload)
   },
 })
 

@@ -2,3 +2,7 @@
 name = "voice-core"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+history-core = { path = "../history-core" }
+ipc-contract = { path = "../ipc-contract" }

@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "xyz.angrymiao.voiceapp",
   "build": {
-    "beforeDevCommand": "pnpm --dir .. dev -- --host 127.0.0.1 --port 1420",
-    "beforeBuildCommand": "pnpm --dir .. build",
+    "beforeDevCommand": "pnpm exec vite --host 127.0.0.1 --port 1420 --strictPort",
+    "beforeBuildCommand": "pnpm build",
     "devUrl": "http://127.0.0.1:1420",
     "frontendDist": "../dist"
   },
@@ -18,6 +18,13 @@
         "height": 760
       }
     ]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["voice-app"]
+      }
+    }
   },
   "bundle": {
     "active": false

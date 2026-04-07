@@ -537,7 +537,7 @@ describe('useVoiceController typeless hotkey regressions', () => {
     expect(countInvokeCalls('typelessOverlay:hide')).toBeGreaterThanOrEqual(2)
   })
 
-  it('cancels the current round before asr when the initial hotkey press is a short tap', async () => {
+  it('does not start recording before the hold threshold when the initial hotkey press is a short tap', async () => {
     const { result } = renderHook(() => useVoiceController(), { wrapper: createWrapper() })
 
     await act(async () => {
@@ -550,11 +550,11 @@ describe('useVoiceController typeless hotkey regressions', () => {
     })
 
     expect(result.current.voiceMode).toBe('inactive')
-    expect(mocks.recorder.startCalls).toBe(1)
-    expect(mocks.recorder.stopCalls).toBe(1)
+    expect(mocks.recorder.startCalls).toBe(0)
+    expect(mocks.recorder.stopCalls).toBe(0)
     expect(mocks.recorder.transcribeCalls).toBe(0)
     expect(vi.mocked(submitNewUserMessage)).not.toHaveBeenCalled()
-    expect(countInvokeCalls('typelessOverlay:hide')).toBeGreaterThanOrEqual(1)
+    expect(hasInvokeCall('typelessOverlay:show')).toBe(false)
   })
 
   it('cancels the active typeless operation on short tap during asr without starting a new recording', async () => {
@@ -645,7 +645,7 @@ describe('useVoiceController typeless hotkey regressions', () => {
     expect(keyupEvent.defaultPrevented).toBe(true)
   })
 
-  it('starts a new recording and hides the previous typeless result when the result is already visible', async () => {
+  it('closes the previous typeless result on short tap without starting a new recording', async () => {
     mocks.request.executionPhase = 'chat_result'
     const wrapper = createWrapper((store) => {
       store.set(typelessRequestAtom, mocks.request.context)
@@ -668,8 +668,64 @@ describe('useVoiceController typeless hotkey regressions', () => {
       await flushAsyncWork()
     })
 
-    expect(mocks.recorder.startCalls).toBe(1)
+    expect(mocks.recorder.startCalls).toBe(0)
     expect(mocks.ipc.showTypelessChatResult).toHaveBeenCalledTimes(1)
+    expect(mocks.ipc.hideTypelessChatResult).toHaveBeenCalled()
+  })
+
+  it('closes the previous typeless result on short tap even if voiceMode is still processing', async () => {
+    mocks.request.executionPhase = 'chat_result'
+    const { store, wrapper } = createWrapperWithStore((currentStore) => {
+      currentStore.set(typelessRequestAtom, {
+        ...mocks.request.context,
+        finalized: true,
+      })
+      currentStore.set(voiceModeAtom, 'processing')
+    })
+
+    renderHook(() => useVoiceController(), { wrapper })
+
+    await act(async () => {
+      await flushAsyncWork(20)
+    })
+
+    expect(mocks.ipc.showTypelessChatResult).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      mocks.hotkeys.down?.()
+      await flushAsyncWork(20)
+      vi.advanceTimersByTime(50)
+      mocks.hotkeys.up?.()
+      vi.advanceTimersByTime(10)
+      await flushAsyncWork(20)
+    })
+
+    expect(mocks.recorder.startCalls).toBe(0)
+    expect(mocks.ipc.hideTypelessChatResult).toHaveBeenCalled()
+    expect(store.get(typelessRequestAtom)).toBeNull()
+  })
+
+  it('starts a new recording after the hold threshold when the previous typeless result is visible', async () => {
+    mocks.request.executionPhase = 'chat_result'
+    const wrapper = createWrapper((store) => {
+      store.set(typelessRequestAtom, mocks.request.context)
+    })
+
+    renderHook(() => useVoiceController(), { wrapper })
+
+    await act(async () => {
+      await flushAsyncWork()
+    })
+
+    expect(mocks.ipc.showTypelessChatResult).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      mocks.hotkeys.down?.()
+      vi.advanceTimersByTime(200)
+      await flushAsyncWork(20)
+    })
+
+    expect(mocks.recorder.startCalls).toBe(1)
     expect(mocks.ipc.hideTypelessChatResult).toHaveBeenCalled()
   })
 

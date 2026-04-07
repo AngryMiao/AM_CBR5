@@ -2,6 +2,6 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capability set for the Voice App desktop shell.",
-  "windows": ["main"],
+  "windows": ["main", "overlay", "result"],
   "permissions": ["core:default"]
 }

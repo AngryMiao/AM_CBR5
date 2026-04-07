@@ -1,8 +1,53 @@
-use settings_core::VoiceSettings;
+use settings_core::{EditableVoiceSettings, RuntimeVoiceSettings, StoredVoiceSettings};
 
 #[test]
-fn defaults_enable_background_agent_shape() {
-  let settings = VoiceSettings::default();
-  assert_eq!(settings.work_mode, "background-agent");
-  assert!(settings.history_enabled);
+fn defaults_do_not_include_unused_work_mode_setting() {
+    let settings = StoredVoiceSettings::default();
+    let serialized = serde_json::to_value(&settings).expect("settings should serialize");
+
+    assert_eq!(settings.schema_version, 1);
+    assert!(settings.history_enabled);
+    assert_eq!(settings.llm_model, "gpt-4o-mini");
+    assert_eq!(settings.doubao_asr_model, "bigmodel");
+    assert_eq!(settings.default_hotkey, "RightAlt");
+    assert_eq!(settings.microphone_device_id, "");
+    assert_eq!(settings.doubao_asr_audio_format, "pcm");
+    assert_eq!(settings.doubao_asr_audio_bits, 16);
+    assert_eq!(settings.doubao_asr_audio_channel, 1);
+    assert_eq!(
+        settings.llm_system_prompt,
+        "你是一个桌面语音助手。用户明确要求执行本地动作时，请优先调用已提供工具；只有在不需要执行动作时，才返回简洁、可执行的最终回答。"
+    );
+    assert_eq!(
+        serialized["doubao_asr_resource_id"],
+        "volc.bigasr.sauc.duration"
+    );
+    assert_eq!(serialized["doubao_asr_audio_rate"], 16_000);
+    assert_eq!(serialized["default_hotkey"], "RightAlt");
+    assert_eq!(serialized["microphone_device_id"], "");
+    assert_eq!(serialized["llm_base_url"], "https://api.openai.com/v1");
+    assert_eq!(serialized["angrymiao_skill_enabled"], true);
+    assert_eq!(serialized["keyboard_driver_path"], "");
+    assert!(settings.keyboard_shortcuts.len() >= 10);
+    assert_eq!(serialized["keyboard_shortcuts"][0]["id"], "ks_copy");
+    assert_eq!(
+        serialized["keyboard_shortcuts"][0]["trigger_words"][0],
+        "复制"
+    );
+    assert!(serialized.get("work_mode").is_none());
+}
+
+#[test]
+fn runtime_and_editable_snapshots_normalize_legacy_default_hotkey() {
+    let mut settings = StoredVoiceSettings::default();
+    settings.default_hotkey = "Hold Alt+Space".to_string();
+    settings.microphone_device_id = "usb-mic".to_string();
+
+    let runtime = RuntimeVoiceSettings::from_settings(&settings);
+    let editable = EditableVoiceSettings::from_settings(&settings);
+
+    assert_eq!(runtime.default_hotkey, "RightAlt");
+    assert_eq!(runtime.microphone_device_id, "usb-mic");
+    assert_eq!(editable.default_hotkey, "RightAlt");
+    assert_eq!(editable.microphone_device_id, "usb-mic");
 }
