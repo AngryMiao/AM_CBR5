@@ -4,6 +4,7 @@ use std::time::Duration;
 #[cfg(target_os = "windows")]
 use std::{ffi::c_void, mem::size_of};
 
+use ipc_contract::RuntimeSnapshot;
 use tauri::{
     webview::Color, App, AppHandle, Manager, PhysicalPosition, Runtime, WebviewUrl,
     WebviewWindowBuilder, Window, WindowEvent,
@@ -12,7 +13,7 @@ use tauri::{
 const MAIN_WINDOW_LABEL: &str = "main";
 const OVERLAY_WINDOW_LABEL: &str = "overlay";
 const RESULT_WINDOW_LABEL: &str = "result";
-const OVERLAY_WIDTH: f64 = 300.0;
+const OVERLAY_WIDTH: f64 = 560.0;
 const OVERLAY_HEIGHT: f64 = 128.0;
 const RESULT_WIDTH: f64 = 720.0;
 const RESULT_HEIGHT: f64 = 520.0;
@@ -49,7 +50,7 @@ pub fn configure_main_window(app: &mut App) -> tauri::Result<()> {
     ensure_overlay_window(app)?;
     ensure_result_window(app)?;
     relayout_runtime_windows(&app.handle())?;
-    sync_runtime_windows(&app.handle(), "待命中")?;
+    sync_runtime_windows(&app.handle(), &RuntimeSnapshot::default())?;
 
     Ok(())
 }
@@ -65,8 +66,8 @@ pub fn handle_global_window_event<R: Runtime>(window: &Window<R>, event: &Window
     }
 }
 
-pub fn sync_runtime_windows(app: &AppHandle, phase: &str) -> tauri::Result<()> {
-    let visibility = window_visibility_for_phase(phase);
+pub fn sync_runtime_windows(app: &AppHandle, snapshot: &RuntimeSnapshot) -> tauri::Result<()> {
+    let visibility = window_visibility_for_snapshot(snapshot);
     relayout_runtime_windows(app)?;
 
     // overlay/result 是独立 runtime 窗口，不接管主窗口显隐；
@@ -81,7 +82,7 @@ pub fn sync_runtime_windows(app: &AppHandle, phase: &str) -> tauri::Result<()> {
         visibility.result_visible,
         true,
     )?;
-    sync_overlay_auto_hide(app.clone(), phase, visibility.overlay_visible);
+    sync_overlay_auto_hide(app.clone(), snapshot, visibility.overlay_visible);
 
     Ok(())
 }
@@ -202,8 +203,20 @@ fn should_hide_window_on_close(label: &str) -> bool {
     label == MAIN_WINDOW_LABEL || label == OVERLAY_WINDOW_LABEL || label == RESULT_WINDOW_LABEL
 }
 
+#[cfg(test)]
 fn window_visibility_for_phase(phase: &str) -> WindowVisibility {
-    match phase {
+    window_visibility_for_snapshot(&RuntimeSnapshot::with_mode(phase, "", "", "", "none"))
+}
+
+fn window_visibility_for_snapshot(snapshot: &RuntimeSnapshot) -> WindowVisibility {
+    if snapshot.input_mode == "transcription" {
+        return WindowVisibility {
+            overlay_visible: snapshot.phase != "待命中",
+            result_visible: false,
+        };
+    }
+
+    match snapshot.phase.as_str() {
         "正在聆听" | "正在识别" | "正在生成" | "正在执行" | "正在输出" => {
             WindowVisibility {
                 overlay_visible: true,
@@ -284,10 +297,13 @@ fn result_bounds_for_work_area(work_area: WorkArea) -> WindowBounds {
     }
 }
 
-fn sync_overlay_auto_hide(app: AppHandle, phase: &str, overlay_visible: bool) {
+fn sync_overlay_auto_hide(app: AppHandle, snapshot: &RuntimeSnapshot, overlay_visible: bool) {
     let token = OVERLAY_HIDE_TOKEN.fetch_add(1, Ordering::SeqCst) + 1;
 
-    if !overlay_visible || phase != "正在识别" {
+    if snapshot.input_mode == "transcription"
+        || !overlay_visible
+        || snapshot.phase != "正在识别"
+    {
         return;
     }
 
@@ -362,9 +378,11 @@ fn suppress_windows_runtime_window_border(window: &tauri::WebviewWindow) {
 
 #[cfg(test)]
 mod tests {
+    use ipc_contract::RuntimeSnapshot;
+
     use super::{
         overlay_bounds_for_work_area, result_bounds_for_work_area, should_hide_window_on_close,
-        window_visibility_for_phase, WorkArea,
+        window_visibility_for_phase, window_visibility_for_snapshot, WorkArea, OVERLAY_WIDTH,
     };
 
     #[test]
@@ -410,6 +428,41 @@ mod tests {
     }
 
     #[test]
+    fn transcription_mode_done_state_does_not_show_result_window() {
+        let snapshot = RuntimeSnapshot::with_mode(
+            "已完成",
+            "转录结果",
+            "已将文本输出到当前输入位置。",
+            "本地工具执行已完成。",
+            "transcription",
+        );
+
+        let visibility = window_visibility_for_snapshot(&snapshot);
+        assert!(visibility.overlay_visible);
+        assert!(!visibility.result_visible);
+    }
+
+    #[test]
+    fn transcription_mode_error_state_does_not_show_result_window() {
+        let snapshot = RuntimeSnapshot::with_mode(
+            "识别失败",
+            "转录结果",
+            "识别失败",
+            "转录文本输出失败。",
+            "transcription",
+        );
+
+        let visibility = window_visibility_for_snapshot(&snapshot);
+        assert!(visibility.overlay_visible);
+        assert!(!visibility.result_visible);
+    }
+
+    #[test]
+    fn overlay_window_is_wide_enough_for_runtime_capsule() {
+        assert!(OVERLAY_WIDTH >= 560.0);
+    }
+
+    #[test]
     fn main_window_close_should_hide_to_background() {
         assert!(should_hide_window_on_close("main"));
         assert!(should_hide_window_on_close("overlay"));
@@ -425,7 +478,7 @@ mod tests {
             height: 900,
         });
 
-        assert_eq!(bounds.x, 750);
+        assert_eq!(bounds.x, 620);
         assert_eq!(bounds.y, 792);
     }
 

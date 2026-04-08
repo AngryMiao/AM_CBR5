@@ -18,6 +18,7 @@ export type RuntimeSnapshot = {
   transcript: string
   result: string
   detail: string
+  input_mode: 'none' | 'agent' | 'transcription' | string
 }
 
 export type HistoryRecord = {
@@ -38,6 +39,7 @@ export type VoiceSettings = {
   asr_model: string
   asr_resource_id: string
   asr_audio_rate: number
+  transcription_silence_timeout_ms: number
   llm_provider: string
   llm_model: string
   llm_base_url: string
@@ -72,19 +74,7 @@ export type EditableVoiceSettings = {
   doubao_asr_app_id: string
   doubao_asr_resource_id: string
   doubao_asr_model: string
-  doubao_asr_audio_format: string
-  doubao_asr_audio_rate: number
-  doubao_asr_audio_bits: number
-  doubao_asr_audio_channel: number
-  doubao_asr_audio_language: string
-  doubao_asr_enable_itn: boolean
-  doubao_asr_enable_ddc: boolean
-  doubao_asr_enable_punc: boolean
-  doubao_asr_show_utterances: boolean
-  doubao_asr_force_to_speech_time: number
-  doubao_asr_end_window_size: number
-  doubao_asr_boosting_table_id: string
-  doubao_asr_context_json: string
+  transcription_silence_timeout_ms: number
   llm_base_url: string
   llm_model: string
   llm_system_prompt: string
@@ -106,19 +96,7 @@ export type SaveEditableVoiceSettingsInput = {
   doubao_asr_app_id: string
   doubao_asr_resource_id: string
   doubao_asr_model: string
-  doubao_asr_audio_format: string
-  doubao_asr_audio_rate: number
-  doubao_asr_audio_bits: number
-  doubao_asr_audio_channel: number
-  doubao_asr_audio_language: string
-  doubao_asr_enable_itn: boolean
-  doubao_asr_enable_ddc: boolean
-  doubao_asr_enable_punc: boolean
-  doubao_asr_show_utterances: boolean
-  doubao_asr_force_to_speech_time: number
-  doubao_asr_end_window_size: number
-  doubao_asr_boosting_table_id: string
-  doubao_asr_context_json: string
+  transcription_silence_timeout_ms: number
   llm_base_url: string
   llm_model: string
   llm_system_prompt: string

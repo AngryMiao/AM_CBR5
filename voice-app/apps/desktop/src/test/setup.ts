@@ -7,6 +7,7 @@ type RuntimeSnapshot = {
   transcript: string
   result: string
   detail: string
+  input_mode: string
 }
 
 type HistoryRecord = {
@@ -27,6 +28,7 @@ type VoiceSettings = {
   asr_model: string
   asr_resource_id: string
   asr_audio_rate: number
+  transcription_silence_timeout_ms: number
   llm_provider: string
   llm_model: string
   llm_base_url: string
@@ -56,19 +58,7 @@ type EditableVoiceSettings = {
   doubao_asr_app_id: string
   doubao_asr_resource_id: string
   doubao_asr_model: string
-  doubao_asr_audio_format: string
-  doubao_asr_audio_rate: number
-  doubao_asr_audio_bits: number
-  doubao_asr_audio_channel: number
-  doubao_asr_audio_language: string
-  doubao_asr_enable_itn: boolean
-  doubao_asr_enable_ddc: boolean
-  doubao_asr_enable_punc: boolean
-  doubao_asr_show_utterances: boolean
-  doubao_asr_force_to_speech_time: number
-  doubao_asr_end_window_size: number
-  doubao_asr_boosting_table_id: string
-  doubao_asr_context_json: string
+  transcription_silence_timeout_ms: number
   llm_base_url: string
   llm_model: string
   llm_system_prompt: string
@@ -95,19 +85,7 @@ type SaveEditableVoiceSettingsInput = {
   doubao_asr_app_id: string
   doubao_asr_resource_id: string
   doubao_asr_model: string
-  doubao_asr_audio_format: string
-  doubao_asr_audio_rate: number
-  doubao_asr_audio_bits: number
-  doubao_asr_audio_channel: number
-  doubao_asr_audio_language: string
-  doubao_asr_enable_itn: boolean
-  doubao_asr_enable_ddc: boolean
-  doubao_asr_enable_punc: boolean
-  doubao_asr_show_utterances: boolean
-  doubao_asr_force_to_speech_time: number
-  doubao_asr_end_window_size: number
-  doubao_asr_boosting_table_id: string
-  doubao_asr_context_json: string
+  transcription_silence_timeout_ms: number
   llm_base_url: string
   llm_model: string
   llm_system_prompt: string
@@ -227,6 +205,7 @@ let runtimeSnapshot: RuntimeSnapshot = {
   transcript: '',
   result: '',
   detail: '等待下一次语音任务。',
+  input_mode: 'none',
 }
 let historyRecords: HistoryRecord[] = []
 let runtimeLogs: RuntimeLogEntry[] = []
@@ -254,6 +233,7 @@ let microphoneInputs = createDefaultMicrophoneInputs()
 const listeners = new Map<string, Set<(event: { payload: unknown }) => void>>()
 const getCurrentWindow = vi.fn(() => ({ label: 'main', hide: vi.fn() }))
 const pendingTimers = new Set<ReturnType<typeof setTimeout>>()
+const defaultAsrAudioRate = 16000
 
 beforeEach(() => {
   for (const timer of pendingTimers) {
@@ -265,6 +245,7 @@ beforeEach(() => {
     transcript: '',
     result: '',
     detail: '等待下一次语音任务。',
+    input_mode: 'none',
   }
   historyRecords = []
   runtimeLogs = [{ level: 'info', message: '语音运行时已就绪。' }]
@@ -304,19 +285,7 @@ function createDefaultEditableSettings(): EditableVoiceSettings {
     doubao_asr_app_id: 'test-app-id',
     doubao_asr_resource_id: 'volc.bigasr.sauc.duration',
     doubao_asr_model: 'bigmodel',
-    doubao_asr_audio_format: 'pcm',
-    doubao_asr_audio_rate: 16000,
-    doubao_asr_audio_bits: 16,
-    doubao_asr_audio_channel: 1,
-    doubao_asr_audio_language: 'zh-CN',
-    doubao_asr_enable_itn: false,
-    doubao_asr_enable_ddc: false,
-    doubao_asr_enable_punc: false,
-    doubao_asr_show_utterances: true,
-    doubao_asr_force_to_speech_time: 0,
-    doubao_asr_end_window_size: 800,
-    doubao_asr_boosting_table_id: '',
-    doubao_asr_context_json: '',
+    transcription_silence_timeout_ms: 3500,
     llm_base_url: 'https://api.openai.com/v1',
     llm_model: 'gpt-4o-mini',
     llm_system_prompt:
@@ -475,7 +444,8 @@ function toVoiceSettings(settings: EditableVoiceSettings): VoiceSettings {
     asr_provider: 'doubao',
     asr_model: settings.doubao_asr_model,
     asr_resource_id: settings.doubao_asr_resource_id,
-    asr_audio_rate: settings.doubao_asr_audio_rate,
+    asr_audio_rate: defaultAsrAudioRate,
+    transcription_silence_timeout_ms: settings.transcription_silence_timeout_ms,
     llm_provider: 'openai-compatible',
     llm_model: settings.llm_model,
     llm_base_url: settings.llm_base_url,
@@ -491,6 +461,11 @@ function emit(eventName: string, payload: unknown) {
   listeners.get(eventName)?.forEach((listener) => {
     listener({ payload })
   })
+}
+
+export function setRuntimeSnapshotForTest(next: RuntimeSnapshot) {
+  runtimeSnapshot = next
+  emit('runtime-snapshot', runtimeSnapshot)
 }
 
 function pushInfoLog(message: string) {
@@ -510,6 +485,7 @@ function completeToolExecutionRuntime(transcript: string, createdAt: string) {
     transcript,
     result: '已将文本输出到当前输入位置。',
     detail: '本地工具执行已完成。',
+    input_mode: 'agent',
   }
   historyRecords = [
     ...historyRecords,
@@ -534,6 +510,7 @@ function scheduleToolExecutionRuntime(transcript: string, createdAt: string) {
       transcript,
       result: '',
       detail: '正在输出文本到当前焦点。',
+      input_mode: 'agent',
     }
     emit('runtime-snapshot', runtimeSnapshot)
     pushInfoLog('LLM 已返回 1 个工具动作，正在进入本地执行。')
@@ -551,6 +528,7 @@ function startMicrophoneCaptureRuntime() {
     transcript: '',
     result: '',
     detail: '正在接收语音输入。',
+    input_mode: 'agent',
   }
   pushInfoLog('测试语音任务已开始，状态进入正在聆听。')
   emit('runtime-snapshot', runtimeSnapshot)
@@ -561,6 +539,7 @@ function startMicrophoneCaptureRuntime() {
       transcript: '实时片段',
       result: '',
       detail: '正在流式识别语音内容。',
+      input_mode: 'agent',
     }
     emit('runtime-snapshot', runtimeSnapshot)
   })
@@ -577,6 +556,7 @@ function stopMicrophoneCaptureRuntime() {
     transcript: runtimeSnapshot.transcript,
     result: '',
     detail: '正在等待豆包返回最终识别结果。',
+    input_mode: 'agent',
   }
   pushInfoLog('测试语音任务已结束录音，等待豆包完成识别。')
   emit('runtime-snapshot', runtimeSnapshot)
@@ -587,6 +567,7 @@ function stopMicrophoneCaptureRuntime() {
       transcript,
       result: '',
       detail: '正在等待 OpenAI-compatible LLM 输出。',
+      input_mode: 'agent',
     }
     emit('runtime-snapshot', runtimeSnapshot)
     pushInfoLog('豆包流式识别已完成，正在请求 OpenAI-compatible LLM。')
@@ -624,6 +605,7 @@ function previewHistoryRecordRuntime(recordId: number) {
     transcript: record.transcript,
     result: record.result,
     detail: record.detail,
+    input_mode: 'agent',
   }
   emit('runtime-snapshot', runtimeSnapshot)
   return runtimeSnapshot
@@ -640,6 +622,7 @@ function retryHistoryRecordRuntime(recordId: number) {
     transcript: record.transcript,
     result: '',
     detail: `正在根据任务 #${recordId} 的识别文本重新生成结果。`,
+    input_mode: 'agent',
   }
   emit('runtime-snapshot', runtimeSnapshot)
   pushInfoLog(`已开始重试任务 #${recordId}，正在重新请求 OpenAI-compatible LLM。`)
@@ -875,6 +858,7 @@ vi.mock('@tauri-apps/api/core', () => ({
         transcript: '',
         result: '',
         detail: '等待下一次语音任务。',
+        input_mode: 'none',
       }
       emit('runtime-snapshot', runtimeSnapshot)
       return runtimeSnapshot

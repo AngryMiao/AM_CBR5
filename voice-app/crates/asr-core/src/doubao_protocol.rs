@@ -416,38 +416,64 @@ fn collect_segments_from_result(result: &Value) -> Vec<TranscriptSegment> {
         return segments;
     };
 
-    if let Some(text) = record.get("text").and_then(Value::as_str) {
-        let text = text.trim();
-        if !text.is_empty() {
-            segments.push(TranscriptSegment {
-                text: text.to_string(),
-                definite: false,
-            });
-        }
-    }
-
     if let Some(Value::Array(utterances)) = record.get("utterances") {
+        let mut utterance_segments = Vec::new();
         for utterance in utterances {
             let Some(entry) = utterance.as_object() else {
                 continue;
             };
 
-            if let Some(text) = entry.get("text").and_then(Value::as_str) {
-                let text = text.trim();
-                if !text.is_empty() {
-                    segments.push(TranscriptSegment {
-                        text: text.to_string(),
-                        definite: entry
-                            .get("definite")
-                            .and_then(Value::as_bool)
-                            .unwrap_or(false),
-                    });
-                }
+            let text = extract_segment_text(entry);
+            if !text.is_empty() {
+                utterance_segments.push(TranscriptSegment {
+                    text,
+                    definite: entry
+                        .get("definite")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
+                });
             }
+        }
+
+        if !utterance_segments.is_empty() {
+            return utterance_segments;
         }
     }
 
+    let text = extract_segment_text(record);
+    if !text.is_empty() {
+        segments.push(TranscriptSegment {
+            text,
+            definite: false,
+        });
+    }
+
     segments
+}
+
+fn extract_segment_text(entry: &Map<String, Value>) -> String {
+    if let Some(text) = entry.get("text").and_then(Value::as_str) {
+        let text = text.trim();
+        if !text.is_empty() {
+            return text.to_string();
+        }
+    }
+
+    if let Some(Value::Array(words)) = entry.get("words") {
+        let text = words
+            .iter()
+            .filter_map(Value::as_object)
+            .filter_map(|word| word.get("text").and_then(Value::as_str))
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .collect::<String>();
+
+        if !text.is_empty() {
+            return text;
+        }
+    }
+
+    String::new()
 }
 
 fn is_completed_response(flags: u8, sequence: Option<i32>) -> bool {

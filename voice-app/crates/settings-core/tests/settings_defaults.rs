@@ -51,3 +51,38 @@ fn runtime_and_editable_snapshots_normalize_legacy_default_hotkey() {
     assert_eq!(editable.default_hotkey, "RightAlt");
     assert_eq!(editable.microphone_device_id, "usb-mic");
 }
+
+#[test]
+fn stored_settings_default_transcription_timeout_is_3500ms() {
+    let settings = StoredVoiceSettings::default();
+    assert_eq!(settings.transcription_silence_timeout_ms, 3_500);
+    assert_eq!(settings.doubao_asr_app_id, "");
+    assert!(settings.doubao_asr_enable_punc);
+}
+
+#[test]
+fn editable_settings_only_expose_user_editable_voice_fields() {
+    let settings = StoredVoiceSettings::default();
+    let editable = EditableVoiceSettings::from_settings(&settings);
+    let serialized = serde_json::to_value(&editable).expect("editable settings should serialize");
+
+    assert_eq!(editable.transcription_silence_timeout_ms, 3_500);
+    assert_eq!(serialized["microphone_device_id"], "");
+    assert_eq!(serialized["transcription_silence_timeout_ms"], 3_500);
+    assert_eq!(
+        serialized["doubao_asr_url"],
+        "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+    );
+    assert_eq!(serialized["doubao_asr_app_id"], "");
+    assert_eq!(serialized["doubao_asr_resource_id"], "volc.bigasr.sauc.duration");
+    assert_eq!(serialized["doubao_asr_model"], "bigmodel");
+    assert!(serialized.get("doubao_asr_audio_rate").is_none());
+    assert!(serialized.get("doubao_asr_enable_punc").is_none());
+}
+
+#[test]
+fn runtime_settings_keep_transcription_timeout() {
+    let settings = StoredVoiceSettings::default();
+    let runtime = RuntimeVoiceSettings::from_settings(&settings);
+    assert_eq!(runtime.transcription_silence_timeout_ms, 3_500);
+}

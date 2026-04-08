@@ -8,8 +8,8 @@ use asr_core::{
     DoubaoAsrConfig, DoubaoSessionEvent, DoubaoStreamingSession, MicrophoneRecordingSession,
 };
 use automation_core::{
-    GlobalHotkey, HoldToTalkController, HotkeyPressDecision, HotkeyReleaseDecision,
-    RuntimeHotkeyPhase, SystemToolExecutor, ToolExecutionRuntimePhase, ToolExecutor,
+    GlobalHotkey, HotkeyModeAction, HotkeyModeController, RuntimeHotkeyPhase,
+    SystemToolExecutor, ToolExecutionRuntimePhase, ToolExecutor, VoiceInputMode,
 };
 use history_core::{
     load_history_records, query_history_records, save_history_records, HistoryQuery, HistoryRecord,
@@ -55,7 +55,9 @@ struct RuntimeStore {
     active_task: Option<ActiveVoiceTask>,
     active_operation_id: Option<u64>,
     next_operation_id: u64,
-    hotkey_controller: HoldToTalkController,
+    hotkey_controller: HotkeyModeController,
+    active_input_mode: VoiceInputMode,
+    transcription_silence_token: u64,
     tool_executor: Arc<dyn ToolExecutor>,
     mcp_runtime: McpRuntime,
     mcp_last_sync_error: Option<String>,
@@ -67,10 +69,20 @@ pub(crate) struct TaskStartOutcome {
     pub events: Option<mpsc::Receiver<DoubaoSessionEvent>>,
 }
 
+pub(crate) enum HotkeyReleaseOutcome {
+    TaskStarted(TaskStartOutcome),
+    Snapshot(RuntimeSnapshot),
+}
+
 pub(crate) struct SessionEventOutcome {
     pub operation_id: u64,
     pub snapshot: RuntimeSnapshot,
-    pub llm_transcript: Option<String>,
+    pub follow_up: Option<SessionFollowUp>,
+}
+
+pub(crate) enum SessionFollowUp {
+    RunLlm(String),
+    CommitTranscription(String),
 }
 
 pub(crate) enum LlmRunOutcome {
@@ -203,7 +215,14 @@ impl AppState {
 
     pub fn runtime_snapshot(&self) -> RuntimeSnapshot {
         let runtime = self.runtime.lock().expect("runtime store lock poisoned");
-        runtime.machine.snapshot()
+        snapshot_with_mode(runtime.machine.snapshot(), runtime.active_input_mode)
+    }
+
+    pub fn current_input_mode(&self) -> VoiceInputMode {
+        self.runtime
+            .lock()
+            .expect("runtime store lock poisoned")
+            .active_input_mode
     }
 
     pub fn history_records(&self) -> Vec<HistoryRecord> {
@@ -523,22 +542,36 @@ impl AppState {
         let phase = self.runtime_snapshot().phase;
 
         match phase.as_str() {
-            "待命中" | "已完成" | "识别失败" => self.start_voice_task().map(Some),
+            "待命中" | "已完成" | "识别失败" => {
+                self.start_voice_task_for_mode(VoiceInputMode::Agent).map(Some)
+            }
             _ => Ok(None),
         }
     }
 
     pub fn continue_hotkey_task(&self, now_ms: u64) -> Result<Option<TaskStartOutcome>, String> {
         let phase = self.runtime_snapshot().phase;
+        let input_mode = self.current_input_mode();
         let decision = {
             let mut runtime = self.runtime.lock().expect("runtime store lock poisoned");
-            runtime
-                .hotkey_controller
-                .on_interrupt_restart_timer(map_runtime_phase(&phase), now_ms)
+            runtime.hotkey_controller.on_interrupt_restart_timer(
+                map_runtime_phase(&phase),
+                input_mode,
+                now_ms,
+            )
         };
 
         match decision {
-            HotkeyPressDecision::StartListening => self.start_voice_task().map(Some),
+            HotkeyModeAction::StartAgentListening => {
+                self.start_voice_task_for_mode(VoiceInputMode::Agent).map(Some)
+            }
+            HotkeyModeAction::StartTranscriptionListening => self
+                .start_voice_task_for_mode(VoiceInputMode::Transcription)
+                .map(Some),
+            HotkeyModeAction::CancelAndArmRestart => {
+                let _ = self.cancel_current_operation("已中断当前语音任务，等待长按重启。");
+                Ok(None)
+            }
             _ => Ok(None),
         }
     }
@@ -555,47 +588,85 @@ impl AppState {
 
     pub fn handle_hotkey_pressed(&self, now_ms: u64) -> Result<Option<TaskStartOutcome>, String> {
         let phase = self.runtime_snapshot().phase;
+        let input_mode = self.current_input_mode();
         let decision = {
             let mut runtime = self.runtime.lock().expect("runtime store lock poisoned");
             runtime
                 .hotkey_controller
-                .on_press(map_runtime_phase(&phase), now_ms)
+                .on_press(map_runtime_phase(&phase), input_mode, now_ms)
         };
 
         match decision {
-            HotkeyPressDecision::StartListening => self.start_voice_task().map(Some),
-            HotkeyPressDecision::CancelAndArmRestart => {
+            HotkeyModeAction::StartAgentListening => {
+                self.start_voice_task_for_mode(VoiceInputMode::Agent).map(Some)
+            }
+            HotkeyModeAction::StartTranscriptionListening => self
+                .start_voice_task_for_mode(VoiceInputMode::Transcription)
+                .map(Some),
+            HotkeyModeAction::CancelAndArmRestart => {
                 let _ = self.cancel_current_operation("已中断当前语音任务，等待长按重启。");
                 Ok(None)
             }
-            HotkeyPressDecision::Noop => Ok(None),
+            HotkeyModeAction::Noop => Ok(None),
+            _ => Ok(None),
         }
     }
 
-    pub fn handle_hotkey_released(&self, now_ms: u64) -> Result<Option<RuntimeSnapshot>, String> {
+    pub fn handle_hotkey_released(
+        &self,
+        now_ms: u64,
+    ) -> Result<Option<HotkeyReleaseOutcome>, String> {
         let phase = self.runtime_snapshot().phase;
+        let input_mode = self.current_input_mode();
         let decision = {
             let mut runtime = self.runtime.lock().expect("runtime store lock poisoned");
             runtime
                 .hotkey_controller
-                .on_release(map_runtime_phase(&phase), now_ms)
+                .on_release(map_runtime_phase(&phase), input_mode, now_ms)
         };
 
         match decision {
-            HotkeyReleaseDecision::FinishListening => self.finish_voice_task().map(Some),
-            HotkeyReleaseDecision::CancelListening => {
+            HotkeyModeAction::StartAgentListening => self
+                .start_voice_task_for_mode(VoiceInputMode::Agent)
+                .map(HotkeyReleaseOutcome::TaskStarted)
+                .map(Some),
+            HotkeyModeAction::StartTranscriptionListening => self
+                .start_voice_task_for_mode(VoiceInputMode::Transcription)
+                .map(HotkeyReleaseOutcome::TaskStarted)
+                .map(Some),
+            HotkeyModeAction::FinishAgentListening | HotkeyModeAction::StopTranscriptionAndSubmit => {
+                self.finish_voice_task()
+                    .map(HotkeyReleaseOutcome::Snapshot)
+                    .map(Some)
+            }
+            HotkeyModeAction::CancelAgentListening => {
                 let snapshot = self.cancel_current_operation("已取消当前语音任务。");
-                Ok(Some(snapshot))
+                Ok(Some(HotkeyReleaseOutcome::Snapshot(snapshot)))
             }
-            HotkeyReleaseDecision::DismissResult => {
+            HotkeyModeAction::DismissResult => {
                 let snapshot = self.dismiss_runtime_result("已关闭任务结果。");
-                Ok(Some(snapshot))
+                Ok(Some(HotkeyReleaseOutcome::Snapshot(snapshot)))
             }
-            HotkeyReleaseDecision::Noop => Ok(None),
+            HotkeyModeAction::Noop => Ok(None),
+            _ => Ok(None),
         }
     }
 
+    pub fn start_voice_task_for_mode(
+        &self,
+        input_mode: VoiceInputMode,
+    ) -> Result<TaskStartOutcome, String> {
+        self.start_voice_task_with_mode(input_mode)
+    }
+
     pub fn start_voice_task(&self) -> Result<TaskStartOutcome, String> {
+        self.start_voice_task_with_mode(VoiceInputMode::Agent)
+    }
+
+    fn start_voice_task_with_mode(
+        &self,
+        input_mode: VoiceInputMode,
+    ) -> Result<TaskStartOutcome, String> {
         {
             let runtime = self.runtime.lock().expect("runtime store lock poisoned");
             if runtime.active_operation_id.is_some() || runtime.active_task.is_some() {
@@ -604,48 +675,63 @@ impl AppState {
         }
 
         if let Err(message) = self.ensure_platform_ready_for_voice_task() {
-            return Ok(TaskStartOutcome {
-                operation_id: 0,
-                snapshot: self.fail_voice_task(message),
-                events: None,
-            });
+            return Ok(self.tag_task_start_outcome_with_mode(
+                TaskStartOutcome {
+                    operation_id: 0,
+                    snapshot: self.fail_voice_task(message),
+                    events: None,
+                },
+                input_mode,
+            ));
         }
 
         #[cfg(test)]
         {
-            if let Err(message) = self.validate_llm_config_for_voice_task() {
-                return Ok(TaskStartOutcome {
-                    operation_id: 0,
-                    snapshot: self.fail_voice_task(message),
-                    events: None,
-                });
+            if let Err(message) = self.validate_config_for_voice_task(input_mode) {
+                return Ok(self.tag_task_start_outcome_with_mode(
+                    TaskStartOutcome {
+                        operation_id: 0,
+                        snapshot: self.fail_voice_task(message),
+                        events: None,
+                    },
+                    input_mode,
+                ));
             }
 
             self.start_test_voice_task()
+                .map(|outcome| self.tag_task_start_outcome_with_mode(outcome, input_mode))
         }
         #[cfg(not(test))]
         {
-            if let Err(message) = self.validate_llm_config_for_voice_task() {
-                return Ok(TaskStartOutcome {
-                    operation_id: 0,
-                    snapshot: self.fail_voice_task(message),
-                    events: None,
-                });
+            if let Err(message) = self.validate_config_for_voice_task(input_mode) {
+                return Ok(self.tag_task_start_outcome_with_mode(
+                    TaskStartOutcome {
+                        operation_id: 0,
+                        snapshot: self.fail_voice_task(message),
+                        events: None,
+                    },
+                    input_mode,
+                ));
             }
 
             self.start_live_voice_task()
+                .map(|outcome| self.tag_task_start_outcome_with_mode(outcome, input_mode))
         }
     }
 
     pub fn finish_voice_task(&self) -> Result<RuntimeSnapshot, String> {
-        #[cfg(test)]
-        {
-            self.finish_test_voice_task()
-        }
-        #[cfg(not(test))]
-        {
-            self.finish_live_voice_task()
-        }
+        let snapshot = {
+            #[cfg(test)]
+            {
+                self.finish_test_voice_task()
+            }
+            #[cfg(not(test))]
+            {
+                self.finish_live_voice_task()
+            }
+        }?;
+
+        Ok(snapshot_with_mode(snapshot, self.current_input_mode()))
     }
 
     pub fn apply_session_event(
@@ -663,8 +749,11 @@ impl AppState {
                 runtime.machine.update_partial_transcript(text);
                 Some(SessionEventOutcome {
                     operation_id,
-                    snapshot: runtime.machine.snapshot(),
-                    llm_transcript: None,
+                    snapshot: snapshot_with_mode(
+                        runtime.machine.snapshot(),
+                        runtime.active_input_mode,
+                    ),
+                    follow_up: None,
                 })
             }
             DoubaoSessionEvent::Completed { text } => {
@@ -673,35 +762,53 @@ impl AppState {
                     return Some(SessionEventOutcome {
                         operation_id,
                         snapshot: self.fail_voice_task("豆包未返回可用识别文本。"),
-                        llm_transcript: None,
+                        follow_up: None,
                     });
                 }
 
                 let task = self.take_active_task();
                 let snapshot = {
                     let mut runtime = self.runtime.lock().expect("runtime store lock poisoned");
-                    runtime.machine.start_generating_with_transcript(
-                        transcript.clone(),
-                        "正在等待 OpenAI-compatible LLM 输出。",
-                    );
-                    runtime.logs.push(RuntimeLogEntry::info(
-                        "豆包流式识别已完成，正在请求 OpenAI-compatible LLM。",
-                    ));
+                    let follow_up = match runtime.active_input_mode {
+                        VoiceInputMode::Transcription => {
+                            runtime.machine.start_inserting_with_transcript(
+                                transcript.clone(),
+                                "正在将转录文本输出到当前输入位置。",
+                            );
+                            runtime.logs.push(RuntimeLogEntry::info(
+                                "豆包流式识别已完成，正在提交转录文本到当前输入位置。",
+                            ));
+                            SessionFollowUp::CommitTranscription(transcript.clone())
+                        }
+                        _ => {
+                            runtime.machine.start_generating_with_transcript(
+                                transcript.clone(),
+                                "正在等待 OpenAI-compatible LLM 输出。",
+                            );
+                            runtime.logs.push(RuntimeLogEntry::info(
+                                "豆包流式识别已完成，正在请求 OpenAI-compatible LLM。",
+                            ));
+                            SessionFollowUp::RunLlm(transcript.clone())
+                        }
+                    };
 
-                    runtime.machine.snapshot()
+                    (
+                        snapshot_with_mode(runtime.machine.snapshot(), runtime.active_input_mode),
+                        Some(follow_up),
+                    )
                 };
 
                 self.cleanup_task(task);
                 Some(SessionEventOutcome {
                     operation_id,
-                    snapshot,
-                    llm_transcript: Some(transcript),
+                    snapshot: snapshot.0,
+                    follow_up: snapshot.1,
                 })
             }
             DoubaoSessionEvent::Error { message } => Some(SessionEventOutcome {
                 operation_id,
                 snapshot: self.fail_voice_task(message),
-                llm_transcript: None,
+                follow_up: None,
             }),
         }
     }
@@ -714,6 +821,105 @@ impl AppState {
         self.apply_session_event(operation_id, event)
             .expect("test runtime event should be applied")
             .snapshot
+    }
+
+    pub fn arm_transcription_silence_timeout(
+        &self,
+        operation_id: u64,
+    ) -> Option<(u64, u64)> {
+        let mut runtime = self.runtime.lock().expect("runtime store lock poisoned");
+        if runtime.active_operation_id != Some(operation_id)
+            || runtime.active_input_mode != VoiceInputMode::Transcription
+            || runtime.machine.snapshot().phase != "正在聆听"
+        {
+            return None;
+        }
+
+        let timeout_ms = u64::from(runtime.runtime_settings.transcription_silence_timeout_ms);
+        if timeout_ms == 0 {
+            return None;
+        }
+
+        runtime.transcription_silence_token =
+            runtime.transcription_silence_token.saturating_add(1);
+        Some((runtime.transcription_silence_token, timeout_ms))
+    }
+
+    pub fn finish_transcription_if_silence_timeout(
+        &self,
+        operation_id: u64,
+        token: u64,
+    ) -> Option<RuntimeSnapshot> {
+        let runtime = self.runtime.lock().expect("runtime store lock poisoned");
+        let should_finish = runtime.active_operation_id == Some(operation_id)
+            && runtime.active_input_mode == VoiceInputMode::Transcription
+            && runtime.transcription_silence_token == token
+            && runtime.machine.snapshot().phase == "正在聆听";
+        drop(runtime);
+
+        if !should_finish {
+            return None;
+        }
+
+        self.finish_voice_task().ok()
+    }
+
+    pub fn commit_transcription_insert(
+        &self,
+        operation_id: u64,
+        transcript: String,
+    ) -> Option<RuntimeSnapshot> {
+        if !self.is_current_operation(operation_id) {
+            return None;
+        }
+
+        let executor = {
+            let runtime = self.runtime.lock().expect("runtime store lock poisoned");
+            Arc::clone(&runtime.tool_executor)
+        };
+
+        if let Err(message) = executor.execute(&automation_core::ToolExecutionRequest::type_text(
+            &transcript,
+        )) {
+            return self.fail_tool_execution(operation_id, format!("转录文本输出失败: {message}"));
+        }
+
+        let snapshot = {
+            let mut runtime = self.runtime.lock().expect("runtime store lock poisoned");
+            if runtime.stored_settings.history_enabled {
+                let record = runtime.machine.complete_success_with(
+                    transcript.clone(),
+                    "已将文本输出到当前输入位置。",
+                    "本地工具执行已完成。",
+                );
+                runtime.history.push(record);
+                let history_store_path = runtime.history_store_path.clone();
+                let history = runtime.history.clone();
+                if let Err(cause) = persist_history(history_store_path.as_ref(), &history) {
+                    runtime.logs.push(RuntimeLogEntry::error(format!(
+                        "写入本地历史记录失败: {cause}"
+                    )));
+                }
+            }
+            runtime.logs.push(RuntimeLogEntry::info(
+                "转录文本已输出到当前输入位置。".to_string(),
+            ));
+            runtime.active_operation_id = None;
+            runtime.active_input_mode = VoiceInputMode::None;
+            runtime.machine.reset();
+            snapshot_with_mode(runtime.machine.snapshot(), VoiceInputMode::None)
+        };
+
+        Some(snapshot)
+    }
+
+    #[cfg(test)]
+    pub fn commit_transcription_insert_for_test(
+        &self,
+        transcript: String,
+    ) -> Option<RuntimeSnapshot> {
+        let operation_id = self.current_operation_id()?;
+        self.commit_transcription_insert(operation_id, transcript)
     }
 
     pub fn run_llm_generation(
@@ -842,7 +1048,7 @@ impl AppState {
             runtime
                 .machine
                 .complete_success_with("", result, "OpenAI-compatible LLM 输出已完成。");
-        let snapshot = runtime.machine.snapshot();
+        let snapshot = snapshot_with_mode(runtime.machine.snapshot(), runtime.active_input_mode);
         runtime.active_operation_id = None;
 
         if runtime.stored_settings.history_enabled {
@@ -877,7 +1083,7 @@ impl AppState {
         let record = runtime
             .machine
             .complete_success_with("", result, "本地工具执行已完成。");
-        let snapshot = runtime.machine.snapshot();
+        let snapshot = snapshot_with_mode(runtime.machine.snapshot(), runtime.active_input_mode);
         runtime.active_operation_id = None;
 
         if runtime.stored_settings.history_enabled {
@@ -912,7 +1118,7 @@ impl AppState {
         let record = runtime
             .machine
             .complete_error_with("", "生成失败", message.clone());
-        let snapshot = runtime.machine.snapshot();
+        let snapshot = snapshot_with_mode(runtime.machine.snapshot(), runtime.active_input_mode);
         runtime.active_operation_id = None;
 
         if runtime.stored_settings.history_enabled {
@@ -945,7 +1151,7 @@ impl AppState {
         let record = runtime
             .machine
             .complete_error_with("", "工具执行失败", message.clone());
-        let snapshot = runtime.machine.snapshot();
+        let snapshot = snapshot_with_mode(runtime.machine.snapshot(), runtime.active_input_mode);
         runtime.active_operation_id = None;
 
         if runtime.stored_settings.history_enabled {
@@ -1179,7 +1385,7 @@ impl AppState {
             let record = runtime
                 .machine
                 .complete_error_with("", "识别失败", message.clone());
-            let snapshot = runtime.machine.snapshot();
+            let snapshot = snapshot_with_mode(runtime.machine.snapshot(), runtime.active_input_mode);
 
             if runtime.stored_settings.history_enabled {
                 runtime.history.push(record);
@@ -1300,6 +1506,14 @@ impl AppState {
         self.build_llm_service("").validate_config()
     }
 
+    fn validate_config_for_voice_task(&self, input_mode: VoiceInputMode) -> Result<(), String> {
+        if input_mode != VoiceInputMode::Transcription {
+            self.validate_llm_config_for_voice_task()?;
+        }
+
+        Ok(())
+    }
+
     fn begin_operation(&self) -> u64 {
         let mut runtime = self.runtime.lock().expect("runtime store lock poisoned");
         let operation_id = runtime.next_operation_id;
@@ -1316,15 +1530,29 @@ impl AppState {
         self.current_operation_id() == Some(operation_id)
     }
 
+    fn tag_task_start_outcome_with_mode(
+        &self,
+        mut outcome: TaskStartOutcome,
+        input_mode: VoiceInputMode,
+    ) -> TaskStartOutcome {
+        {
+            let mut runtime = self.runtime.lock().expect("runtime store lock poisoned");
+            runtime.active_input_mode = input_mode;
+        }
+        outcome.snapshot = snapshot_with_mode(outcome.snapshot, input_mode);
+        outcome
+    }
+
     fn cancel_current_operation(&self, message: impl Into<String>) -> RuntimeSnapshot {
         let task = self.take_active_task();
         let message = message.into();
         let snapshot = {
             let mut runtime = self.runtime.lock().expect("runtime store lock poisoned");
             runtime.active_operation_id = None;
+            runtime.active_input_mode = VoiceInputMode::None;
             runtime.machine.reset();
             runtime.logs.push(RuntimeLogEntry::info(message));
-            runtime.machine.snapshot()
+            snapshot_with_mode(runtime.machine.snapshot(), VoiceInputMode::None)
         };
 
         self.cleanup_task(task);
@@ -1335,9 +1563,10 @@ impl AppState {
         let message = message.into();
         let mut runtime = self.runtime.lock().expect("runtime store lock poisoned");
         runtime.active_operation_id = None;
+        runtime.active_input_mode = VoiceInputMode::None;
         runtime.machine.reset();
         runtime.logs.push(RuntimeLogEntry::info(message));
-        runtime.machine.snapshot()
+        snapshot_with_mode(runtime.machine.snapshot(), VoiceInputMode::None)
     }
 }
 
@@ -1365,7 +1594,9 @@ fn build_runtime_store(
         active_task: None,
         active_operation_id: None,
         next_operation_id: 1,
-        hotkey_controller: HoldToTalkController::default(),
+        hotkey_controller: HotkeyModeController::default(),
+        active_input_mode: VoiceInputMode::None,
+        transcription_silence_token: 0,
         tool_executor,
         mcp_runtime,
         mcp_last_sync_error: None,
@@ -1499,6 +1730,14 @@ fn map_runtime_phase(phase: &str) -> RuntimeHotkeyPhase {
         "识别失败" => RuntimeHotkeyPhase::Error,
         _ => RuntimeHotkeyPhase::Idle,
     }
+}
+
+fn snapshot_with_mode(
+    mut snapshot: RuntimeSnapshot,
+    input_mode: VoiceInputMode,
+) -> RuntimeSnapshot {
+    snapshot.input_mode = input_mode.as_contract_str().to_string();
+    snapshot
 }
 
 fn preferred_tool_runtime_phase(requests: &[LlmToolRequest]) -> ToolExecutionRuntimePhase {
@@ -1743,14 +1982,24 @@ mod tests {
     use std::path::PathBuf;
 
     use asr_core::DoubaoSessionEvent;
-    use automation_core::HOTKEY_RESTART_THRESHOLD_MS;
+    use automation_core::{VoiceInputMode, HOTKEY_RESTART_THRESHOLD_MS};
     use history_core::{load_history_records, save_history_records, HistoryRecord};
     use llm_core::LlmToolRequest;
     use mcp_core::McpToolCall;
     use serde_json::json;
     use settings_core::{EditableSecretValueInput, SaveEditableVoiceSettingsInput};
 
-    use super::AppState;
+    use super::{AppState, HotkeyReleaseOutcome};
+
+    fn expect_release_snapshot(
+        outcome: Option<HotkeyReleaseOutcome>,
+        context: &str,
+    ) -> ipc_contract::RuntimeSnapshot {
+        match outcome.expect(context) {
+            HotkeyReleaseOutcome::Snapshot(snapshot) => snapshot,
+            HotkeyReleaseOutcome::TaskStarted(outcome) => outcome.snapshot,
+        }
+    }
 
     #[test]
     fn hotkey_press_from_idle_enters_listening() {
@@ -1816,8 +2065,8 @@ mod tests {
 
         let snapshot = state
             .handle_hotkey_released(1_220)
-            .expect("hotkey release should not fail")
-            .expect("listening runtime should react to hotkey release");
+            .expect("hotkey release should not fail");
+        let snapshot = expect_release_snapshot(snapshot, "listening runtime should react to hotkey release");
         assert_eq!(snapshot.phase, "正在识别");
     }
 
@@ -1829,11 +2078,136 @@ mod tests {
 
         let snapshot = state
             .handle_hotkey_released(1_100)
-            .expect("hotkey release should not fail")
-            .expect("short hold should cancel current round");
+            .expect("hotkey release should not fail");
+        let snapshot = expect_release_snapshot(snapshot, "short hold should cancel current round");
 
         assert_eq!(snapshot.phase, "待命中");
         assert!(state.history_records().is_empty());
+    }
+
+    #[test]
+    fn double_tap_from_idle_enters_transcription_listening() {
+        let state = AppState::for_test();
+
+        let pressed = state
+            .handle_hotkey_pressed(1_000)
+            .expect("first tap press should not fail");
+        assert!(pressed.is_none());
+
+        let released = state
+            .handle_hotkey_released(1_060)
+            .expect("first tap release should not fail");
+        assert!(released.is_none());
+
+        let pressed = state
+            .handle_hotkey_pressed(1_140)
+            .expect("second tap press should not fail");
+        assert!(pressed.is_none());
+
+        let released = state
+            .handle_hotkey_released(1_190)
+            .expect("second tap release should not fail");
+        match released {
+            Some(HotkeyReleaseOutcome::TaskStarted(outcome)) => {
+                assert_eq!(outcome.snapshot.phase, "正在聆听");
+                assert_eq!(outcome.snapshot.input_mode, "transcription");
+            }
+            Some(HotkeyReleaseOutcome::Snapshot(snapshot)) => {
+                panic!("expected transcription task start, got snapshot phase {}", snapshot.phase);
+            }
+            None => panic!("second tap release should start transcription"),
+        }
+
+        let snapshot = state.runtime_snapshot();
+        assert_eq!(snapshot.phase, "正在聆听");
+        assert_eq!(snapshot.input_mode, "transcription");
+    }
+
+    #[test]
+    fn duplicate_release_after_transcription_start_does_not_immediately_stop_recording() {
+        let state = AppState::for_test();
+
+        state
+            .handle_hotkey_pressed(1_000)
+            .expect("first tap press should not fail");
+        state
+            .handle_hotkey_released(1_060)
+            .expect("first tap release should not fail");
+        state
+            .handle_hotkey_pressed(1_140)
+            .expect("second tap press should not fail");
+        let released = state
+            .handle_hotkey_released(1_190)
+            .expect("second tap release should not fail");
+        assert!(matches!(released, Some(HotkeyReleaseOutcome::TaskStarted(_))));
+
+        let duplicate_release = state
+            .handle_hotkey_released(1_210)
+            .expect("duplicate release should not fail");
+        assert!(duplicate_release.is_none());
+
+        let snapshot = state.runtime_snapshot();
+        assert_eq!(snapshot.phase, "正在聆听");
+        assert_eq!(snapshot.input_mode, "transcription");
+    }
+
+    #[test]
+    fn delayed_release_without_new_press_after_transcription_start_does_not_stop_recording() {
+        let state = AppState::for_test();
+
+        state
+            .handle_hotkey_pressed(1_000)
+            .expect("first tap press should not fail");
+        state
+            .handle_hotkey_released(1_060)
+            .expect("first tap release should not fail");
+        state
+            .handle_hotkey_pressed(1_140)
+            .expect("second tap press should not fail");
+        let released = state
+            .handle_hotkey_released(1_190)
+            .expect("second tap release should not fail");
+        assert!(matches!(released, Some(HotkeyReleaseOutcome::TaskStarted(_))));
+
+        let delayed_release = state
+            .handle_hotkey_released(1_500)
+            .expect("delayed duplicate release should not fail");
+        assert!(delayed_release.is_none());
+
+        let snapshot = state.runtime_snapshot();
+        assert_eq!(snapshot.phase, "正在聆听");
+        assert_eq!(snapshot.input_mode, "transcription");
+    }
+
+    #[test]
+    fn single_tap_after_transcription_start_stops_and_submits() {
+        let state = AppState::for_test();
+
+        state
+            .handle_hotkey_pressed(1_000)
+            .expect("first tap press should not fail");
+        state
+            .handle_hotkey_released(1_060)
+            .expect("first tap release should not fail");
+        state
+            .handle_hotkey_pressed(1_140)
+            .expect("second tap press should not fail");
+        state
+            .handle_hotkey_released(1_190)
+            .expect("second tap release should not fail");
+
+        let pressed = state
+            .handle_hotkey_pressed(1_360)
+            .expect("stop tap press should not fail");
+        assert!(pressed.is_none());
+
+        let released = state
+            .handle_hotkey_released(1_420)
+            .expect("stop tap release should not fail");
+        let snapshot = expect_release_snapshot(released, "transcription tap should stop and submit");
+
+        assert_eq!(snapshot.phase, "正在识别");
+        assert_eq!(snapshot.input_mode, "transcription");
     }
 
     #[test]
@@ -1857,8 +2231,8 @@ mod tests {
 
         let snapshot = state
             .handle_hotkey_released(5_100)
-            .expect("result hotkey release should not fail")
-            .expect("short tap should dismiss the visible result");
+            .expect("result hotkey release should not fail");
+        let snapshot = expect_release_snapshot(snapshot, "short tap should dismiss the visible result");
 
         assert_eq!(snapshot.phase, "待命中");
         assert_eq!(state.history_records().len(), 1);
@@ -1951,6 +2325,84 @@ mod tests {
             .runtime_logs()
             .iter()
             .any(|entry| entry.message.contains("OpenAI-compatible LLM 输出已完成")));
+    }
+
+    #[test]
+    fn transcription_completed_types_text_without_llm_generation() {
+        let state = AppState::for_test();
+
+        state
+            .start_voice_task_for_mode(VoiceInputMode::Transcription)
+            .expect("transcription task should start");
+        state
+            .finish_voice_task()
+            .expect("transcription task should stop listening");
+
+        let snapshot = state.apply_session_event_for_test(DoubaoSessionEvent::Completed {
+            text: "直接写入的文本".to_string(),
+        });
+
+        assert_eq!(snapshot.phase, "正在输出");
+        assert_eq!(snapshot.input_mode, "transcription");
+
+        let final_snapshot = state
+            .commit_transcription_insert_for_test("直接写入的文本".to_string())
+            .expect("transcription insert should succeed");
+
+        assert_eq!(final_snapshot.phase, "待命中");
+        assert_eq!(final_snapshot.input_mode, "none");
+    }
+
+    #[test]
+    fn transcription_silence_timeout_finishes_listening_and_ignores_stale_tokens() {
+        let state = AppState::for_test();
+        let operation_id = state
+            .start_voice_task_for_mode(VoiceInputMode::Transcription)
+            .expect("transcription task should start")
+            .operation_id;
+
+        let (first_token, timeout_ms) = state
+            .arm_transcription_silence_timeout(operation_id)
+            .expect("transcription listening should arm silence timeout");
+        assert_eq!(timeout_ms, 3_500);
+
+        state.apply_session_event_for_test(DoubaoSessionEvent::Partial {
+            text: "实时片段".to_string(),
+        });
+
+        let (second_token, _) = state
+            .arm_transcription_silence_timeout(operation_id)
+            .expect("new transcription activity should refresh silence timeout");
+        assert!(second_token > first_token);
+        assert!(state
+            .finish_transcription_if_silence_timeout(operation_id, first_token)
+            .is_none());
+
+        let snapshot = state
+            .finish_transcription_if_silence_timeout(operation_id, second_token)
+            .expect("latest silence timeout token should stop transcription");
+
+        assert_eq!(snapshot.phase, "正在识别");
+        assert_eq!(snapshot.input_mode, "transcription");
+    }
+
+    #[test]
+    fn transcription_mode_does_not_require_llm_config_to_start_listening() {
+        let mut settings = super::test_stored_settings();
+        settings.llm_api_key.clear();
+        let state = AppState::from_settings(settings);
+
+        let outcome = state
+            .start_voice_task_for_mode(VoiceInputMode::Transcription)
+            .expect("transcription start should not fail when LLM config is missing");
+
+        assert_eq!(outcome.snapshot.phase, "正在聆听");
+        assert_eq!(outcome.snapshot.input_mode, "transcription");
+        assert_ne!(outcome.operation_id, 0);
+
+        let snapshot = state.cancel_current_operation("测试清理转录任务。");
+        assert_eq!(snapshot.phase, "待命中");
+        assert_eq!(snapshot.input_mode, "none");
     }
 
     #[test]

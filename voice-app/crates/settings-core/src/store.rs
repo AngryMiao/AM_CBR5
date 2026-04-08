@@ -16,7 +16,10 @@ impl SettingsStore {
     pub fn load_or_create(path: &Path) -> Result<StoredVoiceSettings, String> {
         if path.exists() {
             match Self::load(path) {
-                Ok(settings) => return Ok(settings),
+                Ok(settings) => {
+                    Self::save(path, &settings)?;
+                    return Ok(settings);
+                }
                 Err(_) => {
                     let settings = StoredVoiceSettings::default();
                     Self::save(path, &settings)?;
@@ -37,6 +40,7 @@ impl SettingsStore {
         let mut settings = serde_json::from_str::<StoredVoiceSettings>(&raw)
             .map_err(|cause| format!("解析 settings.json 失败: {cause}"))?;
         settings.default_hotkey = normalize_stored_default_hotkey(&settings.default_hotkey);
+        settings.normalize_code_owned_doubao_defaults();
         Ok(settings)
     }
 
@@ -61,41 +65,30 @@ impl SettingsStore {
         input: SaveEditableVoiceSettingsInput,
     ) -> Result<StoredVoiceSettings, String> {
         let mcp_servers = parse_mcp_servers_json(&input.mcp_servers_json)?;
-        let mut next_settings = StoredVoiceSettings {
-            schema_version: crate::SETTINGS_SCHEMA_VERSION,
-            history_enabled: input.history_enabled,
-            auto_launch_enabled: input.auto_launch_enabled,
-            default_hotkey: input.default_hotkey.trim().to_string(),
-            microphone_device_id: input.microphone_device_id.trim().to_string(),
-            doubao_asr_url: input.doubao_asr_url.trim().to_string(),
-            doubao_asr_app_id: input.doubao_asr_app_id.trim().to_string(),
-            doubao_asr_access_token: input
-                .doubao_asr_access_token
-                .resolve(&current.doubao_asr_access_token),
-            doubao_asr_resource_id: input.doubao_asr_resource_id.trim().to_string(),
-            doubao_asr_model: input.doubao_asr_model.trim().to_string(),
-            doubao_asr_audio_format: input.doubao_asr_audio_format.trim().to_string(),
-            doubao_asr_audio_rate: input.doubao_asr_audio_rate,
-            doubao_asr_audio_bits: input.doubao_asr_audio_bits,
-            doubao_asr_audio_channel: input.doubao_asr_audio_channel,
-            doubao_asr_audio_language: input.doubao_asr_audio_language.trim().to_string(),
-            doubao_asr_enable_itn: input.doubao_asr_enable_itn,
-            doubao_asr_enable_ddc: input.doubao_asr_enable_ddc,
-            doubao_asr_enable_punc: input.doubao_asr_enable_punc,
-            doubao_asr_show_utterances: input.doubao_asr_show_utterances,
-            doubao_asr_force_to_speech_time: input.doubao_asr_force_to_speech_time,
-            doubao_asr_end_window_size: input.doubao_asr_end_window_size,
-            doubao_asr_boosting_table_id: input.doubao_asr_boosting_table_id.trim().to_string(),
-            doubao_asr_context_json: input.doubao_asr_context_json.trim().to_string(),
-            llm_base_url: input.llm_base_url.trim().to_string(),
-            llm_api_key: input.llm_api_key.resolve(&current.llm_api_key),
-            llm_model: input.llm_model.trim().to_string(),
-            llm_system_prompt: input.llm_system_prompt.trim().to_string(),
-            angrymiao_skill_enabled: input.angrymiao_skill_enabled,
-            keyboard_driver_path: input.keyboard_driver_path.trim().to_string(),
-            keyboard_shortcuts: sanitize_keyboard_shortcuts(input.keyboard_shortcuts),
-            mcp_servers,
-        };
+        let mut next_settings = current.clone();
+
+        next_settings.schema_version = crate::SETTINGS_SCHEMA_VERSION;
+        next_settings.history_enabled = input.history_enabled;
+        next_settings.auto_launch_enabled = input.auto_launch_enabled;
+        next_settings.default_hotkey = input.default_hotkey.trim().to_string();
+        next_settings.microphone_device_id = input.microphone_device_id.trim().to_string();
+        next_settings.doubao_asr_url = input.doubao_asr_url.trim().to_string();
+        next_settings.doubao_asr_app_id = input.doubao_asr_app_id.trim().to_string();
+        next_settings.doubao_asr_resource_id = input.doubao_asr_resource_id.trim().to_string();
+        next_settings.doubao_asr_model = input.doubao_asr_model.trim().to_string();
+        next_settings.doubao_asr_access_token = input
+            .doubao_asr_access_token
+            .resolve(&current.doubao_asr_access_token);
+        next_settings.transcription_silence_timeout_ms = input.transcription_silence_timeout_ms;
+        next_settings.llm_base_url = input.llm_base_url.trim().to_string();
+        next_settings.llm_api_key = input.llm_api_key.resolve(&current.llm_api_key);
+        next_settings.llm_model = input.llm_model.trim().to_string();
+        next_settings.llm_system_prompt = input.llm_system_prompt.trim().to_string();
+        next_settings.angrymiao_skill_enabled = input.angrymiao_skill_enabled;
+        next_settings.keyboard_driver_path = input.keyboard_driver_path.trim().to_string();
+        next_settings.keyboard_shortcuts = sanitize_keyboard_shortcuts(input.keyboard_shortcuts);
+        next_settings.mcp_servers = mcp_servers;
+        next_settings.normalize_code_owned_doubao_defaults();
 
         validate_settings_for_save(&next_settings)?;
         next_settings.default_hotkey = parse_save_default_hotkey(&next_settings.default_hotkey)?;
@@ -120,13 +113,10 @@ fn validate_settings_for_save(settings: &StoredVoiceSettings) -> Result<(), Stri
         &mut errors,
     );
     validate_required("豆包模型", &settings.doubao_asr_model, &mut errors);
-    validate_required("音频格式", &settings.doubao_asr_audio_format, &mut errors);
-    validate_required("音频语言", &settings.doubao_asr_audio_language, &mut errors);
-    validate_doubao_audio_format(&settings.doubao_asr_audio_format, &mut errors);
-    validate_doubao_audio_rate(settings.doubao_asr_audio_rate, &mut errors);
-    validate_doubao_audio_bits(settings.doubao_asr_audio_bits, &mut errors);
-    validate_doubao_audio_channel(settings.doubao_asr_audio_channel, &mut errors);
-    validate_context_json(&settings.doubao_asr_context_json, &mut errors);
+    validate_transcription_silence_timeout(
+        settings.transcription_silence_timeout_ms,
+        &mut errors,
+    );
     validate_url(
         "LLM Base URL",
         &settings.llm_base_url,
@@ -200,45 +190,9 @@ fn validate_url(
     }
 }
 
-fn validate_doubao_audio_format(value: &str, errors: &mut Vec<String>) {
-    let value = value.trim().to_ascii_lowercase();
-
-    if value.is_empty() {
-        return;
-    }
-
-    if !matches!(value.as_str(), "pcm" | "wav" | "ogg" | "mp3") {
-        errors.push("音频格式只支持 pcm、wav、ogg 或 mp3。".to_string());
-    }
-}
-
-fn validate_doubao_audio_rate(value: u32, errors: &mut Vec<String>) {
-    if value != 16_000 {
-        errors.push("音频采样率当前只支持 16000。".to_string());
-    }
-}
-
-fn validate_doubao_audio_bits(value: u16, errors: &mut Vec<String>) {
-    if value != 16 {
-        errors.push("音频位深当前只支持 16。".to_string());
-    }
-}
-
-fn validate_doubao_audio_channel(value: u16, errors: &mut Vec<String>) {
-    if !matches!(value, 1 | 2) {
-        errors.push("音频声道当前只支持 1 或 2。".to_string());
-    }
-}
-
-fn validate_context_json(value: &str, errors: &mut Vec<String>) {
-    let value = value.trim();
-
-    if value.is_empty() {
-        return;
-    }
-
-    if serde_json::from_str::<serde_json::Value>(value).is_err() {
-        errors.push("Context JSON 必须是合法 JSON。".to_string());
+fn validate_transcription_silence_timeout(value: u16, errors: &mut Vec<String>) {
+    if value != 0 && !(500..=5_000).contains(&value) {
+        errors.push("转录静音自动结束需为 0 或 500 到 5000 毫秒。".to_string());
     }
 }
 

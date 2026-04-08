@@ -29,6 +29,53 @@ fn broken_store_falls_back_to_default_and_rewrites_file() {
 }
 
 #[test]
+fn load_or_create_rewrites_code_owned_doubao_fields_to_defaults() {
+    let dir = tempfile::tempdir().expect("temp dir should exist");
+    let path = dir.path().join("settings.json");
+    let mut customized = StoredVoiceSettings::default();
+    customized.doubao_asr_url = "ws://127.0.0.1/custom".to_string();
+    customized.doubao_asr_app_id = "custom-app-id".to_string();
+    customized.doubao_asr_resource_id = "custom-resource".to_string();
+    customized.doubao_asr_model = "custom-model".to_string();
+    customized.doubao_asr_audio_format = "wav".to_string();
+    customized.doubao_asr_audio_rate = 8_000;
+    customized.doubao_asr_audio_bits = 8;
+    customized.doubao_asr_audio_channel = 2;
+    customized.doubao_asr_audio_language = "en-US".to_string();
+    customized.doubao_asr_enable_itn = true;
+    customized.doubao_asr_enable_ddc = true;
+    customized.doubao_asr_enable_punc = false;
+    customized.doubao_asr_show_utterances = false;
+    customized.doubao_asr_force_to_speech_time = 123;
+    customized.doubao_asr_end_window_size = 456;
+    customized.doubao_asr_boosting_table_id = "custom-boosting".to_string();
+    customized.doubao_asr_context_json = "{\"domain\":\"office\"}".to_string();
+    SettingsStore::save(&path, &customized).expect("custom settings should save");
+
+    let loaded = SettingsStore::load_or_create(&path).expect("settings should normalize");
+    let rewritten = SettingsStore::load(&path).expect("rewritten settings should reload");
+
+    assert_eq!(loaded.doubao_asr_url, "ws://127.0.0.1/custom");
+    assert_eq!(loaded.doubao_asr_app_id, "custom-app-id");
+    assert_eq!(loaded.doubao_asr_resource_id, "custom-resource");
+    assert_eq!(loaded.doubao_asr_model, "custom-model");
+    assert_eq!(loaded.doubao_asr_audio_format, "pcm");
+    assert_eq!(loaded.doubao_asr_audio_rate, 16_000);
+    assert_eq!(loaded.doubao_asr_audio_bits, 16);
+    assert_eq!(loaded.doubao_asr_audio_channel, 1);
+    assert_eq!(loaded.doubao_asr_audio_language, "zh-CN");
+    assert!(!loaded.doubao_asr_enable_itn);
+    assert!(!loaded.doubao_asr_enable_ddc);
+    assert!(loaded.doubao_asr_enable_punc);
+    assert!(loaded.doubao_asr_show_utterances);
+    assert_eq!(loaded.doubao_asr_force_to_speech_time, 0);
+    assert_eq!(loaded.doubao_asr_end_window_size, 800);
+    assert_eq!(loaded.doubao_asr_boosting_table_id, "");
+    assert_eq!(loaded.doubao_asr_context_json, "");
+    assert_eq!(rewritten, loaded);
+}
+
+#[test]
 fn load_normalizes_legacy_default_hotkey_to_right_alt() {
     let dir = tempfile::tempdir().expect("temp dir should exist");
     let path = dir.path().join("settings.json");
@@ -96,6 +143,56 @@ fn save_updates_microphone_device_preference() {
     .expect("microphone device should save");
 
     assert_eq!(updated.microphone_device_id, "usb-mic");
+}
+
+#[test]
+fn save_rewrites_code_owned_doubao_fields_to_defaults() {
+    let mut current = StoredVoiceSettings::default();
+    current.doubao_asr_url = "ws://127.0.0.1/custom".to_string();
+    current.doubao_asr_app_id = "custom-app-id".to_string();
+    current.doubao_asr_resource_id = "custom-resource".to_string();
+    current.doubao_asr_model = "custom-model".to_string();
+    current.doubao_asr_audio_format = "wav".to_string();
+    current.doubao_asr_audio_rate = 8_000;
+    current.doubao_asr_audio_bits = 8;
+    current.doubao_asr_audio_channel = 2;
+    current.doubao_asr_audio_language = "en-US".to_string();
+    current.doubao_asr_enable_itn = true;
+    current.doubao_asr_enable_ddc = true;
+    current.doubao_asr_enable_punc = false;
+    current.doubao_asr_show_utterances = false;
+    current.doubao_asr_force_to_speech_time = 321;
+    current.doubao_asr_end_window_size = 654;
+    current.doubao_asr_boosting_table_id = "custom-boosting".to_string();
+    current.doubao_asr_context_json = "{\"domain\":\"office\"}".to_string();
+
+    let updated = SettingsStore::apply_input(
+        &current,
+        SaveEditableVoiceSettingsInput {
+            microphone_device_id: "usb-mic".to_string(),
+            ..SaveEditableVoiceSettingsInput::from_settings(&current)
+        },
+    )
+    .expect("saving editable settings should restore code-owned doubao defaults");
+
+    assert_eq!(updated.microphone_device_id, "usb-mic");
+    assert_eq!(updated.doubao_asr_url, "ws://127.0.0.1/custom");
+    assert_eq!(updated.doubao_asr_app_id, "custom-app-id");
+    assert_eq!(updated.doubao_asr_resource_id, "custom-resource");
+    assert_eq!(updated.doubao_asr_model, "custom-model");
+    assert_eq!(updated.doubao_asr_audio_format, "pcm");
+    assert_eq!(updated.doubao_asr_audio_rate, 16_000);
+    assert_eq!(updated.doubao_asr_audio_bits, 16);
+    assert_eq!(updated.doubao_asr_audio_channel, 1);
+    assert_eq!(updated.doubao_asr_audio_language, "zh-CN");
+    assert!(!updated.doubao_asr_enable_itn);
+    assert!(!updated.doubao_asr_enable_ddc);
+    assert!(updated.doubao_asr_enable_punc);
+    assert!(updated.doubao_asr_show_utterances);
+    assert_eq!(updated.doubao_asr_force_to_speech_time, 0);
+    assert_eq!(updated.doubao_asr_end_window_size, 800);
+    assert_eq!(updated.doubao_asr_boosting_table_id, "");
+    assert_eq!(updated.doubao_asr_context_json, "");
 }
 
 #[test]
@@ -184,7 +281,6 @@ fn save_can_clear_secret_values_explicitly() {
 #[test]
 fn save_rejects_invalid_structural_settings() {
     let mut current = StoredVoiceSettings::default();
-    current.doubao_asr_app_id = "test-app-id".to_string();
     current.doubao_asr_access_token = "test-secret".to_string();
     current.llm_api_key = "test-llm-secret".to_string();
 
@@ -192,22 +288,16 @@ fn save_rejects_invalid_structural_settings() {
         &current,
         SaveEditableVoiceSettingsInput {
             default_hotkey: "  ".to_string(),
-            doubao_asr_url: "not-a-websocket-url".to_string(),
-            doubao_asr_audio_rate: 8_000,
-            doubao_asr_audio_bits: 8,
-            doubao_asr_audio_channel: 3,
-            doubao_asr_context_json: "{broken-json".to_string(),
+            llm_base_url: "not-an-http-url".to_string(),
+            transcription_silence_timeout_ms: 100,
             ..SaveEditableVoiceSettingsInput::from_settings(&current)
         },
     )
     .expect_err("invalid settings should be rejected");
 
     assert!(error.contains("默认热键不能为空。"));
-    assert!(error.contains("豆包 WebSocket URL 必须是合法的 ws:// 或 wss:// 地址。"));
-    assert!(error.contains("音频采样率当前只支持 16000。"));
-    assert!(error.contains("音频位深当前只支持 16。"));
-    assert!(error.contains("音频声道当前只支持 1 或 2。"));
-    assert!(error.contains("Context JSON 必须是合法 JSON。"));
+    assert!(error.contains("LLM Base URL 必须是合法的 http:// 或 https:// 地址。"));
+    assert!(error.contains("转录静音自动结束需为 0 或 500 到 5000 毫秒。"));
 }
 
 #[test]
@@ -229,7 +319,6 @@ fn save_rejects_legacy_hold_style_default_hotkey() {
 #[test]
 fn save_rejects_invalid_llm_base_url() {
     let mut current = StoredVoiceSettings::default();
-    current.doubao_asr_app_id = "test-app-id".to_string();
     current.doubao_asr_access_token = "test-secret".to_string();
     current.llm_api_key = "test-llm-secret".to_string();
 
@@ -243,6 +332,22 @@ fn save_rejects_invalid_llm_base_url() {
     .expect_err("invalid llm url should be rejected");
 
     assert!(error.contains("LLM Base URL 必须是合法的 http:// 或 https:// 地址。"));
+}
+
+#[test]
+fn save_rejects_transcription_timeout_below_minimum_except_zero() {
+    let current = StoredVoiceSettings::default();
+
+    let error = SettingsStore::apply_input(
+        &current,
+        SaveEditableVoiceSettingsInput {
+            transcription_silence_timeout_ms: 100,
+            ..SaveEditableVoiceSettingsInput::from_settings(&current)
+        },
+    )
+    .expect_err("timeout below 500ms should be rejected unless disabled with 0");
+
+    assert!(error.contains("转录静音自动结束需为 0 或 500 到 5000 毫秒。"));
 }
 
 #[test]

@@ -6,6 +6,7 @@ const loadingSnapshot: RuntimeSnapshot = {
   transcript: '',
   result: '',
   detail: '正在加载运行时状态。',
+  input_mode: 'none',
 }
 
 export function useRuntimeSnapshot() {
@@ -48,6 +49,7 @@ export function useRuntimeSnapshot() {
     transcript: snapshot.transcript,
     result: snapshot.result,
     detail: snapshot.detail,
+    input_mode: snapshot.input_mode,
     error,
   }
 }

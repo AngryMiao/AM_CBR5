@@ -1,4 +1,5 @@
 mod global_hotkey;
+mod hotkey_mode;
 mod hold_to_talk;
 mod keyboard_hook;
 #[cfg(target_os = "macos")]
@@ -8,6 +9,9 @@ mod tool_execution;
 mod windows_keyboard_hook;
 
 pub use global_hotkey::{GlobalHotkey, HotkeyParseError};
+pub use hotkey_mode::{
+    HotkeyModeAction, HotkeyModeController, VoiceInputMode, DOUBLE_TAP_WINDOW_MS,
+};
 pub use hold_to_talk::{
     HoldToTalkController, HotkeyPressDecision, HotkeyReleaseDecision, RuntimeHotkeyPhase,
     HOTKEY_RESTART_THRESHOLD_MS,

@@ -372,8 +372,15 @@ fn handle_hotkey_released(app: &AppHandle, ts_ms: u64) -> Result<(), String> {
         return Ok(());
     }
     let state = app.state::<AppState>();
-    if let Some(snapshot) = state.handle_hotkey_released(ts_ms)? {
-        let _ = commands::sync_and_emit_runtime(app, &state, snapshot)?;
+    if let Some(outcome) = state.handle_hotkey_released(ts_ms)? {
+        match outcome {
+            crate::app_state::HotkeyReleaseOutcome::TaskStarted(outcome) => {
+                let _ = commands::handle_task_start_outcome(app, &state, outcome)?;
+            }
+            crate::app_state::HotkeyReleaseOutcome::Snapshot(snapshot) => {
+                let _ = commands::sync_and_emit_runtime(app, &state, snapshot)?;
+            }
+        }
     }
     Ok(())
 }

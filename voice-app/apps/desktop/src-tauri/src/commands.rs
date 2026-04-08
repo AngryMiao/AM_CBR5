@@ -1,5 +1,6 @@
 use std::sync::mpsc;
 use std::thread;
+use std::time::Duration;
 
 use asr_core::{list_microphone_input_devices, DoubaoSessionEvent, MicrophoneInputDevice};
 use history_core::HistoryRecord;
@@ -10,7 +11,9 @@ use serde::Serialize;
 use settings_core::{EditableVoiceSettings, SaveEditableVoiceSettingsInput, VoiceSettings};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::app_state::{AppState, LlmRunOutcome, RuntimeDiagnostics, TaskStartOutcome};
+use crate::app_state::{
+    AppState, LlmRunOutcome, RuntimeDiagnostics, SessionFollowUp, TaskStartOutcome,
+};
 use crate::skill_bundles::SkillBundleInventoryItem;
 use crate::{hotkeys, platform_runtime, windowing};
 
@@ -211,6 +214,8 @@ pub(crate) fn handle_task_start_outcome(
 ) -> Result<RuntimeSnapshot, String> {
     let snapshot = sync_and_emit_runtime(app, state, outcome.snapshot)?;
 
+    maybe_schedule_transcription_silence_timeout(app, state, outcome.operation_id, &snapshot);
+
     if let Some(events) = outcome.events {
         spawn_session_event_listener(app.clone(), outcome.operation_id, events);
     }
@@ -229,18 +234,68 @@ pub(crate) fn spawn_session_event_listener(
             let Some(outcome) = state.apply_session_event(operation_id, event) else {
                 break;
             };
-            let phase = outcome.snapshot.phase.clone();
-            let llm_transcript = outcome.llm_transcript.clone();
-            let _ = sync_and_emit_runtime(&app, &state, outcome.snapshot);
+            let snapshot = outcome.snapshot;
+            let phase = snapshot.phase.clone();
+            let follow_up = outcome.follow_up;
+            let _ = sync_and_emit_runtime(&app, &state, snapshot.clone());
+            maybe_schedule_transcription_silence_timeout(
+                &app,
+                &state,
+                outcome.operation_id,
+                &snapshot,
+            );
 
-            if let Some(transcript) = llm_transcript {
-                spawn_llm_generation(app.clone(), outcome.operation_id, transcript);
-                break;
+            match follow_up {
+                Some(SessionFollowUp::RunLlm(transcript)) => {
+                    spawn_llm_generation(app.clone(), outcome.operation_id, transcript);
+                    break;
+                }
+                Some(SessionFollowUp::CommitTranscription(transcript)) => {
+                    if let Some(snapshot) =
+                        state.commit_transcription_insert(outcome.operation_id, transcript)
+                    {
+                        let _ = sync_and_emit_runtime(&app, &state, snapshot);
+                    }
+                    break;
+                }
+                None => {
+                    if phase == "已完成" || phase == "识别失败" {
+                        break;
+                    }
+                }
             }
+        }
+    });
+}
 
-            if phase == "已完成" || phase == "识别失败" {
-                break;
-            }
+fn maybe_schedule_transcription_silence_timeout(
+    app: &AppHandle,
+    state: &AppState,
+    operation_id: u64,
+    snapshot: &RuntimeSnapshot,
+) {
+    if snapshot.input_mode != "transcription" {
+        return;
+    }
+
+    let Some((token, timeout_ms)) = state.arm_transcription_silence_timeout(operation_id) else {
+        return;
+    };
+
+    schedule_transcription_silence_timeout(app.clone(), operation_id, token, timeout_ms);
+}
+
+fn schedule_transcription_silence_timeout(
+    app: AppHandle,
+    operation_id: u64,
+    token: u64,
+    timeout_ms: u64,
+) {
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(timeout_ms));
+        let state = app.state::<AppState>();
+        if let Some(snapshot) = state.finish_transcription_if_silence_timeout(operation_id, token) {
+            let _ = sync_and_emit_runtime(&app, &state, snapshot);
         }
     });
 }
@@ -274,7 +329,7 @@ pub(crate) fn sync_and_emit_runtime(
     state: &AppState,
     snapshot: RuntimeSnapshot,
 ) -> Result<RuntimeSnapshot, String> {
-    windowing::sync_runtime_windows(app, &snapshot.phase).map_err(|cause| cause.to_string())?;
+    windowing::sync_runtime_windows(app, &snapshot).map_err(|cause| cause.to_string())?;
     app.emit("runtime-snapshot", snapshot.clone())
         .map_err(|cause| cause.to_string())?;
     app.emit("history-updated", state.history_records())

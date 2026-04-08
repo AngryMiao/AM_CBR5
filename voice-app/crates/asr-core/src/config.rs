@@ -1,7 +1,13 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
-use settings_core::StoredVoiceSettings;
+use settings_core::{
+    StoredVoiceSettings, DEFAULT_DOUBAO_ASR_ENABLE_DDC, DEFAULT_DOUBAO_ASR_ENABLE_ITN,
+    DEFAULT_DOUBAO_ASR_ENABLE_PUNC, DEFAULT_DOUBAO_ASR_END_WINDOW_SIZE,
+    DEFAULT_DOUBAO_ASR_FORCE_TO_SPEECH_TIME, DEFAULT_DOUBAO_ASR_SHOW_UTTERANCES,
+    DEFAULT_DOUBAO_AUDIO_BITS, DEFAULT_DOUBAO_AUDIO_CHANNEL, DEFAULT_DOUBAO_AUDIO_FORMAT,
+    DEFAULT_DOUBAO_AUDIO_LANGUAGE, DEFAULT_DOUBAO_AUDIO_RATE,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AsrRuntimeConfig {
@@ -48,19 +54,19 @@ impl DoubaoAsrConfig {
             access_token: required_setting(&settings.doubao_asr_access_token, "豆包 Access Token")?,
             resource_id: required_setting(&settings.doubao_asr_resource_id, "豆包 Resource ID")?,
             model: required_setting(&settings.doubao_asr_model, "豆包模型")?,
-            audio_format: required_setting(&settings.doubao_asr_audio_format, "音频格式")?,
-            audio_rate: settings.doubao_asr_audio_rate,
-            audio_bits: settings.doubao_asr_audio_bits,
-            audio_channel: settings.doubao_asr_audio_channel,
-            audio_language: required_setting(&settings.doubao_asr_audio_language, "音频语言")?,
-            enable_itn: settings.doubao_asr_enable_itn,
-            enable_ddc: settings.doubao_asr_enable_ddc,
-            enable_punc: settings.doubao_asr_enable_punc,
-            show_utterances: settings.doubao_asr_show_utterances,
-            force_to_speech_time: settings.doubao_asr_force_to_speech_time,
-            end_window_size: settings.doubao_asr_end_window_size,
-            boosting_table_id: optional_setting(&settings.doubao_asr_boosting_table_id),
-            context_json: optional_setting(&settings.doubao_asr_context_json),
+            audio_format: DEFAULT_DOUBAO_AUDIO_FORMAT.to_string(),
+            audio_rate: DEFAULT_DOUBAO_AUDIO_RATE,
+            audio_bits: DEFAULT_DOUBAO_AUDIO_BITS,
+            audio_channel: DEFAULT_DOUBAO_AUDIO_CHANNEL,
+            audio_language: DEFAULT_DOUBAO_AUDIO_LANGUAGE.to_string(),
+            enable_itn: DEFAULT_DOUBAO_ASR_ENABLE_ITN,
+            enable_ddc: DEFAULT_DOUBAO_ASR_ENABLE_DDC,
+            enable_punc: DEFAULT_DOUBAO_ASR_ENABLE_PUNC,
+            show_utterances: DEFAULT_DOUBAO_ASR_SHOW_UTTERANCES,
+            force_to_speech_time: DEFAULT_DOUBAO_ASR_FORCE_TO_SPEECH_TIME,
+            end_window_size: DEFAULT_DOUBAO_ASR_END_WINDOW_SIZE,
+            boosting_table_id: None,
+            context_json: None,
         })
     }
 
@@ -100,14 +106,4 @@ fn required_setting(value: &str, field_name: &str) -> Result<String, DoubaoAsrEr
     }
 
     Ok(value.to_string())
-}
-
-fn optional_setting(value: &str) -> Option<String> {
-    let value = value.trim();
-
-    if value.is_empty() {
-        return None;
-    }
-
-    Some(value.to_string())
 }

@@ -58,23 +58,23 @@ fn snapshot_with_mode_keeps_explicit_input_mode() {
 use settings_core::{EditableVoiceSettings, RuntimeVoiceSettings, StoredVoiceSettings};
 
 #[test]
-fn stored_settings_default_transcription_timeout_is_1500ms() {
+fn stored_settings_default_transcription_timeout_is_3500ms() {
     let settings = StoredVoiceSettings::default();
-    assert_eq!(settings.transcription_silence_timeout_ms, 1_500);
+    assert_eq!(settings.transcription_silence_timeout_ms, 3_500);
 }
 
 #[test]
 fn editable_settings_expose_transcription_timeout() {
     let settings = StoredVoiceSettings::default();
     let editable = EditableVoiceSettings::from_settings(&settings);
-    assert_eq!(editable.transcription_silence_timeout_ms, 1_500);
+    assert_eq!(editable.transcription_silence_timeout_ms, 3_500);
 }
 
 #[test]
 fn runtime_settings_keep_transcription_timeout() {
     let settings = StoredVoiceSettings::default();
     let runtime = RuntimeVoiceSettings::from_settings(&settings);
-    assert_eq!(runtime.transcription_silence_timeout_ms, 1_500);
+    assert_eq!(runtime.transcription_silence_timeout_ms, 3_500);
 }
 ```
 
@@ -159,7 +159,7 @@ impl Default for StoredVoiceSettings {
         Self {
             // ...
             doubao_asr_end_window_size: 800,
-            transcription_silence_timeout_ms: 1_500,
+            transcription_silence_timeout_ms: 3_500,
             doubao_asr_boosting_table_id: String::new(),
             // ...
         }
@@ -1037,7 +1037,7 @@ runtimeSnapshot = {
 
 editableSettings = {
   // ...
-  transcription_silence_timeout_ms: 1500,
+  transcription_silence_timeout_ms: 3500,
   // ...
 }
 

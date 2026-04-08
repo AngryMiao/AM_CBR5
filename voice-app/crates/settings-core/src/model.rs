@@ -12,7 +12,17 @@ pub const DEFAULT_DOUBAO_ASR_URL: &str =
 pub const DEFAULT_DOUBAO_ASR_RESOURCE_ID: &str = "volc.bigasr.sauc.duration";
 pub const DEFAULT_DOUBAO_ASR_MODEL: &str = "bigmodel";
 pub const DEFAULT_DOUBAO_AUDIO_FORMAT: &str = "pcm";
+pub const DEFAULT_DOUBAO_AUDIO_RATE: u32 = 16_000;
+pub const DEFAULT_DOUBAO_AUDIO_BITS: u16 = 16;
+pub const DEFAULT_DOUBAO_AUDIO_CHANNEL: u16 = 1;
 pub const DEFAULT_DOUBAO_AUDIO_LANGUAGE: &str = "zh-CN";
+pub const DEFAULT_DOUBAO_ASR_ENABLE_ITN: bool = false;
+pub const DEFAULT_DOUBAO_ASR_ENABLE_DDC: bool = false;
+pub const DEFAULT_DOUBAO_ASR_ENABLE_PUNC: bool = true;
+pub const DEFAULT_DOUBAO_ASR_SHOW_UTTERANCES: bool = true;
+pub const DEFAULT_DOUBAO_ASR_FORCE_TO_SPEECH_TIME: u64 = 0;
+pub const DEFAULT_DOUBAO_ASR_END_WINDOW_SIZE: u16 = 800;
+pub const DEFAULT_TRANSCRIPTION_SILENCE_TIMEOUT_MS: u16 = 3_500;
 pub const DEFAULT_LLM_BASE_URL: &str = "https://api.openai.com/v1";
 pub const DEFAULT_LLM_MODEL: &str = "gpt-4o-mini";
 pub const DEFAULT_LLM_SYSTEM_PROMPT: &str =
@@ -46,6 +56,7 @@ pub struct StoredVoiceSettings {
     pub doubao_asr_show_utterances: bool,
     pub doubao_asr_force_to_speech_time: u64,
     pub doubao_asr_end_window_size: u16,
+    pub transcription_silence_timeout_ms: u16,
     pub doubao_asr_boosting_table_id: String,
     pub doubao_asr_context_json: String,
     pub llm_base_url: String,
@@ -74,16 +85,17 @@ impl Default for StoredVoiceSettings {
             doubao_asr_resource_id: DEFAULT_DOUBAO_ASR_RESOURCE_ID.to_string(),
             doubao_asr_model: DEFAULT_DOUBAO_ASR_MODEL.to_string(),
             doubao_asr_audio_format: DEFAULT_DOUBAO_AUDIO_FORMAT.to_string(),
-            doubao_asr_audio_rate: 16_000,
-            doubao_asr_audio_bits: 16,
-            doubao_asr_audio_channel: 1,
+            doubao_asr_audio_rate: DEFAULT_DOUBAO_AUDIO_RATE,
+            doubao_asr_audio_bits: DEFAULT_DOUBAO_AUDIO_BITS,
+            doubao_asr_audio_channel: DEFAULT_DOUBAO_AUDIO_CHANNEL,
             doubao_asr_audio_language: DEFAULT_DOUBAO_AUDIO_LANGUAGE.to_string(),
-            doubao_asr_enable_itn: false,
-            doubao_asr_enable_ddc: false,
-            doubao_asr_enable_punc: false,
-            doubao_asr_show_utterances: true,
-            doubao_asr_force_to_speech_time: 0,
-            doubao_asr_end_window_size: 800,
+            doubao_asr_enable_itn: DEFAULT_DOUBAO_ASR_ENABLE_ITN,
+            doubao_asr_enable_ddc: DEFAULT_DOUBAO_ASR_ENABLE_DDC,
+            doubao_asr_enable_punc: DEFAULT_DOUBAO_ASR_ENABLE_PUNC,
+            doubao_asr_show_utterances: DEFAULT_DOUBAO_ASR_SHOW_UTTERANCES,
+            doubao_asr_force_to_speech_time: DEFAULT_DOUBAO_ASR_FORCE_TO_SPEECH_TIME,
+            doubao_asr_end_window_size: DEFAULT_DOUBAO_ASR_END_WINDOW_SIZE,
+            transcription_silence_timeout_ms: DEFAULT_TRANSCRIPTION_SILENCE_TIMEOUT_MS,
             doubao_asr_boosting_table_id: String::new(),
             doubao_asr_context_json: String::new(),
             llm_base_url: DEFAULT_LLM_BASE_URL.to_string(),
@@ -98,6 +110,24 @@ impl Default for StoredVoiceSettings {
     }
 }
 
+impl StoredVoiceSettings {
+    pub fn normalize_code_owned_doubao_defaults(&mut self) {
+        self.doubao_asr_audio_format = DEFAULT_DOUBAO_AUDIO_FORMAT.to_string();
+        self.doubao_asr_audio_rate = DEFAULT_DOUBAO_AUDIO_RATE;
+        self.doubao_asr_audio_bits = DEFAULT_DOUBAO_AUDIO_BITS;
+        self.doubao_asr_audio_channel = DEFAULT_DOUBAO_AUDIO_CHANNEL;
+        self.doubao_asr_audio_language = DEFAULT_DOUBAO_AUDIO_LANGUAGE.to_string();
+        self.doubao_asr_enable_itn = DEFAULT_DOUBAO_ASR_ENABLE_ITN;
+        self.doubao_asr_enable_ddc = DEFAULT_DOUBAO_ASR_ENABLE_DDC;
+        self.doubao_asr_enable_punc = DEFAULT_DOUBAO_ASR_ENABLE_PUNC;
+        self.doubao_asr_show_utterances = DEFAULT_DOUBAO_ASR_SHOW_UTTERANCES;
+        self.doubao_asr_force_to_speech_time = DEFAULT_DOUBAO_ASR_FORCE_TO_SPEECH_TIME;
+        self.doubao_asr_end_window_size = DEFAULT_DOUBAO_ASR_END_WINDOW_SIZE;
+        self.doubao_asr_boosting_table_id.clear();
+        self.doubao_asr_context_json.clear();
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EditableVoiceSettings {
     pub schema_version: u32,
@@ -109,19 +139,7 @@ pub struct EditableVoiceSettings {
     pub doubao_asr_app_id: String,
     pub doubao_asr_resource_id: String,
     pub doubao_asr_model: String,
-    pub doubao_asr_audio_format: String,
-    pub doubao_asr_audio_rate: u32,
-    pub doubao_asr_audio_bits: u16,
-    pub doubao_asr_audio_channel: u16,
-    pub doubao_asr_audio_language: String,
-    pub doubao_asr_enable_itn: bool,
-    pub doubao_asr_enable_ddc: bool,
-    pub doubao_asr_enable_punc: bool,
-    pub doubao_asr_show_utterances: bool,
-    pub doubao_asr_force_to_speech_time: u64,
-    pub doubao_asr_end_window_size: u16,
-    pub doubao_asr_boosting_table_id: String,
-    pub doubao_asr_context_json: String,
+    pub transcription_silence_timeout_ms: u16,
     pub llm_base_url: String,
     pub llm_model: String,
     pub llm_system_prompt: String,
@@ -145,19 +163,7 @@ impl EditableVoiceSettings {
             doubao_asr_app_id: settings.doubao_asr_app_id.clone(),
             doubao_asr_resource_id: settings.doubao_asr_resource_id.clone(),
             doubao_asr_model: settings.doubao_asr_model.clone(),
-            doubao_asr_audio_format: settings.doubao_asr_audio_format.clone(),
-            doubao_asr_audio_rate: settings.doubao_asr_audio_rate,
-            doubao_asr_audio_bits: settings.doubao_asr_audio_bits,
-            doubao_asr_audio_channel: settings.doubao_asr_audio_channel,
-            doubao_asr_audio_language: settings.doubao_asr_audio_language.clone(),
-            doubao_asr_enable_itn: settings.doubao_asr_enable_itn,
-            doubao_asr_enable_ddc: settings.doubao_asr_enable_ddc,
-            doubao_asr_enable_punc: settings.doubao_asr_enable_punc,
-            doubao_asr_show_utterances: settings.doubao_asr_show_utterances,
-            doubao_asr_force_to_speech_time: settings.doubao_asr_force_to_speech_time,
-            doubao_asr_end_window_size: settings.doubao_asr_end_window_size,
-            doubao_asr_boosting_table_id: settings.doubao_asr_boosting_table_id.clone(),
-            doubao_asr_context_json: settings.doubao_asr_context_json.clone(),
+            transcription_silence_timeout_ms: settings.transcription_silence_timeout_ms,
             llm_base_url: settings.llm_base_url.clone(),
             llm_model: settings.llm_model.clone(),
             llm_system_prompt: settings.llm_system_prompt.clone(),
@@ -181,6 +187,7 @@ pub struct RuntimeVoiceSettings {
     pub asr_model: String,
     pub asr_resource_id: String,
     pub asr_audio_rate: u32,
+    pub transcription_silence_timeout_ms: u16,
     pub llm_provider: String,
     pub llm_model: String,
     pub llm_base_url: String,
@@ -203,7 +210,8 @@ impl RuntimeVoiceSettings {
             asr_provider: "doubao".to_string(),
             asr_model: settings.doubao_asr_model.clone(),
             asr_resource_id: settings.doubao_asr_resource_id.clone(),
-            asr_audio_rate: settings.doubao_asr_audio_rate,
+            asr_audio_rate: DEFAULT_DOUBAO_AUDIO_RATE,
+            transcription_silence_timeout_ms: settings.transcription_silence_timeout_ms,
             llm_provider: "openai-compatible".to_string(),
             llm_model: settings.llm_model.clone(),
             llm_base_url: settings.llm_base_url.clone(),
@@ -244,19 +252,7 @@ pub struct SaveEditableVoiceSettingsInput {
     pub doubao_asr_app_id: String,
     pub doubao_asr_resource_id: String,
     pub doubao_asr_model: String,
-    pub doubao_asr_audio_format: String,
-    pub doubao_asr_audio_rate: u32,
-    pub doubao_asr_audio_bits: u16,
-    pub doubao_asr_audio_channel: u16,
-    pub doubao_asr_audio_language: String,
-    pub doubao_asr_enable_itn: bool,
-    pub doubao_asr_enable_ddc: bool,
-    pub doubao_asr_enable_punc: bool,
-    pub doubao_asr_show_utterances: bool,
-    pub doubao_asr_force_to_speech_time: u64,
-    pub doubao_asr_end_window_size: u16,
-    pub doubao_asr_boosting_table_id: String,
-    pub doubao_asr_context_json: String,
+    pub transcription_silence_timeout_ms: u16,
     pub llm_base_url: String,
     pub llm_model: String,
     pub llm_system_prompt: String,
@@ -280,19 +276,7 @@ impl SaveEditableVoiceSettingsInput {
             doubao_asr_app_id: settings.doubao_asr_app_id.clone(),
             doubao_asr_resource_id: settings.doubao_asr_resource_id.clone(),
             doubao_asr_model: settings.doubao_asr_model.clone(),
-            doubao_asr_audio_format: settings.doubao_asr_audio_format.clone(),
-            doubao_asr_audio_rate: settings.doubao_asr_audio_rate,
-            doubao_asr_audio_bits: settings.doubao_asr_audio_bits,
-            doubao_asr_audio_channel: settings.doubao_asr_audio_channel,
-            doubao_asr_audio_language: settings.doubao_asr_audio_language.clone(),
-            doubao_asr_enable_itn: settings.doubao_asr_enable_itn,
-            doubao_asr_enable_ddc: settings.doubao_asr_enable_ddc,
-            doubao_asr_enable_punc: settings.doubao_asr_enable_punc,
-            doubao_asr_show_utterances: settings.doubao_asr_show_utterances,
-            doubao_asr_force_to_speech_time: settings.doubao_asr_force_to_speech_time,
-            doubao_asr_end_window_size: settings.doubao_asr_end_window_size,
-            doubao_asr_boosting_table_id: settings.doubao_asr_boosting_table_id.clone(),
-            doubao_asr_context_json: settings.doubao_asr_context_json.clone(),
+            transcription_silence_timeout_ms: settings.transcription_silence_timeout_ms,
             llm_base_url: settings.llm_base_url.clone(),
             llm_model: settings.llm_model.clone(),
             llm_system_prompt: settings.llm_system_prompt.clone(),
@@ -316,19 +300,7 @@ impl SaveEditableVoiceSettingsInput {
             doubao_asr_app_id: snapshot.doubao_asr_app_id.clone(),
             doubao_asr_resource_id: snapshot.doubao_asr_resource_id.clone(),
             doubao_asr_model: snapshot.doubao_asr_model.clone(),
-            doubao_asr_audio_format: snapshot.doubao_asr_audio_format.clone(),
-            doubao_asr_audio_rate: snapshot.doubao_asr_audio_rate,
-            doubao_asr_audio_bits: snapshot.doubao_asr_audio_bits,
-            doubao_asr_audio_channel: snapshot.doubao_asr_audio_channel,
-            doubao_asr_audio_language: snapshot.doubao_asr_audio_language.clone(),
-            doubao_asr_enable_itn: snapshot.doubao_asr_enable_itn,
-            doubao_asr_enable_ddc: snapshot.doubao_asr_enable_ddc,
-            doubao_asr_enable_punc: snapshot.doubao_asr_enable_punc,
-            doubao_asr_show_utterances: snapshot.doubao_asr_show_utterances,
-            doubao_asr_force_to_speech_time: snapshot.doubao_asr_force_to_speech_time,
-            doubao_asr_end_window_size: snapshot.doubao_asr_end_window_size,
-            doubao_asr_boosting_table_id: snapshot.doubao_asr_boosting_table_id.clone(),
-            doubao_asr_context_json: snapshot.doubao_asr_context_json.clone(),
+            transcription_silence_timeout_ms: snapshot.transcription_silence_timeout_ms,
             llm_base_url: snapshot.llm_base_url.clone(),
             llm_model: snapshot.llm_model.clone(),
             llm_system_prompt: snapshot.llm_system_prompt.clone(),

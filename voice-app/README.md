@@ -144,7 +144,7 @@ Running `...\voice-app\target\debug\voice-app-desktop.exe`
 设置页支持：
 
 - 编辑通用设置
-- 编辑豆包 ASR 参数
+- 编辑豆包 ASR 基础参数、默认麦克风与转录静音自动结束
 - 编辑 OpenAI-compatible LLM 参数
 - 编辑内置 AngryMiao skill 开关、键盘驱动路径、键盘快捷键映射
 - 编辑自定义 MCP server JSON

@@ -31,12 +31,7 @@ const settingsSectionErrorFields: Record<SettingsSectionId, SettingsFieldKey[]> 
     'doubao_asr_url',
     'doubao_asr_resource_id',
     'doubao_asr_model',
-    'doubao_asr_audio_format',
-    'doubao_asr_audio_rate',
-    'doubao_asr_audio_bits',
-    'doubao_asr_audio_channel',
-    'doubao_asr_audio_language',
-    'doubao_asr_context_json',
+    'transcription_silence_timeout_ms',
   ],
   models: ['llm_base_url', 'llm_model'],
   mcp: ['keyboard_shortcuts', 'mcp_servers_json'],
@@ -64,7 +59,7 @@ const settingsSections: Array<{
     id: 'voice',
     label: '语音',
     eyebrow: 'Voice',
-    description: '只保留豆包 ASR 的接入参数和音频高级配置。',
+    description: '保留 Doubao 基础接入参数与转录静音自动结束；高级音频参数固定为代码默认值。',
   },
   {
     id: 'models',
@@ -107,19 +102,7 @@ function toSaveInput(
     doubao_asr_app_id: draft.doubao_asr_app_id,
     doubao_asr_resource_id: draft.doubao_asr_resource_id,
     doubao_asr_model: draft.doubao_asr_model,
-    doubao_asr_audio_format: draft.doubao_asr_audio_format,
-    doubao_asr_audio_rate: draft.doubao_asr_audio_rate,
-    doubao_asr_audio_bits: draft.doubao_asr_audio_bits,
-    doubao_asr_audio_channel: draft.doubao_asr_audio_channel,
-    doubao_asr_audio_language: draft.doubao_asr_audio_language,
-    doubao_asr_enable_itn: draft.doubao_asr_enable_itn,
-    doubao_asr_enable_ddc: draft.doubao_asr_enable_ddc,
-    doubao_asr_enable_punc: draft.doubao_asr_enable_punc,
-    doubao_asr_show_utterances: draft.doubao_asr_show_utterances,
-    doubao_asr_force_to_speech_time: draft.doubao_asr_force_to_speech_time,
-    doubao_asr_end_window_size: draft.doubao_asr_end_window_size,
-    doubao_asr_boosting_table_id: draft.doubao_asr_boosting_table_id,
-    doubao_asr_context_json: draft.doubao_asr_context_json,
+    transcription_silence_timeout_ms: draft.transcription_silence_timeout_ms,
     llm_base_url: draft.llm_base_url,
     llm_model: draft.llm_model,
     llm_system_prompt: draft.llm_system_prompt,
@@ -509,308 +492,178 @@ export function SettingsPanel() {
 
                 {activeSection === 'voice' ? (
                   <fieldset className="settings-section" disabled={isBusy}>
-              <legend>豆包 ASR</legend>
-              <label className="settings-field">
-                <span>豆包 WebSocket URL</span>
-                <input
-                  aria-invalid={Boolean(validationErrors.doubao_asr_url)}
-                  className={inputClassName('doubao_asr_url')}
-                  value={draft.doubao_asr_url}
-                  onChange={(event) => updateDraft('doubao_asr_url', event.target.value)}
-                />
-                {renderFieldError('doubao_asr_url')}
-              </label>
-            <label className="settings-field">
-              <span>豆包 App ID</span>
-              <input
-                value={draft.doubao_asr_app_id}
-                onChange={(event) => updateDraft('doubao_asr_app_id', event.target.value)}
-              />
-            </label>
-            <label className="settings-field settings-field-wide">
-              <span>默认麦克风</span>
-              <div className="settings-inline-form">
-                <select
-                  aria-label="默认麦克风"
-                  value={draft.microphone_device_id}
-                  onChange={(event) =>
-                    updateDraft('microphone_device_id', event.target.value)
-                  }
-                >
-                  {isSavedMicrophoneUnavailable ? (
-                    <option value={draft.microphone_device_id}>已保存设备不可用</option>
-                  ) : null}
-                  <option value="">系统默认麦克风</option>
-                  {microphoneInputs.map((device) => (
-                    <option key={device.id} value={device.id}>
-                      {getMicrophoneOptionLabel(device)}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleRefreshMicrophoneInputs()
-                  }}
-                  disabled={isBusy || microphoneStatus === 'loading'}
-                >
-                  刷新设备列表
-                </button>
-              </div>
-              {microphoneStatus === 'loading' ? (
-                <p className="settings-hint">正在读取当前系统麦克风列表。</p>
-              ) : null}
-              {microphoneStatus === 'error' && microphoneMessage ? (
-                <p className="settings-field-error">{microphoneMessage}</p>
-              ) : null}
-              {microphoneStatus === 'idle' && microphoneInputs.length === 0 ? (
-                <p className="settings-hint">
-                  当前未检测到可用输入设备，留空时会继续跟随系统默认麦克风。
-                </p>
-              ) : null}
-              {isSavedMicrophoneUnavailable ? (
-                <p className="settings-hint">
-                  当前已保存的麦克风不可用，新的语音任务会自动回退到系统默认麦克风。
-                </p>
-              ) : null}
-            </label>
-            <div className="settings-secret">
-              <label className="settings-field">
-                <span>豆包 Access Token</span>
-                <input
-                  type="password"
-                  value={doubaoSecret.action === 'replace' ? doubaoSecret.value : ''}
-                  placeholder={
-                    draft.has_doubao_asr_access_token ? '已保存，留空则保持不变' : '当前未设置'
-                  }
-                  onChange={(event) =>
-                    updateSecret(
-                      event.target.value,
-                      draft.has_doubao_asr_access_token,
-                      setDoubaoSecret,
-                    )
-                  }
-                />
-              </label>
-              <div className="settings-inline-actions">
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateSecretDraft(setDoubaoSecret, createUnchangedSecretDraft())
-                  }
-                >
-                  保持当前
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateSecretDraft(setDoubaoSecret, { action: 'clear', value: '' })
-                  }
-                >
-                  清空密钥
-                </button>
-              </div>
-              <p className="settings-hint">
-                {getSecretHint(
-                  draft.has_doubao_asr_access_token,
-                  doubaoSecret,
-                  '豆包 Access Token',
-                )}
-              </p>
-            </div>
-              <label className="settings-field">
-                <span>豆包 Resource ID</span>
-                <input
-                  aria-invalid={Boolean(validationErrors.doubao_asr_resource_id)}
-                  className={inputClassName('doubao_asr_resource_id')}
-                  value={draft.doubao_asr_resource_id}
-                  onChange={(event) =>
-                    updateDraft('doubao_asr_resource_id', event.target.value)
-                  }
-                />
-                {renderFieldError('doubao_asr_resource_id')}
-              </label>
-              <label className="settings-field">
-                <span>豆包模型</span>
-                <input
-                  aria-invalid={Boolean(validationErrors.doubao_asr_model)}
-                  className={inputClassName('doubao_asr_model')}
-                  value={draft.doubao_asr_model}
-                  onChange={(event) => updateDraft('doubao_asr_model', event.target.value)}
-                />
-                {renderFieldError('doubao_asr_model')}
-              </label>
+                    <legend>豆包 ASR</legend>
+                    <label className="settings-field">
+                      <span>豆包 WebSocket URL</span>
+                      <input
+                        aria-invalid={Boolean(validationErrors.doubao_asr_url)}
+                        className={inputClassName('doubao_asr_url')}
+                        value={draft.doubao_asr_url}
+                        onChange={(event) => updateDraft('doubao_asr_url', event.target.value)}
+                      />
+                      {renderFieldError('doubao_asr_url')}
+                    </label>
+                    <label className="settings-field">
+                      <span>豆包 App ID</span>
+                      <input
+                        value={draft.doubao_asr_app_id}
+                        onChange={(event) =>
+                          updateDraft('doubao_asr_app_id', event.target.value)
+                        }
+                      />
+                    </label>
+                    <label className="settings-field settings-field-wide">
+                      <span>默认麦克风</span>
+                      <div className="settings-inline-form">
+                        <select
+                          aria-label="默认麦克风"
+                          value={draft.microphone_device_id}
+                          onChange={(event) =>
+                            updateDraft('microphone_device_id', event.target.value)
+                          }
+                        >
+                          {isSavedMicrophoneUnavailable ? (
+                            <option value={draft.microphone_device_id}>已保存设备不可用</option>
+                          ) : null}
+                          <option value="">系统默认麦克风</option>
+                          {microphoneInputs.map((device) => (
+                            <option key={device.id} value={device.id}>
+                              {getMicrophoneOptionLabel(device)}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleRefreshMicrophoneInputs()
+                          }}
+                          disabled={isBusy || microphoneStatus === 'loading'}
+                        >
+                          刷新设备列表
+                        </button>
+                      </div>
+                      {microphoneStatus === 'loading' ? (
+                        <p className="settings-hint">正在读取当前系统麦克风列表。</p>
+                      ) : null}
+                      {microphoneStatus === 'error' && microphoneMessage ? (
+                        <p className="settings-field-error">{microphoneMessage}</p>
+                      ) : null}
+                      {microphoneStatus === 'idle' && microphoneInputs.length === 0 ? (
+                        <p className="settings-hint">
+                          当前未检测到可用输入设备，留空时会继续跟随系统默认麦克风。
+                        </p>
+                      ) : null}
+                      {isSavedMicrophoneUnavailable ? (
+                        <p className="settings-hint">
+                          当前已保存的麦克风不可用，新的语音任务会自动回退到系统默认麦克风。
+                        </p>
+                      ) : null}
+                    </label>
+                    <div className="settings-secret">
+                      <label className="settings-field">
+                        <span>豆包 Access Token</span>
+                        <input
+                          type="password"
+                          value={doubaoSecret.action === 'replace' ? doubaoSecret.value : ''}
+                          placeholder={
+                            draft.has_doubao_asr_access_token
+                              ? '已保存，留空则保持不变'
+                              : '当前未设置'
+                          }
+                          onChange={(event) =>
+                            updateSecret(
+                              event.target.value,
+                              draft.has_doubao_asr_access_token,
+                              setDoubaoSecret,
+                            )
+                          }
+                        />
+                      </label>
+                      <div className="settings-inline-actions">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateSecretDraft(setDoubaoSecret, createUnchangedSecretDraft())
+                          }
+                        >
+                          保持当前
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateSecretDraft(setDoubaoSecret, {
+                              action: 'clear',
+                              value: '',
+                            })
+                          }
+                        >
+                          清空密钥
+                        </button>
+                      </div>
+                      <p className="settings-hint">
+                        {getSecretHint(
+                          draft.has_doubao_asr_access_token,
+                          doubaoSecret,
+                          '豆包 Access Token',
+                        )}
+                      </p>
+                    </div>
+                    <label className="settings-field">
+                      <span>豆包 Resource ID</span>
+                      <input
+                        aria-invalid={Boolean(validationErrors.doubao_asr_resource_id)}
+                        className={inputClassName('doubao_asr_resource_id')}
+                        value={draft.doubao_asr_resource_id}
+                        onChange={(event) =>
+                          updateDraft('doubao_asr_resource_id', event.target.value)
+                        }
+                      />
+                      {renderFieldError('doubao_asr_resource_id')}
+                    </label>
+                    <label className="settings-field">
+                      <span>豆包模型</span>
+                      <input
+                        aria-invalid={Boolean(validationErrors.doubao_asr_model)}
+                        className={inputClassName('doubao_asr_model')}
+                        value={draft.doubao_asr_model}
+                        onChange={(event) =>
+                          updateDraft('doubao_asr_model', event.target.value)
+                        }
+                      />
+                      {renderFieldError('doubao_asr_model')}
+                    </label>
                   </fieldset>
                 ) : null}
 
                 {activeSection === 'voice' ? (
                   <fieldset className="settings-section" disabled={isBusy}>
                     <legend>高级参数</legend>
-                    <div className="settings-grid-form">
-                      <label className="settings-field">
-                        <span>音频格式</span>
-                        <input
-                          aria-invalid={Boolean(validationErrors.doubao_asr_audio_format)}
-                          className={inputClassName('doubao_asr_audio_format')}
-                          value={draft.doubao_asr_audio_format}
-                          onChange={(event) =>
-                            updateDraft('doubao_asr_audio_format', event.target.value)
-                          }
-                        />
-                        {renderFieldError('doubao_asr_audio_format')}
-                      </label>
-                      <label className="settings-field">
-                        <span>音频采样率</span>
-                        <input
-                          aria-invalid={Boolean(validationErrors.doubao_asr_audio_rate)}
-                          aria-label="音频采样率"
-                          className={inputClassName('doubao_asr_audio_rate')}
-                          type="number"
-                          value={draft.doubao_asr_audio_rate}
-                          onChange={(event) =>
-                            updateDraft(
-                              'doubao_asr_audio_rate',
-                              Number(event.target.value) || 0,
-                            )
-                          }
-                        />
-                        {renderFieldError('doubao_asr_audio_rate')}
-                      </label>
-                      <label className="settings-field">
-                        <span>音频位深</span>
-                        <input
-                          aria-invalid={Boolean(validationErrors.doubao_asr_audio_bits)}
-                          aria-label="音频位深"
-                          className={inputClassName('doubao_asr_audio_bits')}
-                          type="number"
-                          value={draft.doubao_asr_audio_bits}
-                          onChange={(event) =>
-                            updateDraft(
-                              'doubao_asr_audio_bits',
-                              Number(event.target.value) || 0,
-                            )
-                          }
-                        />
-                        {renderFieldError('doubao_asr_audio_bits')}
-                      </label>
-                      <label className="settings-field">
-                        <span>音频声道</span>
-                        <input
-                          aria-invalid={Boolean(validationErrors.doubao_asr_audio_channel)}
-                          className={inputClassName('doubao_asr_audio_channel')}
-                          type="number"
-                          value={draft.doubao_asr_audio_channel}
-                          onChange={(event) =>
-                            updateDraft(
-                              'doubao_asr_audio_channel',
-                              Number(event.target.value) || 0,
-                            )
-                          }
-                        />
-                        {renderFieldError('doubao_asr_audio_channel')}
-                      </label>
-                      <label className="settings-field">
-                        <span>音频语言</span>
-                        <input
-                          aria-invalid={Boolean(validationErrors.doubao_asr_audio_language)}
-                          className={inputClassName('doubao_asr_audio_language')}
-                          value={draft.doubao_asr_audio_language}
-                          onChange={(event) =>
-                            updateDraft('doubao_asr_audio_language', event.target.value)
-                          }
-                        />
-                        {renderFieldError('doubao_asr_audio_language')}
-                      </label>
-                      <label className="settings-field">
-                        <span>强制判定语音时长(ms)</span>
-                        <input
-                          type="number"
-                          value={draft.doubao_asr_force_to_speech_time}
-                          onChange={(event) =>
-                            updateDraft(
-                              'doubao_asr_force_to_speech_time',
-                              Number(event.target.value) || 0,
-                            )
-                          }
-                        />
-                      </label>
-                      <label className="settings-field">
-                        <span>结束判定窗口(ms)</span>
-                        <input
-                          type="number"
-                          value={draft.doubao_asr_end_window_size}
-                          onChange={(event) =>
-                            updateDraft(
-                              'doubao_asr_end_window_size',
-                              Number(event.target.value) || 0,
-                            )
-                          }
-                        />
-                      </label>
-                      <label className="settings-field">
-                        <span>Boosting Table ID</span>
-                        <input
-                          value={draft.doubao_asr_boosting_table_id}
-                          onChange={(event) =>
-                            updateDraft('doubao_asr_boosting_table_id', event.target.value)
-                          }
-                        />
-                      </label>
-                    </div>
-                    <div className="settings-checkbox-grid">
-                      <label className="settings-checkbox">
-                        <input
-                          checked={draft.doubao_asr_enable_itn}
-                          type="checkbox"
-                          onChange={(event) =>
-                            updateDraft('doubao_asr_enable_itn', event.target.checked)
-                          }
-                        />
-                        <span>启用 ITN</span>
-                      </label>
-                      <label className="settings-checkbox">
-                        <input
-                          checked={draft.doubao_asr_enable_ddc}
-                          type="checkbox"
-                          onChange={(event) =>
-                            updateDraft('doubao_asr_enable_ddc', event.target.checked)
-                          }
-                        />
-                        <span>启用 DDC</span>
-                      </label>
-                      <label className="settings-checkbox">
-                        <input
-                          checked={draft.doubao_asr_enable_punc}
-                          type="checkbox"
-                          onChange={(event) =>
-                            updateDraft('doubao_asr_enable_punc', event.target.checked)
-                          }
-                        />
-                        <span>启用标点</span>
-                      </label>
-                      <label className="settings-checkbox">
-                        <input
-                          checked={draft.doubao_asr_show_utterances}
-                          type="checkbox"
-                          onChange={(event) =>
-                            updateDraft('doubao_asr_show_utterances', event.target.checked)
-                          }
-                        />
-                        <span>显示分句结果</span>
-                      </label>
-                    </div>
-                    <label className="settings-field settings-field-wide">
-                      <span>上下文 JSON</span>
-                      <textarea
-                        aria-invalid={Boolean(validationErrors.doubao_asr_context_json)}
-                        className={inputClassName('doubao_asr_context_json')}
-                        rows={4}
-                        value={draft.doubao_asr_context_json}
+                    <p className="settings-hint">
+                      音频格式、采样率、位深、声道、语言、ITN、DDC、标点、分句、结束窗口与上下文参数
+                      已固定为代码默认值，不再开放编辑。
+                    </p>
+                    <label className="settings-field">
+                      <span>转录静音自动结束（ms）</span>
+                      <input
+                        aria-invalid={Boolean(validationErrors.transcription_silence_timeout_ms)}
+                        aria-label="转录静音自动结束（ms）"
+                        className={inputClassName('transcription_silence_timeout_ms')}
+                        min={0}
+                        max={5000}
+                        step={100}
+                        type="number"
+                        value={draft.transcription_silence_timeout_ms}
                         onChange={(event) =>
-                          updateDraft('doubao_asr_context_json', event.target.value)
+                          updateDraft(
+                            'transcription_silence_timeout_ms',
+                            Number(event.target.value) || 0,
+                          )
                         }
                       />
-                      {renderFieldError('doubao_asr_context_json')}
+                      {renderFieldError('transcription_silence_timeout_ms')}
+                      <p className="settings-hint">
+                        转录模式中，持续静音超过该时长后会自动停止并提交。
+                      </p>
                     </label>
                   </fieldset>
                 ) : null}

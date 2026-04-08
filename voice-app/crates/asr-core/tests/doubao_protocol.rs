@@ -77,6 +77,41 @@ fn parses_partial_transcript_events() {
 }
 
 #[test]
+fn partial_events_do_not_duplicate_result_text_and_utterances() {
+    let payload = json!({
+      "code": 20000000,
+      "result": [
+        {
+          "text": "你好世界",
+          "utterances": [
+            {
+              "text": "你好世界",
+              "definite": false
+            }
+          ]
+        }
+      ]
+    });
+    let frame = build_test_frame(
+        MESSAGE_TYPE_FULL_SERVER_RESPONSE,
+        MESSAGE_FLAG_NONE,
+        payload.to_string().as_bytes(),
+        SERIALIZATION_JSON,
+        None,
+        None,
+    );
+
+    let events = parse_doubao_server_events(&frame).expect("partial frame should parse");
+
+    assert_eq!(
+        events,
+        vec![DoubaoSessionEvent::Partial {
+            text: "你好世界".to_string(),
+        }]
+    );
+}
+
+#[test]
 fn parses_completed_transcript_events() {
     let payload = json!({
       "code": 20000000,
@@ -91,6 +126,49 @@ fn parses_completed_transcript_events() {
           ]
         }
       ]
+    });
+    let frame = build_test_frame(
+        MESSAGE_TYPE_FULL_SERVER_RESPONSE,
+        MESSAGE_FLAG_HAS_NEGATIVE_SEQUENCE,
+        payload.to_string().as_bytes(),
+        SERIALIZATION_JSON,
+        None,
+        Some(-1),
+    );
+
+    let events = parse_doubao_server_events(&frame).expect("completed frame should parse");
+
+    assert_eq!(
+        events,
+        vec![DoubaoSessionEvent::Completed {
+            text: "你好，豆包".to_string(),
+        }]
+    );
+}
+
+#[test]
+fn parses_completed_transcript_from_words_when_utterance_text_is_missing() {
+    let payload = json!({
+      "code": 20000000,
+      "result": {
+        "utterances": [
+          {
+            "text": "",
+            "definite": true,
+            "words": [
+              {
+                "text": "你好"
+              },
+              {
+                "text": "，"
+              },
+              {
+                "text": "豆包"
+              }
+            ]
+          }
+        ]
+      }
     });
     let frame = build_test_frame(
         MESSAGE_TYPE_FULL_SERVER_RESPONSE,

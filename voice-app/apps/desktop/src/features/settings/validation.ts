@@ -11,20 +11,13 @@ export type SettingsFieldKey =
   | 'doubao_asr_url'
   | 'doubao_asr_resource_id'
   | 'doubao_asr_model'
-  | 'doubao_asr_audio_format'
-  | 'doubao_asr_audio_rate'
-  | 'doubao_asr_audio_bits'
-  | 'doubao_asr_audio_channel'
-  | 'doubao_asr_audio_language'
-  | 'doubao_asr_context_json'
+  | 'transcription_silence_timeout_ms'
   | 'llm_base_url'
   | 'llm_model'
   | 'keyboard_shortcuts'
   | 'mcp_servers_json'
 
 export type SettingsValidationErrors = Partial<Record<SettingsFieldKey, string>>
-
-const allowedDoubaoAudioFormats = new Set(['pcm', 'wav', 'ogg', 'mp3'])
 
 export function validateSettingsDraft(
   draft: EditableVoiceSettings,
@@ -56,36 +49,14 @@ export function validateSettingsDraft(
     errors.doubao_asr_model = '豆包模型不能为空。'
   }
 
-  if (!draft.doubao_asr_audio_format.trim()) {
-    errors.doubao_asr_audio_format = '音频格式不能为空。'
-  } else if (
-    !allowedDoubaoAudioFormats.has(draft.doubao_asr_audio_format.trim().toLowerCase())
+  const transcriptionTimeout = draft.transcription_silence_timeout_ms
+  if (
+    transcriptionTimeout < 0 ||
+    transcriptionTimeout > 5000 ||
+    (transcriptionTimeout !== 0 && transcriptionTimeout < 500)
   ) {
-    errors.doubao_asr_audio_format = '音频格式只支持 pcm、wav、ogg 或 mp3。'
-  }
-
-  if (draft.doubao_asr_audio_rate !== 16_000) {
-    errors.doubao_asr_audio_rate = '音频采样率当前只支持 16000。'
-  }
-
-  if (draft.doubao_asr_audio_bits !== 16) {
-    errors.doubao_asr_audio_bits = '音频位深当前只支持 16。'
-  }
-
-  if (draft.doubao_asr_audio_channel !== 1 && draft.doubao_asr_audio_channel !== 2) {
-    errors.doubao_asr_audio_channel = '音频声道当前只支持 1 或 2。'
-  }
-
-  if (!draft.doubao_asr_audio_language.trim()) {
-    errors.doubao_asr_audio_language = '音频语言不能为空。'
-  }
-
-  if (draft.doubao_asr_context_json.trim()) {
-    try {
-      JSON.parse(draft.doubao_asr_context_json)
-    } catch {
-      errors.doubao_asr_context_json = '上下文 JSON 必须是合法 JSON。'
-    }
+    errors.transcription_silence_timeout_ms =
+      '转录静音自动结束需为 0 或 500 到 5000 毫秒。'
   }
 
   validateUrl(
