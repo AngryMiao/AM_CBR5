@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import App from '../App'
 import { startMicrophoneCapture, stopMicrophoneCapture } from '../lib/tauri'
+import { setRuntimeSnapshotForTest } from '../test/setup'
 
 async function openMainPanel(name: '运行状态' | '历史记录' | '设置' | '日志') {
   fireEvent.click(await screen.findByRole('button', { name }))
@@ -130,6 +131,40 @@ describe('App shell', () => {
     expect(container.querySelectorAll('.typeless-overlay-wave-bar')).toHaveLength(5)
     expect(screen.queryByText('历史记录')).toBeNull()
     expect(screen.queryByText('设置')).toBeNull()
+  })
+
+  it('uses a pen icon for transcription mode in the overlay window', async () => {
+    vi.mocked(getCurrentWindow).mockImplementation(() => ({ label: 'overlay' } as never))
+    setRuntimeSnapshotForTest({
+      phase: '正在聆听',
+      transcript: '这是转录中的实时文本',
+      result: '',
+      detail: '正在接收语音输入。',
+      input_mode: 'transcription',
+      result_window_mode: 'hidden',
+    })
+
+    const { container } = render(<App />)
+
+    expect(await screen.findByText('这是转录中的实时文本')).toBeInTheDocument()
+    expect(container.querySelector('.typeless-overlay-handle-left')?.textContent).toBe('✎')
+  })
+
+  it('keeps the default listening icon for agent mode in the overlay window', async () => {
+    vi.mocked(getCurrentWindow).mockImplementation(() => ({ label: 'overlay' } as never))
+    setRuntimeSnapshotForTest({
+      phase: '正在聆听',
+      transcript: '',
+      result: '',
+      detail: '正在接收语音输入。',
+      input_mode: 'agent',
+      result_window_mode: 'auto',
+    })
+
+    const { container } = render(<App />)
+
+    expect(await screen.findByRole('status')).toBeInTheDocument()
+    expect(container.querySelector('.typeless-overlay-handle-left')?.textContent).toBe('●')
   })
 
   it('renders result chrome instead of the main shell in the result window', async () => {

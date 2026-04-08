@@ -8,6 +8,7 @@ export function OverlayWindow() {
   const { phase, transcript, error, input_mode } = useRuntimeSnapshot()
   const phaseTone = getRuntimePhaseTone(phase)
   const phaseMeta = getOverlayPhaseMeta(phaseTone)
+  const icon = getOverlayIcon(phaseTone, input_mode)
   const isTranscription = input_mode === 'transcription'
   const previewText = formatTranscriptionPreview(transcript)
   const showTranscript = isTranscription && previewText.length > 0
@@ -38,7 +39,7 @@ export function OverlayWindow() {
           aria-hidden="true"
         >
           <span className="typeless-overlay-handle typeless-overlay-handle-left">
-            {phaseMeta.icon}
+            {icon}
           </span>
 
           {showTranscript ? (
@@ -81,6 +82,17 @@ function getOverlayPhaseMeta(phaseTone: ReturnType<typeof getRuntimePhaseTone>) 
     default:
       return { icon: '●', phase: '加载中' }
   }
+}
+
+function getOverlayIcon(
+  phaseTone: ReturnType<typeof getRuntimePhaseTone>,
+  inputMode: string,
+) {
+  if (inputMode === 'transcription') {
+    return '✎'
+  }
+
+  return getOverlayPhaseMeta(phaseTone).icon
 }
 
 function formatTranscriptionPreview(text: string) {
