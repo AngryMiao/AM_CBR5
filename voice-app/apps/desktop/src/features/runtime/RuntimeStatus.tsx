@@ -83,113 +83,194 @@ export function RuntimeStatus() {
       ? '已启用但异常'
       : '已启用'
     : '未启用'
+  const platformCards = [
+    {
+      label: '当前平台',
+      value: platformDiagnostics?.platform_name ?? '加载中',
+    },
+    {
+      label: '平台支持',
+      value:
+        platformDiagnostics === null
+          ? '加载中'
+          : platformDiagnostics.supported
+            ? '已支持'
+            : '未支持',
+    },
+    {
+      label: '麦克风',
+      value:
+        platformDiagnostics === null
+          ? '加载中'
+          : platformDiagnostics.microphone_available
+            ? '可用'
+            : '未检测到',
+    },
+    {
+      label: '麦克风权限',
+      value: platformDiagnostics?.microphone_permission_status ?? '加载中',
+    },
+    {
+      label: '输入控制',
+      value: platformDiagnostics?.input_control_permission_status ?? '加载中',
+    },
+    {
+      label: '热键后端',
+      value: platformDiagnostics?.hotkey_backend ?? '加载中',
+    },
+    {
+      label: '开机自启动',
+      value:
+        platformDiagnostics === null
+          ? '加载中'
+          : platformDiagnostics.auto_launch_enabled
+            ? '已开启'
+            : '未开启',
+    },
+    {
+      label: 'Deep Link',
+      value:
+        platformDiagnostics === null
+          ? '加载中'
+          : platformDiagnostics.deep_link_registered
+            ? `${platformDiagnostics.deep_link_scheme}:// 已注册`
+            : `${platformDiagnostics?.deep_link_scheme ?? 'voice-app'}:// 未注册`,
+    },
+  ]
+  const runtimeCards = [
+    {
+      label: 'MCP 服务',
+      value:
+        runtimeDiagnostics === null
+          ? '加载中'
+          : `${runtimeDiagnostics.active_server_count}/${runtimeDiagnostics.configured_server_count}`,
+    },
+    {
+      label: 'MCP 工具',
+      value: runtimeDiagnostics === null ? '加载中' : runtimeDiagnostics.tool_count,
+    },
+    {
+      label: 'AngryMiao Runtime',
+      value: runtimeDiagnostics === null ? '加载中' : angrymiaoStatus,
+    },
+  ]
+  const runtimeNotices = [
+    platformDiagnostics?.last_deep_link
+      ? {
+          label: '最近 Deep Link',
+          value: platformDiagnostics.last_deep_link,
+        }
+      : null,
+    platformDiagnostics?.hotkey_backend_error
+      ? {
+          label: '热键错误',
+          value: platformDiagnostics.hotkey_backend_error,
+        }
+      : null,
+  ].filter(Boolean) as Array<{ label: string; value: string }>
 
   return (
-    <section className="panel">
-      <div className="runtime-header">
-        <h2>运行状态</h2>
+    <section className="panel runtime-panel">
+      <div className="hero-strip runtime-home-strip">
+        <div className="runtime-home-copy">
+          <h2>首页</h2>
+          <strong className="runtime-home-title">自然说话，直接完成识别与执行</strong>
+          <small>{detail}</small>
+        </div>
         <span className={`phase-chip phase-${phaseTone}`}>{phase}</span>
       </div>
-      <p className="runtime-copy">{detail}</p>
-      <div className="runtime-transcript">
-        <span>实时文本</span>
-        <strong>{transcript || '等待语音输入。'}</strong>
-      </div>
-      <div className="runtime-transcript">
-        <span>任务结果</span>
-        <strong>{result || '等待 LLM 输出。'}</strong>
-      </div>
-      <div className="runtime-diagnostics">
-        <div className="runtime-diagnostic-card">
-          <span>当前平台</span>
-          <strong>{platformDiagnostics?.platform_name ?? '加载中'}</strong>
-        </div>
-        <div className="runtime-diagnostic-card">
-          <span>平台支持</span>
-          <strong>
-            {platformDiagnostics === null
-              ? '加载中'
-              : platformDiagnostics.supported
-                ? '已支持'
-                : '未支持'}
-          </strong>
-        </div>
-        <div className="runtime-diagnostic-card">
-          <span>麦克风</span>
-          <strong>
-            {platformDiagnostics === null
-              ? '加载中'
-              : platformDiagnostics.microphone_available
-                ? '可用'
-                : '未检测到'}
-          </strong>
-        </div>
-        <div className="runtime-diagnostic-card">
-          <span>麦克风权限</span>
-          <strong>{platformDiagnostics?.microphone_permission_status ?? '加载中'}</strong>
-        </div>
-        <div className="runtime-diagnostic-card">
-          <span>输入控制</span>
-          <strong>{platformDiagnostics?.input_control_permission_status ?? '加载中'}</strong>
-        </div>
-        <div className="runtime-diagnostic-card">
-          <span>热键后端</span>
-          <strong>{platformDiagnostics?.hotkey_backend ?? '加载中'}</strong>
-        </div>
-        <div className="runtime-diagnostic-card">
-          <span>开机自启动</span>
-          <strong>
-            {platformDiagnostics === null
-              ? '加载中'
-              : platformDiagnostics.auto_launch_enabled
-                ? '已开启'
-                : '未开启'}
-          </strong>
-        </div>
-        <div className="runtime-diagnostic-card">
-          <span>Deep Link</span>
-          <strong>
-            {platformDiagnostics === null
-              ? '加载中'
-              : platformDiagnostics.deep_link_registered
-                ? `${platformDiagnostics.deep_link_scheme}:// 已注册`
-              : `${platformDiagnostics?.deep_link_scheme ?? 'voice-app'}:// 未注册`}
-          </strong>
-        </div>
-        <div className="runtime-diagnostic-card">
-          <span>MCP 服务</span>
-          <strong>
-            {runtimeDiagnostics === null
-              ? '加载中'
-              : `${runtimeDiagnostics.active_server_count}/${runtimeDiagnostics.configured_server_count}`}
-          </strong>
-        </div>
-        <div className="runtime-diagnostic-card">
-          <span>MCP 工具</span>
-          <strong>
-            {runtimeDiagnostics === null ? '加载中' : runtimeDiagnostics.tool_count}
-          </strong>
-        </div>
-        <div className="runtime-diagnostic-card">
-          <span>AngryMiao Runtime</span>
-          <strong>{runtimeDiagnostics === null ? '加载中' : angrymiaoStatus}</strong>
+
+      <div className="runtime-home-layout">
+        <article className="runtime-primary-card">
+          <span className="runtime-card-label">当前阶段</span>
+          <strong className="runtime-primary-title">{phase}</strong>
+          <p className="runtime-copy">{detail}</p>
+          <div className="runtime-actions">
+            <button
+              disabled={!canStartCapture}
+              type="button"
+              onClick={() => void runAction(() => startMicrophoneCapture())}
+            >
+              开始录音
+            </button>
+            <button
+              disabled={!canStopCapture}
+              type="button"
+              onClick={() => void runAction(() => stopMicrophoneCapture())}
+            >
+              结束录音
+            </button>
+          </div>
+        </article>
+
+        <div className="runtime-side-stack">
+          <article className="runtime-summary-card runtime-summary-card-platform">
+            <span className="runtime-card-label">平台</span>
+            <div className="runtime-summary-grid">
+              {platformCards.map((card) => (
+                <div key={card.label} className="runtime-diagnostic-card">
+                  <span>{card.label}</span>
+                  <strong>{card.value}</strong>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="runtime-summary-card runtime-summary-card-runtime">
+            <span className="runtime-card-label">MCP</span>
+            <div className="runtime-summary-grid runtime-summary-grid-compact">
+              {runtimeCards.map((card) => (
+                <div key={card.label} className="runtime-diagnostic-card">
+                  <span>{card.label}</span>
+                  <strong>{card.value}</strong>
+                </div>
+              ))}
+            </div>
+          </article>
         </div>
       </div>
-      {platformDiagnostics?.last_deep_link ? (
-        <div className="runtime-transcript">
-          <span>最近 Deep Link</span>
-          <strong>{platformDiagnostics.last_deep_link}</strong>
+
+      <div className="runtime-entry-grid">
+        <article className="runtime-entry-card">
+          <strong>历史</strong>
+          <small>回看识别文本、结果和重试记录。</small>
+        </article>
+        <article className="runtime-entry-card runtime-entry-card-soft">
+          <strong>设置</strong>
+          <small>热键、模型、MCP 都在同一处维护。</small>
+        </article>
+        <article className="runtime-entry-card">
+          <strong>日志</strong>
+          <small>筛选运行事件，快速定位异常链路。</small>
+        </article>
+      </div>
+
+      <div className="runtime-focus-grid">
+        <div className="runtime-transcript runtime-focus-card">
+          <span>实时文本</span>
+          <strong>{transcript || '等待语音输入。'}</strong>
+        </div>
+        <div className="runtime-transcript runtime-focus-card">
+          <span>任务结果</span>
+          <strong>{result || '等待 LLM 输出。'}</strong>
+        </div>
+      </div>
+
+      {runtimeNotices.length > 0 ? (
+        <div className="runtime-note-grid">
+          {runtimeNotices.map((notice) => (
+            <div key={notice.label} className="runtime-transcript runtime-note-card">
+              <span>{notice.label}</span>
+              <strong>{notice.value}</strong>
+            </div>
+          ))}
         </div>
       ) : null}
-      {platformDiagnostics?.hotkey_backend_error ? (
-        <div className="runtime-transcript">
-          <span>热键错误</span>
-          <strong>{platformDiagnostics.hotkey_backend_error}</strong>
-        </div>
-      ) : null}
+
       {platformDiagnostics?.permission_hint ? (
         <p className="runtime-hint">{platformDiagnostics.permission_hint}</p>
       ) : null}
+
       {runtimeDiagnostics ? (
         <>
           <div className="runtime-diagnostic-groups">
@@ -305,22 +386,6 @@ export function RuntimeStatus() {
           ) : null}
         </>
       ) : null}
-      <div className="runtime-actions">
-        <button
-          disabled={!canStartCapture}
-          type="button"
-          onClick={() => void runAction(() => startMicrophoneCapture())}
-        >
-          开始录音
-        </button>
-        <button
-          disabled={!canStopCapture}
-          type="button"
-          onClick={() => void runAction(() => stopMicrophoneCapture())}
-        >
-          结束录音
-        </button>
-      </div>
       {error ?? runtimeError ? (
         <p className="runtime-error" role="alert">
           {error ?? runtimeError}

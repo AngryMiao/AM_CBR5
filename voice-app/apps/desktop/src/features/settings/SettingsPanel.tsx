@@ -41,37 +41,37 @@ const settingsSections: Array<{
   id: SettingsSectionId
   label: string
   eyebrow: string
-  description: string
+  summary: string
 }> = [
   {
     id: 'general',
     label: '通用',
     eyebrow: 'General',
-    description: '管理历史记录、开机自启动以及当前配置真源说明。',
+    summary: '基础开关和主窗口默认行为。',
   },
   {
     id: 'hotkeys',
     label: '快捷键',
     eyebrow: 'Hotkeys',
-    description: '配置长按录音的默认热键，保证全局触发链路稳定。',
+    summary: '默认热键和触发方式配置。',
   },
   {
     id: 'voice',
     label: '语音',
     eyebrow: 'Voice',
-    description: '保留 Doubao 基础接入参数与转录静音自动结束；高级音频参数固定为代码默认值。',
+    summary: 'ASR 链路、麦克风和转录参数。',
   },
   {
     id: 'models',
     label: '模型',
     eyebrow: 'Models',
-    description: '配置 OpenAI-compatible LLM 的服务地址、模型与系统提示词。',
+    summary: 'LLM 地址、模型与系统提示词。',
   },
   {
     id: 'mcp',
     label: 'MCP',
     eyebrow: 'MCP',
-    description: '维护 stdio MCP server 列表，并与内置 AngryMiao runtime 共同参与 MCP 同步。',
+    summary: 'AngryMiao Runtime 与自定义 MCP 服务。',
   },
 ]
 
@@ -383,11 +383,11 @@ export function SettingsPanel() {
   }
 
   return (
-    <section className="panel">
-      <div className="settings-header">
+    <section className="panel settings-panel">
+      <div className="hero-strip settings-strip">
         <div>
           <h2>设置</h2>
-          <p className="settings-copy">`settings.json` 是当前唯一配置真源。</p>
+          <small>热键、语音、模型与 MCP 配置都集中在这里编辑。</small>
         </div>
         <span className="settings-status">
           {status === 'loading'
@@ -415,7 +415,8 @@ export function SettingsPanel() {
               void handleSave()
             }}
           >
-            <div className="settings-shell">
+            <div className="settings-modal-layer">
+              <div className="settings-shell settings-shell-modal">
               <div className="settings-nav" aria-label="设置分区">
                 {settingsSections.map((section) => (
                   <button
@@ -429,7 +430,6 @@ export function SettingsPanel() {
                   >
                     <span>{section.label}</span>
                     <small>{section.eyebrow}</small>
-                    <strong>{section.description}</strong>
                     {sectionHasErrors(section.id) ? <em>需修正</em> : null}
                   </button>
                 ))}
@@ -439,7 +439,7 @@ export function SettingsPanel() {
                 <div className="settings-stage-hero">
                   <span>{currentSection.eyebrow}</span>
                   <strong>{currentSection.label}</strong>
-                  <p>{currentSection.description}</p>
+                  <p>{currentSection.summary}</p>
                 </div>
 
                 {activeSection === 'general' ? (
@@ -793,8 +793,9 @@ export function SettingsPanel() {
                       {renderFieldError('mcp_servers_json')}
                     </label>
                   </fieldset>
-                ) : null}
+                  ) : null}
               </div>
+            </div>
             </div>
 
             <div className="settings-actions">

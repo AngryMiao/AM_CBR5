@@ -5,7 +5,7 @@ import App from '../App'
 import { startMicrophoneCapture, stopMicrophoneCapture } from '../lib/tauri'
 import { setRuntimeSnapshotForTest } from '../test/setup'
 
-async function openMainPanel(name: '运行状态' | '历史记录' | '设置' | '日志') {
+async function openMainPanel(name: '首页' | '历史记录' | '设置' | '日志') {
   fireEvent.click(await screen.findByRole('button', { name }))
 }
 
@@ -17,14 +17,20 @@ describe('App shell', () => {
   it('renders the main menu and shows only the runtime panel by default', () => {
     render(<App />)
 
-    expect(screen.getByRole('button', { name: '运行状态' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '首页' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '历史记录' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '设置' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '日志' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '运行状态' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '首页' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '历史记录' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '设置' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '日志' })).toBeNull()
+  })
+
+  it('renders the redesigned runtime home hero by default', () => {
+    render(<App />)
+
+    expect(screen.getByText('自然说话，直接完成识别与执行')).toBeInTheDocument()
   })
 
   it('switches the main content area through the menu', async () => {
@@ -32,7 +38,7 @@ describe('App shell', () => {
 
     await openMainPanel('设置')
     expect(await screen.findByRole('heading', { name: '设置' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: '运行状态' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: '首页' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '历史记录' })).toBeNull()
 
     await openMainPanel('历史记录')
@@ -56,7 +62,7 @@ describe('App shell', () => {
   it('loads the chinese runtime phase from tauri runtime', async () => {
     render(<App />)
 
-    await screen.findByText('待命中')
+    expect((await screen.findAllByText('待命中')).length).toBeGreaterThan(0)
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith('get_runtime_snapshot')
     })
@@ -65,7 +71,7 @@ describe('App shell', () => {
   it('loads and renders platform diagnostics and mcp runtime diagnostics in the runtime section', async () => {
     render(<App />)
 
-    const runtimeSection = screen.getByRole('heading', { name: '运行状态' }).closest('section')
+    const runtimeSection = screen.getByRole('heading', { name: '首页' }).closest('section')
 
     expect(runtimeSection).not.toBeNull()
 
@@ -104,14 +110,14 @@ describe('App shell', () => {
     render(<App />)
 
     fireEvent.click(await screen.findByRole('button', { name: '开始录音' }))
-    expect(await screen.findByText('正在聆听')).toBeInTheDocument()
+    expect((await screen.findAllByText('正在聆听')).length).toBeGreaterThan(0)
     expect(await screen.findByText('实时片段')).toBeInTheDocument()
 
     fireEvent.click(await screen.findByRole('button', { name: '结束录音' }))
 
-    expect(await screen.findByText('正在识别')).toBeInTheDocument()
-    expect(await screen.findByText('正在生成')).toBeInTheDocument()
-    expect(await screen.findByText('正在输出')).toBeInTheDocument()
+    expect((await screen.findAllByText('正在识别')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('正在生成')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('正在输出')).length).toBeGreaterThan(0)
     expect((await screen.findAllByText('最终识别结果')).length).toBeGreaterThan(0)
     expect((await screen.findAllByText('已将文本输出到当前输入位置。')).length).toBeGreaterThan(
       0,
@@ -181,7 +187,7 @@ describe('App shell', () => {
     expect(screen.getByText('识别内容')).toBeInTheDocument()
     expect(screen.getByText('执行结果')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '关闭结果窗口' })).toBeInTheDocument()
-    expect(screen.queryByText('运行状态')).toBeNull()
+    expect(screen.queryByText('首页')).toBeNull()
   })
 
   it('hides the result window when the close button is clicked', async () => {

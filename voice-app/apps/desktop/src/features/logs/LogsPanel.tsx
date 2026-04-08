@@ -52,6 +52,8 @@ export function LogsPanel() {
 
     return matchesLevel && matchesKeyword
   })
+  const infoCount = logs.filter((entry) => entry.level === 'info').length
+  const errorCount = logs.filter((entry) => entry.level === 'error').length
 
   async function handleExport() {
     try {
@@ -76,12 +78,22 @@ export function LogsPanel() {
   }
 
   return (
-    <section className="panel">
-      <div className="history-toolbar">
+    <section className="panel logs-panel">
+      <div className="hero-strip logs-strip">
         <div>
           <h2>日志</h2>
-          <p className="panel-copy">查看运行日志、筛选诊断信息，并导出本地日志文件。</p>
+          <small>按级别和关键字筛选运行事件，支持导出或清空当前日志。</small>
         </div>
+      </div>
+
+      <div className="logs-notice-card">
+        <strong>当前条目 {filteredLogs.length}</strong>
+        <small>
+          信息 {infoCount} · 错误 {errorCount} · {keyword ? `关键字 ${keyword}` : '未设置关键字'}
+        </small>
+      </div>
+
+      <div className="history-toolbar">
         <div className="history-filters">
           <select
             aria-label="日志级别"
@@ -108,7 +120,7 @@ export function LogsPanel() {
       </div>
 
       {filteredLogs.length === 0 ? (
-        <p>当前没有匹配的运行日志。</p>
+        <p>暂无匹配日志。</p>
       ) : (
         <ul className="logs-list">
           {filteredLogs.map((entry, index) => (
@@ -116,7 +128,9 @@ export function LogsPanel() {
               key={`${entry.level}-${entry.message}-${index}`}
               className={`log-entry ${entry.level === 'error' ? 'log-entry-error' : ''}`.trim()}
             >
-              <span>{logLevelLabel(entry.level)}</span>
+              <div className="log-entry-header">
+                <span>{logLevelLabel(entry.level)}</span>
+              </div>
               <strong>{entry.message}</strong>
             </li>
           ))}

@@ -14,6 +14,8 @@ export function HistoryPanel() {
   const [error, setError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
   const orderedHistory = [...history].sort((left, right) => right.id - left.id)
+  const completedCount = orderedHistory.filter((record) => record.status === 'done').length
+  const failedCount = orderedHistory.filter((record) => record.status === 'error').length
 
   useEffect(() => {
     let disposed = false
@@ -66,12 +68,27 @@ export function HistoryPanel() {
   }
 
   return (
-    <section className="panel">
-      <div className="history-toolbar">
+    <section className="panel history-panel">
+      <div className="hero-strip history-strip">
         <div>
           <h2>历史记录</h2>
-          <p className="panel-copy">结果会持续沉淀到本地历史，可搜索、预览和重新生成。</p>
+          <small>按关键字和状态筛选最近的识别文本、结果与执行详情。</small>
         </div>
+      </div>
+
+      <div className="history-notice-card">
+        <div>
+          <strong>保存历史 / 本地回看</strong>
+          <small>所有记录仅写入本地，用于预览、回看和重新生成。</small>
+        </div>
+        <div className="history-notice-stats">
+          <span>已完成 {completedCount}</span>
+          <span>识别失败 {failedCount}</span>
+          <span>{statusFilter || '全部状态'}</span>
+        </div>
+      </div>
+
+      <div className="history-toolbar">
         <div className="history-filters">
           <input
             aria-label="搜索历史记录"
@@ -91,44 +108,50 @@ export function HistoryPanel() {
         </div>
       </div>
       {orderedHistory.length === 0 ? (
-        <p>已完成的语音任务、识别文本和 LLM 结果会显示在这里。</p>
+        <p>暂无历史记录。</p>
       ) : (
-        <ul className="history-list">
-          {orderedHistory.map((record) => (
-            <li key={`${record.id}-${record.status}`} className="history-item">
-              <div className="history-item-header">
-                <strong>任务 #{record.id}</strong>
-                <span className={`history-status history-status-${record.status}`}>
-                  {historyStatusLabel(record.status)}
-                </span>
-              </div>
-              <div className="history-meta">
-                <span>完成时间</span>
-                <strong>{record.created_at || '未知'}</strong>
-              </div>
-              <div className="history-block">
-                <span>识别文本</span>
-                <strong>{record.transcript || '暂无识别文本。'}</strong>
-              </div>
-              <div className="history-block">
-                <span>任务结果</span>
-                <strong>{record.result || '暂无任务结果。'}</strong>
-              </div>
-              <div className="history-block">
-                <span>详情</span>
-                <strong>{record.detail || '暂无详情。'}</strong>
-              </div>
-              <div className="history-actions">
-                <button type="button" onClick={() => void handlePreview(record.id)}>
-                  预览
-                </button>
-                <button type="button" onClick={() => void handleRetry(record.id)}>
-                  重新生成
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <div className="history-list-shell">
+          <ul className="history-list">
+            {orderedHistory.map((record) => (
+              <li key={`${record.id}-${record.status}`} className="history-item">
+                <div className="history-item-header">
+                  <div className="history-title-group">
+                    <strong>任务 #{record.id}</strong>
+                    <span className={`history-status history-status-${record.status}`}>
+                      {historyStatusLabel(record.status)}
+                    </span>
+                  </div>
+                  <div className="history-meta">
+                    <span>完成时间</span>
+                    <strong>{record.created_at || '未知'}</strong>
+                  </div>
+                </div>
+                <div className="history-item-grid">
+                  <div className="history-block">
+                    <span>识别文本</span>
+                    <strong>{record.transcript || '暂无识别文本。'}</strong>
+                  </div>
+                  <div className="history-block">
+                    <span>任务结果</span>
+                    <strong>{record.result || '暂无任务结果。'}</strong>
+                  </div>
+                  <div className="history-block">
+                    <span>详情</span>
+                    <strong>{record.detail || '暂无详情。'}</strong>
+                  </div>
+                </div>
+                <div className="history-actions">
+                  <button type="button" onClick={() => void handlePreview(record.id)}>
+                    预览
+                  </button>
+                  <button type="button" onClick={() => void handleRetry(record.id)}>
+                    重新生成
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {feedback ? (
         <p className="settings-feedback" role="status">
