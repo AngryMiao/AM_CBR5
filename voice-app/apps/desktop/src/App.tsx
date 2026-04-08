@@ -12,27 +12,22 @@ type MainPanelKey = 'runtime' | 'history' | 'settings' | 'logs'
 const MAIN_PANELS: Array<{
   key: MainPanelKey
   label: string
-  footer: string
 }> = [
   {
     key: 'runtime',
     label: '首页',
-    footer: 'Desktop shell',
   },
   {
     key: 'history',
     label: '历史记录',
-    footer: 'List-first',
   },
   {
     key: 'settings',
     label: '设置',
-    footer: 'Modal-style',
   },
   {
     key: 'logs',
     label: '日志',
-    footer: 'Trace',
   },
 ]
 
@@ -58,16 +53,15 @@ export default function App() {
     return <ResultWindow />
   }
 
-  const currentPanel =
-    MAIN_PANELS.find((panel) => panel.key === activePanel) ?? MAIN_PANELS[0]
-
   return (
     <main className="app-shell">
       <section className="workspace-shell">
         <aside className="workspace-sidebar">
           <div className="workspace-brand">
-            <strong>Voice App</strong>
-            <small>Desktop</small>
+            <span aria-hidden="true" className="workspace-brand-mark">
+              ◈
+            </span>
+            <strong>AngryMiao</strong>
           </div>
           <nav aria-label="主导航" className="workspace-menu">
             {MAIN_PANELS.map((panel) => (
@@ -84,13 +78,6 @@ export default function App() {
               </button>
             ))}
           </nav>
-          <div className="workspace-sidebar-spacer" />
-          <div className="workspace-sidebar-footer">
-            <span aria-live="polite" className="workspace-ready-badge">
-              Ready
-            </span>
-            <small className="workspace-ready-note">{currentPanel.footer}</small>
-          </div>
         </aside>
 
         <section className="workspace-content">

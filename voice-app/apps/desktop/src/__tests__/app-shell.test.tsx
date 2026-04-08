@@ -10,13 +10,16 @@ async function openMainPanel(name: '首页' | '历史记录' | '设置' | '日�
 }
 
 async function openSettingsSection(name: '通用' | '快捷键' | '语音' | '模型' | 'MCP') {
-  fireEvent.click(await screen.findByRole('button', { name }))
+  const sectionLabel = name === '语音' ? '豆包 ASR' : name === '模型' ? 'OpenAI-compatible LLM' : name
+
+  await screen.findByText(sectionLabel)
 }
 
 describe('App shell', () => {
   it('renders the main menu and shows only the runtime panel by default', () => {
     render(<App />)
 
+    expect(screen.getAllByText('AngryMiao').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: '首页' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '历史记录' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '设置' })).toBeInTheDocument()
@@ -27,10 +30,15 @@ describe('App shell', () => {
     expect(screen.queryByRole('heading', { name: '日志' })).toBeNull()
   })
 
-  it('renders the redesigned runtime home hero by default', () => {
+  it('renders the runtime control section without the removed marketing hero copy or recording buttons', async () => {
     render(<App />)
 
-    expect(screen.getByText('自然说话，直接完成识别与执行')).toBeInTheDocument()
+    expect(screen.queryByText('自然说话，直接完成识别与执行')).toBeNull()
+    expect(screen.queryByText('Speak to your desktop.')).toBeNull()
+    expect(screen.getByText('运行控制')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '开始录音' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '结束录音' })).toBeNull()
+    expect(await screen.findByText('当前麦克风')).toBeInTheDocument()
   })
 
   it('switches the main content area through the menu', async () => {
@@ -59,10 +67,11 @@ describe('App shell', () => {
     })
   })
 
-  it('loads the chinese runtime phase from tauri runtime', async () => {
+  it('loads the runtime snapshot without rendering a homepage phase badge', async () => {
     render(<App />)
 
-    expect((await screen.findAllByText('待命中')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('运行控制')).toBeInTheDocument()
+    expect(screen.queryByText('待命中')).toBeNull()
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith('get_runtime_snapshot')
     })
@@ -76,28 +85,32 @@ describe('App shell', () => {
     expect(runtimeSection).not.toBeNull()
 
     const section = within(runtimeSection as HTMLElement)
-    expect(await section.findByText('当前平台')).toBeInTheDocument()
-    expect(section.getByText('Windows')).toBeInTheDocument()
-    expect(section.getByText('麦克风')).toBeInTheDocument()
+    expect(await section.findByText('运行控制')).toBeInTheDocument()
+    expect(section.queryByText('实时文本')).toBeNull()
+    expect(section.getAllByText('任务结果').length).toBeGreaterThan(0)
+    expect(section.getByText('当前麦克风')).toBeInTheDocument()
+    expect(section.getByText('内置麦克风')).toBeInTheDocument()
+    expect((await section.findAllByText('当前平台')).length).toBeGreaterThan(0)
+    expect(section.getAllByText('Windows').length).toBeGreaterThan(0)
+    expect(section.queryByText('正在聆听')).toBeNull()
+    expect(section.queryByRole('button', { name: '开始录音' })).toBeNull()
     expect(section.getAllByText('可用').length).toBeGreaterThan(0)
     expect(
       section.getByText('如无法录音，请检查系统设置中的麦克风权限。'),
     ).toBeInTheDocument()
-    expect(section.getByText('麦克风权限')).toBeInTheDocument()
+    expect(section.getAllByText('麦克风权限').length).toBeGreaterThan(0)
     expect(section.getByText('待验证')).toBeInTheDocument()
-    expect(section.getByText('开机自启动')).toBeInTheDocument()
-    expect(section.getByText('未开启')).toBeInTheDocument()
-    expect(section.getByText('Deep Link')).toBeInTheDocument()
+    expect(section.getByText('深链')).toBeInTheDocument()
     expect(section.getByText('voice-app:// 已注册')).toBeInTheDocument()
-    expect(section.getByText('MCP 服务')).toBeInTheDocument()
-    expect(section.getByText('1/1')).toBeInTheDocument()
-    expect(section.getByText('AngryMiao Runtime')).toBeInTheDocument()
+    expect(section.getAllByText('MCP 服务').length).toBeGreaterThan(0)
+    expect(section.getAllByText('1/1').length).toBeGreaterThan(0)
+    expect(section.getAllByText('AngryMiao 运行时').length).toBeGreaterThan(0)
     expect(section.getAllByText('未启用').length).toBeGreaterThan(0)
-    expect(section.getByText('MCP Runtime')).toBeInTheDocument()
-    expect(section.getByText('已配置 1 个 server，当前活跃 1 个。')).toBeInTheDocument()
-    expect(section.getByText(/内置 skill bundle/)).toBeInTheDocument()
+    expect(section.getByText('MCP 运行时')).toBeInTheDocument()
+    expect(section.getByText('已配置 1 个服务，当前活跃 1 个。')).toBeInTheDocument()
+    expect(section.getByText(/内置技能包/)).toBeInTheDocument()
     expect(section.getByText('mcp__system-control__type_text')).toBeInTheDocument()
-    expect(section.getByText(/bundle 默认路径/)).toBeInTheDocument()
+    expect(section.getByText(/技能包默认路径/)).toBeInTheDocument()
     expect(section.getByText(/AIKeyBoardDriver\.exe/)).toBeInTheDocument()
 
     await waitFor(() => {
@@ -109,16 +122,25 @@ describe('App shell', () => {
   it('captures a microphone task and renders streaming to completed snapshots', async () => {
     render(<App />)
 
-    fireEvent.click(await screen.findByRole('button', { name: '开始录音' }))
-    expect((await screen.findAllByText('正在聆听')).length).toBeGreaterThan(0)
-    expect(await screen.findByText('实时片段')).toBeInTheDocument()
+    expect(await screen.findByText('运行控制')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('get_runtime_snapshot')
+    })
 
-    fireEvent.click(await screen.findByRole('button', { name: '结束录音' }))
+    await act(async () => {
+      await startMicrophoneCapture()
+    })
 
-    expect((await screen.findAllByText('正在识别')).length).toBeGreaterThan(0)
-    expect((await screen.findAllByText('正在生成')).length).toBeGreaterThan(0)
-    expect((await screen.findAllByText('正在输出')).length).toBeGreaterThan(0)
-    expect((await screen.findAllByText('最终识别结果')).length).toBeGreaterThan(0)
+    await waitFor(() => {
+      expect(screen.getByText('正在流式识别语音内容。')).toBeInTheDocument()
+    })
+
+    await act(async () => {
+      await stopMicrophoneCapture()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+
+    expect(await screen.findByText('本地工具执行已完成。')).toBeInTheDocument()
     expect((await screen.findAllByText('已将文本输出到当前输入位置。')).length).toBeGreaterThan(
       0,
     )
@@ -213,13 +235,12 @@ describe('App shell', () => {
     expect(settingsSection).not.toBeNull()
 
     const section = within(settingsSection as HTMLElement)
-    expect(await screen.findByRole('button', { name: '通用' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '快捷键' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '语音' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '模型' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'MCP' })).toBeInTheDocument()
+    expect(await section.findByText('通用')).toBeInTheDocument()
+    expect(section.getByText('快捷键')).toBeInTheDocument()
+    expect(section.getByText('豆包 ASR')).toBeInTheDocument()
+    expect(section.getByText('OpenAI-compatible LLM')).toBeInTheDocument()
+    expect(section.getByText('MCP')).toBeInTheDocument()
     expect(section.getByText('开机自启动')).toBeInTheDocument()
-    expect(section.queryByLabelText('豆包 App ID')).toBeNull()
 
     await openSettingsSection('快捷键')
     expect(await section.findByDisplayValue('RightAlt')).toBeInTheDocument()
