@@ -23,10 +23,11 @@
 本轮只解决主窗口主体观感与信息层级问题：
 
 1. 重做主 app 的左侧导航和右侧内容壳层
-2. 首页变成更像桌面产品首页的浅色 hero + 卡片布局
+2. 首页去掉无意义头部，直接进入有效状态与卡片内容
 3. 历史记录改成列表优先、筛选更轻的工作流界面
 4. 设置页改成主窗口内居中的大面板体验
 5. 日志页跟随新视觉系统统一
+6. 主窗口保留桌面端自适应，但设置不会把壳层挤变形的最小尺寸
 
 ## 非目标
 
@@ -42,63 +43,70 @@
 
 1. 页面背景使用暖白 + 柔和渐变，不再是深色控制台底
 2. 左侧使用固定导航栏，强调产品级主窗口
-3. 右侧使用白色主内容板，形成明确的信息舞台
-4. 顶部保留当前面板的轻量上下文，不放无意义说明
+3. 右侧使用白色主内容板，形成明确的信息舞台，并由内容区独立滚动
+4. 保留桌面端范围内的流动布局，但不允许主窗口缩小到让导航和内容区变形
 
 ### 2. 首页
 
 首页保留现有诊断信息与操作按钮，但重排为：
 
-1. 顶部 hero，明确主标题为 `自然说话，直接开始输入`
-2. hero 右侧直接放当前阶段和主操作按钮
-3. 中部先展示实时文本与任务结果
-4. 下部再铺开平台、权限、MCP、Deep Link、AngryMiao 等诊断卡片
-5. 详细运行时信息继续保留，但降为第二层信息
+1. 删除 `自然说话，直接完成识别与执行` 这类无业务价值的首页头部展示
+2. 首屏直接进入当前阶段、主操作、实时文本与任务结果
+3. 下部再铺开平台、权限、MCP、Deep Link、AngryMiao 等诊断卡片
+4. 详细运行时信息继续保留，但降为第二层信息
 
 ### 3. 历史记录
 
 历史记录改为列表优先：
 
-1. 顶部只保留必要的说明、数量和筛选
-2. 列表项优先展示任务状态、完成时间、识别文本、结果、详情
-3. 操作按钮维持 `预览` / `重新生成`
+1. 删除顶部说明卡片，不再展示单独的说明面板
+2. 顶部只保留必要的筛选与轻量统计信息
+3. 列表项优先展示任务状态、完成时间、识别文本、结果、详情
+4. 操作按钮维持 `预览` / `重新生成`
 
 ### 4. 设置页
 
 设置页按 `C` 处理成主窗口内部的大面板：
 
-1. 页面整体看起来像嵌入式 modal / center stage
-2. 左侧分区导航保留
-3. 右侧 stage 强化为表单舞台，不改任何字段逻辑
-4. 警告、错误、保存状态继续保留，但改成新视觉语言
+1. 删除顶部说明卡片 `热键、语音、模型与 MCP 配置都集中在这里编辑。`
+2. 不再使用左侧分区导航切换内容，改成单页连续上下文
+3. 分区顺序固定为 `通用 -> 快捷键 -> 语音 -> 模型 -> MCP`
+4. 每个设置分区继续保留自己的 `legend / title` 作为视觉分隔
+5. 整体背景层级压缩为更轻的舞台 + 分区卡片，不再出现多层嵌套面板
+6. 警告、错误、保存状态继续保留，但改成新视觉语言
 
 ### 5. 日志页
 
 日志页统一到新浅色系统：
 
-1. 保留等级筛选、关键字筛选、导出、清空
-2. 列表项改成浅色日志卡片
-3. 信息 / 错误态用边框和色块区分
+1. 删除顶部说明卡片，不再展示单独的说明面板
+2. 顶部只保留等级筛选、关键字筛选、导出、清空和轻量统计
+3. 列表项改成浅色日志卡片
+4. 信息 / 错误态用边框和色块区分
 
 ## 实现边界
 
 本轮预计修改：
 
-1. `voice-app/apps/desktop/src/App.tsx`
-2. `voice-app/apps/desktop/src/features/runtime/RuntimeStatus.tsx`
-3. `voice-app/apps/desktop/src/features/history/HistoryPanel.tsx`
-4. `voice-app/apps/desktop/src/features/settings/SettingsPanel.tsx`
-5. `voice-app/apps/desktop/src/features/logs/LogsPanel.tsx`
-6. `voice-app/apps/desktop/src/styles.css`
+1. `voice-app/apps/desktop/src/features/runtime/RuntimeStatus.tsx`
+2. `voice-app/apps/desktop/src/features/history/HistoryPanel.tsx`
+3. `voice-app/apps/desktop/src/features/settings/SettingsPanel.tsx`
+4. `voice-app/apps/desktop/src/features/logs/LogsPanel.tsx`
+5. `voice-app/apps/desktop/src/styles.css`
+6. `voice-app/apps/desktop/src-tauri/tauri.conf.json`
 7. `voice-app/apps/desktop/src/__tests__/app-shell.test.tsx`
+8. `docs/superpowers/specs/2026-04-08-voice-app-main-shell-design.md`
 
 ## 验收标准
 
 满足以下条件才算本轮完成：
 
 1. 主窗口默认进入新的浅色主壳层
-2. 首页出现 `自然说话，直接开始输入`
-3. 历史记录、设置、日志都切到统一的新视觉系统
-4. 识别胶囊和结果窗口代码未被改动
-5. `pnpm --dir voice-app/apps/desktop test`
-6. `pnpm --dir voice-app/apps/desktop build`
+2. 首页不再出现 `自然说话，直接完成识别与执行` 这类无意义头部
+3. 左侧导航固定在左边，右侧内容区可以独立滚动
+4. 设置页改成单页连续上下文，不再通过菜单切换显示分区内容
+5. 设置、历史记录、日志顶部说明卡片均已移除
+6. 主窗口最小尺寸锁定为不会把导航和内容区挤变形的桌面尺寸
+7. 识别胶囊和结果窗口代码未被改动
+8. `pnpm --dir voice-app/apps/desktop test -- app-shell.test.tsx`
+9. `pnpm --dir voice-app/apps/desktop build`

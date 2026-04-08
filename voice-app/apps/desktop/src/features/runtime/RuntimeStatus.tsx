@@ -8,17 +8,13 @@ import {
   type PlatformDiagnostics,
   type RuntimeDiagnostics,
 } from '../../lib/tauri'
-import { getRuntimePhaseTone } from '../../lib/runtimePhase'
 import { useRuntimeSnapshot } from './useRuntimeSnapshot'
 
 export function RuntimeStatus() {
   const { phase, transcript, result, detail, error: runtimeError } = useRuntimeSnapshot()
   const [error, setError] = useState<string | null>(null)
-  const [platformDiagnostics, setPlatformDiagnostics] =
-    useState<PlatformDiagnostics | null>(null)
-  const [runtimeDiagnostics, setRuntimeDiagnostics] =
-    useState<RuntimeDiagnostics | null>(null)
-  const phaseTone = getRuntimePhaseTone(phase)
+  const [platformDiagnostics, setPlatformDiagnostics] = useState<PlatformDiagnostics | null>(null)
+  const [runtimeDiagnostics, setRuntimeDiagnostics] = useState<RuntimeDiagnostics | null>(null)
 
   useEffect(() => {
     let disposed = false
@@ -90,21 +86,11 @@ export function RuntimeStatus() {
     },
     {
       label: '平台支持',
-      value:
-        platformDiagnostics === null
-          ? '加载中'
-          : platformDiagnostics.supported
-            ? '已支持'
-            : '未支持',
+      value: platformDiagnostics === null ? '加载中' : platformDiagnostics.supported ? '已支持' : '未支持',
     },
     {
       label: '麦克风',
-      value:
-        platformDiagnostics === null
-          ? '加载中'
-          : platformDiagnostics.microphone_available
-            ? '可用'
-            : '未检测到',
+      value: platformDiagnostics === null ? '加载中' : platformDiagnostics.microphone_available ? '可用' : '未检测到',
     },
     {
       label: '麦克风权限',
@@ -120,12 +106,7 @@ export function RuntimeStatus() {
     },
     {
       label: '开机自启动',
-      value:
-        platformDiagnostics === null
-          ? '加载中'
-          : platformDiagnostics.auto_launch_enabled
-            ? '已开启'
-            : '未开启',
+      value: platformDiagnostics === null ? '加载中' : platformDiagnostics.auto_launch_enabled ? '已开启' : '未开启',
     },
     {
       label: 'Deep Link',
@@ -171,14 +152,7 @@ export function RuntimeStatus() {
 
   return (
     <section className="panel runtime-panel">
-      <div className="hero-strip runtime-home-strip">
-        <div className="runtime-home-copy">
-          <h2>首页</h2>
-          <strong className="runtime-home-title">自然说话，直接完成识别与执行</strong>
-          <small>{detail}</small>
-        </div>
-        <span className={`phase-chip phase-${phaseTone}`}>{phase}</span>
-      </div>
+      <h2 className="sr-only">首页</h2>
 
       <div className="runtime-home-layout">
         <article className="runtime-primary-card">
@@ -283,9 +257,7 @@ export function RuntimeStatus() {
                 </strong>
               </div>
               {runtimeDiagnostics.skill_bundle_root ? (
-                <p className="runtime-detail-copy">
-                  Skill Bundle 根目录：{runtimeDiagnostics.skill_bundle_root}
-                </p>
+                <p className="runtime-detail-copy">Skill Bundle 根目录：{runtimeDiagnostics.skill_bundle_root}</p>
               ) : null}
               {runtimeDiagnostics.mcp_servers.length === 0 ? (
                 <p className="runtime-detail-copy">当前没有启用中的 MCP server。</p>
@@ -296,9 +268,7 @@ export function RuntimeStatus() {
                       <div>
                         <strong>{server.name}</strong>
                         <span>
-                          {server.id} · {server.source === 'settings.json'
-                            ? 'settings.json'
-                            : '内置 skill bundle'}
+                          {server.id} · {server.source === 'settings.json' ? 'settings.json' : '内置 skill bundle'}
                         </span>
                       </div>
                       <em>{server.active_in_runtime ? '运行中' : '未接通'}</em>
@@ -330,31 +300,19 @@ export function RuntimeStatus() {
               <div className="runtime-detail-grid">
                 <div>
                   <span>Bundle 安装</span>
-                  <strong>
-                    {runtimeDiagnostics.angrymiao.bundle_installed ? '已安装' : '未安装'}
-                  </strong>
+                  <strong>{runtimeDiagnostics.angrymiao.bundle_installed ? '已安装' : '未安装'}</strong>
                 </div>
                 <div>
                   <span>当前平台</span>
-                  <strong>
-                    {runtimeDiagnostics.angrymiao.supported_on_current_platform
-                      ? '已支持'
-                      : '未支持'}
-                  </strong>
+                  <strong>{runtimeDiagnostics.angrymiao.supported_on_current_platform ? '已支持' : '未支持'}</strong>
                 </div>
                 <div>
                   <span>Runtime Entry</span>
-                  <strong>
-                    {runtimeDiagnostics.angrymiao.runtime_entry_exists ? '存在' : '缺失'}
-                  </strong>
+                  <strong>{runtimeDiagnostics.angrymiao.runtime_entry_exists ? '存在' : '缺失'}</strong>
                 </div>
                 <div>
                   <span>键盘驱动</span>
-                  <strong>
-                    {runtimeDiagnostics.angrymiao.keyboard_driver_exists
-                      ? '已就绪'
-                      : '未就绪'}
-                  </strong>
+                  <strong>{runtimeDiagnostics.angrymiao.keyboard_driver_exists ? '已就绪' : '未就绪'}</strong>
                 </div>
               </div>
               {runtimeDiagnostics.angrymiao.keyboard_driver_path ? (
@@ -369,9 +327,7 @@ export function RuntimeStatus() {
               {runtimeDiagnostics.angrymiao.missing_required_env.length > 0 ? (
                 <div className="runtime-detail-subsection">
                   <span>缺少必填环境</span>
-                  <strong>
-                    {runtimeDiagnostics.angrymiao.missing_required_env.join('、')}
-                  </strong>
+                  <strong>{runtimeDiagnostics.angrymiao.missing_required_env.join('、')}</strong>
                 </div>
               ) : null}
               {runtimeDiagnostics.angrymiao.error ? (
@@ -386,7 +342,7 @@ export function RuntimeStatus() {
           ) : null}
         </>
       ) : null}
-      {error ?? runtimeError ? (
+      {(error ?? runtimeError) ? (
         <p className="runtime-error" role="alert">
           {error ?? runtimeError}
         </p>

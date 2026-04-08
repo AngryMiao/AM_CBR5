@@ -47,8 +47,7 @@ export function LogsPanel() {
   const normalizedKeyword = keyword.trim().toLowerCase()
   const filteredLogs = [...logs].reverse().filter((entry) => {
     const matchesLevel = !levelFilter || entry.level === levelFilter
-    const matchesKeyword =
-      !normalizedKeyword || entry.message.toLowerCase().includes(normalizedKeyword)
+    const matchesKeyword = !normalizedKeyword || entry.message.toLowerCase().includes(normalizedKeyword)
 
     return matchesLevel && matchesKeyword
   })
@@ -79,27 +78,11 @@ export function LogsPanel() {
 
   return (
     <section className="panel logs-panel">
-      <div className="hero-strip logs-strip">
-        <div>
-          <h2>日志</h2>
-          <small>按级别和关键字筛选运行事件，支持导出或清空当前日志。</small>
-        </div>
-      </div>
-
-      <div className="logs-notice-card">
-        <strong>当前条目 {filteredLogs.length}</strong>
-        <small>
-          信息 {infoCount} · 错误 {errorCount} · {keyword ? `关键字 ${keyword}` : '未设置关键字'}
-        </small>
-      </div>
+      <h2 className="sr-only">日志</h2>
 
       <div className="history-toolbar">
         <div className="history-filters">
-          <select
-            aria-label="日志级别"
-            value={levelFilter}
-            onChange={(event) => setLevelFilter(event.target.value)}
-          >
+          <select aria-label="日志级别" value={levelFilter} onChange={(event) => setLevelFilter(event.target.value)}>
             <option value="">全部级别</option>
             <option value="info">信息</option>
             <option value="error">错误</option>
@@ -116,6 +99,12 @@ export function LogsPanel() {
           <button type="button" onClick={() => void handleClear()}>
             清空日志
           </button>
+        </div>
+        <div className="panel-toolbar-meta">
+          <span>当前条目 {filteredLogs.length}</span>
+          <span>信息 {infoCount}</span>
+          <span>错误 {errorCount}</span>
+          <span>{keyword ? `关键字 ${keyword}` : '未设置关键字'}</span>
         </div>
       </div>
 

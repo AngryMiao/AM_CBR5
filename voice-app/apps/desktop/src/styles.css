@@ -78,9 +78,7 @@ html[data-window='result'] #root {
   width: min(1240px, calc(100% - 32px));
   margin: 0 auto;
   padding: 24px 0 40px;
-  font-family:
-    "Bahnschrift", "Aptos", "Segoe UI", "PingFang SC", "Microsoft YaHei",
-    sans-serif;
+  font-family: 'Bahnschrift', 'Aptos', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 .app-shell::before {
@@ -89,8 +87,7 @@ html[data-window='result'] #root {
   inset: 12px 0 auto;
   height: 240px;
   border-radius: 40px;
-  background:
-    linear-gradient(90deg, rgba(104, 183, 255, 0.14), rgba(255, 184, 107, 0.06));
+  background: linear-gradient(90deg, rgba(104, 183, 255, 0.14), rgba(255, 184, 107, 0.06));
   filter: blur(48px);
   z-index: -1;
   pointer-events: none;
@@ -112,9 +109,7 @@ html[data-window='result'] #root {
   padding: 24px 22px 20px;
   border: 1px solid var(--shell-border);
   border-radius: 28px;
-  background:
-    linear-gradient(180deg, rgba(14, 21, 28, 0.94), rgba(8, 12, 17, 0.98)),
-    rgba(8, 12, 17, 0.96);
+  background: linear-gradient(180deg, rgba(14, 21, 28, 0.94), rgba(8, 12, 17, 0.98)), rgba(8, 12, 17, 0.96);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(18px);
 }
@@ -243,8 +238,7 @@ html[data-window='result'] #root {
   padding: 16px 18px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 22px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.025));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.025));
 }
 
 .workspace-summary span {
@@ -272,8 +266,7 @@ html[data-window='result'] #root {
   padding: 22px 24px;
   border: 1px solid var(--shell-border);
   border-radius: 28px;
-  background:
-    linear-gradient(180deg, var(--shell-surface), var(--shell-surface-strong));
+  background: linear-gradient(180deg, var(--shell-surface), var(--shell-surface-strong));
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24);
   backdrop-filter: blur(18px);
 }
@@ -580,8 +573,7 @@ html[data-window='result'] #root {
   padding: 18px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 20px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.025));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.025));
 }
 
 .settings-stage-hero strong {
@@ -700,13 +692,11 @@ html[data-window='result'] #root {
 }
 
 .settings-actions button:first-child {
-  background:
-    linear-gradient(135deg, rgba(104, 183, 255, 0.18), rgba(104, 183, 255, 0.08));
+  background: linear-gradient(135deg, rgba(104, 183, 255, 0.18), rgba(104, 183, 255, 0.08));
 }
 
 .settings-actions button:first-child:hover {
-  background:
-    linear-gradient(135deg, rgba(104, 183, 255, 0.28), rgba(255, 184, 107, 0.12));
+  background: linear-gradient(135deg, rgba(104, 183, 255, 0.28), rgba(255, 184, 107, 0.12));
 }
 
 .settings-hint {
@@ -1185,13 +1175,11 @@ html[data-window='result'] #root {
 }
 
 .runtime-actions button {
-  background:
-    linear-gradient(135deg, rgba(104, 183, 255, 0.18), rgba(104, 183, 255, 0.08));
+  background: linear-gradient(135deg, rgba(104, 183, 255, 0.18), rgba(104, 183, 255, 0.08));
 }
 
 .runtime-actions button:hover {
-  background:
-    linear-gradient(135deg, rgba(104, 183, 255, 0.28), rgba(255, 184, 107, 0.12));
+  background: linear-gradient(135deg, rgba(104, 183, 255, 0.28), rgba(255, 184, 107, 0.12));
 }
 
 .runtime-actions button:disabled,
@@ -1648,8 +1636,7 @@ body:not([data-window='overlay']):not([data-window='result']) {
 .app-shell {
   width: min(1400px, calc(100% - 40px));
   padding: 24px 0 36px;
-  font-family:
-    "Aptos", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: 'Aptos', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 .app-shell::before {
@@ -1673,8 +1660,7 @@ body:not([data-window='overlay']):not([data-window='result']) {
   padding: 28px 22px 22px;
   border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 34px;
-  background:
-    linear-gradient(180deg, rgba(252, 246, 240, 0.96), rgba(242, 232, 222, 0.96));
+  background: linear-gradient(180deg, rgba(252, 246, 240, 0.96), rgba(242, 232, 222, 0.96));
   box-shadow:
     0 30px 60px rgba(146, 121, 97, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.65);
@@ -1761,8 +1747,7 @@ body:not([data-window='overlay']):not([data-window='result']) {
 
 .workspace-menu-item[data-active='true'] {
   border-color: rgba(171, 142, 111, 0.2);
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(246, 236, 226, 0.94));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(246, 236, 226, 0.94));
   box-shadow: 0 18px 30px rgba(146, 121, 97, 0.08);
 }
 
@@ -1878,8 +1863,7 @@ body:not([data-window='overlay']):not([data-window='result']) {
   padding: 24px;
   border: 1px solid rgba(255, 255, 255, 0.7);
   border-radius: 34px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 251, 246, 0.96));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 251, 246, 0.96));
   box-shadow:
     0 28px 60px rgba(146, 121, 97, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
@@ -2057,8 +2041,7 @@ body:not([data-window='overlay']):not([data-window='result']) {
   padding: 22px;
   border: 1px solid rgba(171, 142, 111, 0.16);
   border-radius: 28px;
-  background:
-    linear-gradient(135deg, #fff3e3 0%, #fffdfb 50%, #eef3ff 100%);
+  background: linear-gradient(135deg, #fff3e3 0%, #fffdfb 50%, #eef3ff 100%);
 }
 
 .runtime-hero-copy {
@@ -2412,8 +2395,7 @@ body:not([data-window='overlay']):not([data-window='result']) {
   padding: 18px;
   border: 1px solid rgba(171, 142, 111, 0.14);
   border-radius: 30px;
-  background:
-    linear-gradient(180deg, rgba(250, 244, 237, 0.94), rgba(255, 255, 255, 0.92));
+  background: linear-gradient(180deg, rgba(250, 244, 237, 0.94), rgba(255, 255, 255, 0.92));
 }
 
 .settings-nav {
@@ -2460,8 +2442,7 @@ body:not([data-window='overlay']):not([data-window='result']) {
   padding: 22px;
   border: 1px solid rgba(171, 142, 111, 0.16);
   border-radius: 26px;
-  background:
-    linear-gradient(135deg, #fff4e6 0%, #fffdfb 58%, #f1f4ff 100%);
+  background: linear-gradient(135deg, #fff4e6 0%, #fffdfb 58%, #f1f4ff 100%);
 }
 
 .settings-stage-hero strong {
@@ -2661,8 +2642,7 @@ body:not([data-window='overlay']):not([data-window='result']) {
   --shell-sidebar-bg: linear-gradient(180deg, #f4efe8 0%, #f1ebe3 100%);
   --shell-blue-card: linear-gradient(135deg, #e7f6ff 0%, #f7fbff 100%);
   --shell-peach-card: linear-gradient(135deg, #fff0e6 0%, #fffaf6 100%);
-  --shell-modal-scrim:
-    linear-gradient(180deg, rgba(39, 33, 27, 0.08), rgba(39, 33, 27, 0.14));
+  --shell-modal-scrim: linear-gradient(180deg, rgba(39, 33, 27, 0.08), rgba(39, 33, 27, 0.14));
   --shell-shadow-soft: 0 22px 40px rgba(28, 22, 14, 0.08);
   --shell-shadow-modal: 0 24px 48px rgba(40, 28, 16, 0.16);
 }
@@ -2683,9 +2663,7 @@ body:not([data-window='overlay']):not([data-window='result']) {
 .app-shell {
   width: min(1320px, calc(100% - 32px));
   padding: 20px 0 30px;
-  font-family:
-    'Aptos', 'Bahnschrift', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei',
-    sans-serif;
+  font-family: 'Aptos', 'Bahnschrift', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 .app-shell::before {
@@ -2732,9 +2710,7 @@ body:not([data-window='overlay']):not([data-window='result']) {
 }
 
 .workspace-brand strong {
-  font-family:
-    'Bahnschrift SemiCondensed', 'Aptos Display', 'Aptos', 'Segoe UI',
-    sans-serif;
+  font-family: 'Bahnschrift SemiCondensed', 'Aptos Display', 'Aptos', 'Segoe UI', sans-serif;
   font-size: 24px;
   line-height: 0.95;
   letter-spacing: -0.04em;
@@ -2902,9 +2878,7 @@ body:not([data-window='overlay']):not([data-window='result']) {
 }
 
 .runtime-home-title {
-  font-family:
-    'Bahnschrift SemiCondensed', 'Aptos Display', 'Aptos', 'Segoe UI',
-    sans-serif;
+  font-family: 'Bahnschrift SemiCondensed', 'Aptos Display', 'Aptos', 'Segoe UI', sans-serif;
   max-width: 16ch;
   color: var(--shell-text);
   font-size: clamp(32px, 4vw, 42px);
@@ -3391,14 +3365,11 @@ body:not([data-window='overlay']):not([data-window='result']) {
   padding: 16px 18px;
   border: 1px solid var(--shell-border-soft);
   border-radius: 18px;
-  background:
-    linear-gradient(135deg, #fff4e6 0%, #fffdfb 58%, #f1f4ff 100%);
+  background: linear-gradient(135deg, #fff4e6 0%, #fffdfb 58%, #f1f4ff 100%);
 }
 
 .settings-stage-hero strong {
-  font-family:
-    'Bahnschrift SemiCondensed', 'Aptos Display', 'Aptos', 'Segoe UI',
-    sans-serif;
+  font-family: 'Bahnschrift SemiCondensed', 'Aptos Display', 'Aptos', 'Segoe UI', sans-serif;
   font-size: 28px;
   letter-spacing: -0.04em;
 }
@@ -3608,4 +3579,228 @@ body:not([data-window='overlay']):not([data-window='result']) {
   .history-notice-stats {
     display: grid;
   }
+}
+
+/* Main shell layout refinement */
+
+html[data-window='main'],
+html[data-window='main'] body,
+html[data-window='main'] #root {
+  height: 100%;
+}
+
+html[data-window='main'] body {
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+html[data-window='main'] #root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  width: min(1360px, calc(100% - 24px));
+  height: 100vh;
+  padding: 12px 0;
+}
+
+.workspace-shell {
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 20px;
+  height: 100%;
+  min-height: 0;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.workspace-sidebar,
+.workspace-content {
+  min-height: 0;
+}
+
+.workspace-sidebar {
+  grid-template-rows: auto auto 1fr auto;
+  gap: 14px;
+  padding: 18px 16px 18px 18px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.workspace-brand strong {
+  font-size: 30px;
+}
+
+.workspace-menu {
+  gap: 10px;
+}
+
+.workspace-menu-item {
+  min-height: 56px;
+  padding: 14px 16px 14px 18px;
+  border-radius: 16px;
+}
+
+.workspace-menu-item span {
+  font-size: 16px;
+}
+
+.workspace-sidebar-spacer {
+  min-height: 24px;
+}
+
+.workspace-sidebar-footer {
+  gap: 10px;
+}
+
+.workspace-content {
+  min-width: 0;
+  padding: 24px 28px 30px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.workspace-content .panel {
+  min-height: 0;
+}
+
+.runtime-home-layout {
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.9fr);
+}
+
+.runtime-primary-card {
+  padding: 20px;
+}
+
+.runtime-copy {
+  max-width: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 1320px) {
+  .runtime-home-layout,
+  .runtime-entry-grid,
+  .runtime-focus-grid,
+  .runtime-diagnostic-groups,
+  .history-item-grid,
+  .settings-shell-modal {
+    grid-template-columns: 1fr;
+  }
+
+  .history-notice-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 1240px) {
+  .app-shell {
+    width: calc(100% - 16px);
+  }
+
+  .workspace-shell {
+    grid-template-columns: 216px minmax(0, 1fr);
+    gap: 16px;
+    padding: 14px;
+  }
+
+  .workspace-content {
+    padding: 22px 24px 28px;
+  }
+
+  .workspace-menu-item {
+    min-height: 52px;
+  }
+}
+
+.workspace-menu-item::before,
+.workspace-menu-item[data-active='true']::before {
+  display: none;
+}
+
+.history-toolbar {
+  display: grid;
+  gap: 10px;
+}
+
+.logs-panel .history-toolbar {
+  gap: 10px;
+}
+
+.panel-toolbar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  color: #7f7264;
+  font-size: 12px;
+}
+
+.panel-toolbar-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid #eee4d8;
+  background: rgba(247, 242, 235, 0.9);
+}
+
+.settings-panel {
+  gap: 16px;
+}
+
+.settings-form {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-sections {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-section {
+  gap: 14px;
+  padding: 18px 18px 20px;
+  border-color: #ece2d6;
+  background: linear-gradient(180deg, #fffdfa 0%, #fffaf5 100%);
+}
+
+.settings-section legend {
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #eadfce;
+  background: #f7efe5;
+}
+
+.settings-secret,
+.shortcut-settings,
+.skill-bundle-panel,
+.shortcut-card,
+.shortcut-create,
+.skill-bundle-card {
+  padding: 14px;
+  border-color: #efe4d8;
+  background: #fff;
+}
+
+.settings-checkbox {
+  border-color: #efe4d8;
+  background: #fff;
+}
+
+.settings-actions {
+  padding-top: 2px;
 }

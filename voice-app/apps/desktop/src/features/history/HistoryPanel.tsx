@@ -69,24 +69,7 @@ export function HistoryPanel() {
 
   return (
     <section className="panel history-panel">
-      <div className="hero-strip history-strip">
-        <div>
-          <h2>历史记录</h2>
-          <small>按关键字和状态筛选最近的识别文本、结果与执行详情。</small>
-        </div>
-      </div>
-
-      <div className="history-notice-card">
-        <div>
-          <strong>保存历史 / 本地回看</strong>
-          <small>所有记录仅写入本地，用于预览、回看和重新生成。</small>
-        </div>
-        <div className="history-notice-stats">
-          <span>已完成 {completedCount}</span>
-          <span>识别失败 {failedCount}</span>
-          <span>{statusFilter || '全部状态'}</span>
-        </div>
-      </div>
+      <h2 className="sr-only">历史记录</h2>
 
       <div className="history-toolbar">
         <div className="history-filters">
@@ -105,6 +88,11 @@ export function HistoryPanel() {
             <option value="done">已完成</option>
             <option value="error">识别失败</option>
           </select>
+        </div>
+        <div className="panel-toolbar-meta history-toolbar-meta">
+          <span>已完成 {completedCount}</span>
+          <span>识别失败 {failedCount}</span>
+          <span>{statusFilter || '全部状态'}</span>
         </div>
       </div>
       {orderedHistory.length === 0 ? (
