@@ -189,7 +189,8 @@ describe('App shell', () => {
     expect(await section.findByLabelText('豆包 App ID')).toBeInTheDocument()
     expect(section.getByLabelText('默认麦克风')).toBeInTheDocument()
     expect(section.getByRole('button', { name: '刷新设备列表' })).toBeInTheDocument()
-    expect(section.getByLabelText('音频位深')).toBeInTheDocument()
+    expect(section.getByLabelText('转录静音自动结束（ms）')).toBeInTheDocument()
+    expect(section.queryByLabelText('音频位深')).toBeNull()
 
     await openSettingsSection('模型')
     expect(await section.findByLabelText('LLM API Key')).toHaveAttribute('type', 'password')
@@ -498,8 +499,8 @@ describe('App shell', () => {
     fireEvent.keyDown(window, { code: 'Backspace', key: 'Backspace' })
 
     await openSettingsSection('语音')
-    fireEvent.change(await screen.findByLabelText('音频采样率'), {
-      target: { value: '8000' },
+    fireEvent.change(await screen.findByLabelText('转录静音自动结束（ms）'), {
+      target: { value: '200' },
     })
 
     await openSettingsSection('MCP')
@@ -514,7 +515,9 @@ describe('App shell', () => {
     expect(await screen.findByText('默认热键不能为空。')).toBeInTheDocument()
 
     await openSettingsSection('语音')
-    expect(await screen.findByText('音频采样率当前只支持 16000。')).toBeInTheDocument()
+    expect(
+      await screen.findByText('转录静音自动结束需为 0 或 500 到 5000 毫秒。'),
+    ).toBeInTheDocument()
 
     await openSettingsSection('MCP')
     expect(screen.getByRole('button', { name: '保存设置' })).toBeDisabled()

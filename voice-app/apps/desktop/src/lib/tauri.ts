@@ -19,6 +19,7 @@ export type RuntimeSnapshot = {
   result: string
   detail: string
   input_mode: 'none' | 'agent' | 'transcription' | string
+  result_window_mode: 'auto' | 'hidden' | string
 }
 
 export type HistoryRecord = {

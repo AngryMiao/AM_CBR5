@@ -1,5 +1,12 @@
 use serde::{Deserialize, Serialize};
 
+pub const RESULT_WINDOW_MODE_AUTO: &str = "auto";
+pub const RESULT_WINDOW_MODE_HIDDEN: &str = "hidden";
+
+fn default_result_window_mode() -> String {
+    RESULT_WINDOW_MODE_AUTO.to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RuntimeSnapshot {
     pub phase: String,
@@ -7,6 +14,8 @@ pub struct RuntimeSnapshot {
     pub result: String,
     pub detail: String,
     pub input_mode: String,
+    #[serde(default = "default_result_window_mode")]
+    pub result_window_mode: String,
 }
 
 impl Default for RuntimeSnapshot {
@@ -38,6 +47,12 @@ impl RuntimeSnapshot {
             result: result.into(),
             detail: detail.into(),
             input_mode: input_mode.into(),
+            result_window_mode: default_result_window_mode(),
         }
+    }
+
+    pub fn with_result_window_mode(mut self, result_window_mode: impl Into<String>) -> Self {
+        self.result_window_mode = result_window_mode.into();
+        self
     }
 }

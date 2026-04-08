@@ -7,6 +7,7 @@ const loadingSnapshot: RuntimeSnapshot = {
   result: '',
   detail: '正在加载运行时状态。',
   input_mode: 'none',
+  result_window_mode: 'auto',
 }
 
 export function useRuntimeSnapshot() {

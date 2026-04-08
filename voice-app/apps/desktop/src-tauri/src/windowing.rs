@@ -4,7 +4,7 @@ use std::time::Duration;
 #[cfg(target_os = "windows")]
 use std::{ffi::c_void, mem::size_of};
 
-use ipc_contract::RuntimeSnapshot;
+use ipc_contract::{RuntimeSnapshot, RESULT_WINDOW_MODE_HIDDEN};
 use tauri::{
     webview::Color, App, AppHandle, Manager, PhysicalPosition, Runtime, WebviewUrl,
     WebviewWindowBuilder, Window, WindowEvent,
@@ -26,6 +26,7 @@ static OVERLAY_HIDE_TOKEN: AtomicU64 = AtomicU64::new(0);
 struct WindowVisibility {
     overlay_visible: bool,
     result_visible: bool,
+    result_focus_on_show: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,7 +81,7 @@ pub fn sync_runtime_windows(app: &AppHandle, snapshot: &RuntimeSnapshot) -> taur
     apply_window_visibility(
         app.get_webview_window(RESULT_WINDOW_LABEL),
         visibility.result_visible,
-        true,
+        visibility.result_focus_on_show,
     )?;
     sync_overlay_auto_hide(app.clone(), snapshot, visibility.overlay_visible);
 
@@ -213,23 +214,39 @@ fn window_visibility_for_snapshot(snapshot: &RuntimeSnapshot) -> WindowVisibilit
         return WindowVisibility {
             overlay_visible: snapshot.phase != "待命中",
             result_visible: false,
+            result_focus_on_show: false,
         };
     }
+
+    let result_window_hidden = snapshot.result_window_mode == RESULT_WINDOW_MODE_HIDDEN;
 
     match snapshot.phase.as_str() {
         "正在聆听" | "正在识别" | "正在生成" | "正在执行" | "正在输出" => {
             WindowVisibility {
                 overlay_visible: true,
                 result_visible: false,
+                result_focus_on_show: false,
             }
         }
-        "已完成" | "识别失败" => WindowVisibility {
-            overlay_visible: false,
-            result_visible: true,
-        },
+        "已完成" | "识别失败" => {
+            if result_window_hidden {
+                return WindowVisibility {
+                    overlay_visible: false,
+                    result_visible: false,
+                    result_focus_on_show: false,
+                };
+            }
+
+            WindowVisibility {
+                overlay_visible: false,
+                result_visible: true,
+                result_focus_on_show: false,
+            }
+        }
         _ => WindowVisibility {
             overlay_visible: false,
             result_visible: false,
+            result_focus_on_show: false,
         },
     }
 }
@@ -399,6 +416,7 @@ mod tests {
 
         assert!(!visibility.overlay_visible);
         assert!(visibility.result_visible);
+        assert!(!visibility.result_focus_on_show);
     }
 
     #[test]
@@ -440,6 +458,7 @@ mod tests {
         let visibility = window_visibility_for_snapshot(&snapshot);
         assert!(visibility.overlay_visible);
         assert!(!visibility.result_visible);
+        assert!(!visibility.result_focus_on_show);
     }
 
     #[test]
@@ -455,6 +474,43 @@ mod tests {
         let visibility = window_visibility_for_snapshot(&snapshot);
         assert!(visibility.overlay_visible);
         assert!(!visibility.result_visible);
+        assert!(!visibility.result_focus_on_show);
+    }
+
+    #[test]
+    fn agent_llm_done_state_shows_result_window_without_grabbing_focus() {
+        let mut snapshot = RuntimeSnapshot::with_mode(
+            "已完成",
+            "帮我总结这段会议纪要",
+            "这里是总结结果",
+            "OpenAI-compatible LLM 输出已完成。",
+            "agent",
+        );
+        snapshot.result_window_mode = "auto".to_string();
+
+        let visibility = window_visibility_for_snapshot(&snapshot);
+
+        assert!(!visibility.overlay_visible);
+        assert!(visibility.result_visible);
+        assert!(!visibility.result_focus_on_show);
+    }
+
+    #[test]
+    fn agent_tool_success_hides_result_window_after_completion() {
+        let mut snapshot = RuntimeSnapshot::with_mode(
+            "已完成",
+            "请打开 Rust 官网",
+            "已打开链接。",
+            "本地工具执行已完成。",
+            "agent",
+        );
+        snapshot.result_window_mode = "hidden".to_string();
+
+        let visibility = window_visibility_for_snapshot(&snapshot);
+
+        assert!(!visibility.overlay_visible);
+        assert!(!visibility.result_visible);
+        assert!(!visibility.result_focus_on_show);
     }
 
     #[test]

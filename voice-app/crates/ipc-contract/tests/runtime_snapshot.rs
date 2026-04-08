@@ -16,6 +16,7 @@ fn default_snapshot_uses_none_input_mode() {
 
     assert_eq!(snapshot.phase, "待命中");
     assert_eq!(snapshot.input_mode, "none");
+    assert_eq!(snapshot.result_window_mode, "auto");
 }
 
 #[test]
@@ -30,4 +31,5 @@ fn snapshot_with_mode_keeps_explicit_input_mode() {
 
     assert_eq!(snapshot.input_mode, "transcription");
     assert_eq!(snapshot.transcript, "实时片段");
+    assert_eq!(snapshot.result_window_mode, "auto");
 }

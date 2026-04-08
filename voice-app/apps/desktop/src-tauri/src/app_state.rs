@@ -14,7 +14,7 @@ use automation_core::{
 use history_core::{
     load_history_records, query_history_records, save_history_records, HistoryQuery, HistoryRecord,
 };
-use ipc_contract::RuntimeSnapshot;
+use ipc_contract::{RuntimeSnapshot, RESULT_WINDOW_MODE_AUTO, RESULT_WINDOW_MODE_HIDDEN};
 use llm_core::{
     LlmGenerationOutcome, LlmToolRequest, OpenAiCompatibleLlmConfig, OpenAiCompatibleLlmService,
 };
@@ -1083,7 +1083,8 @@ impl AppState {
         let record = runtime
             .machine
             .complete_success_with("", result, "本地工具执行已完成。");
-        let snapshot = snapshot_with_mode(runtime.machine.snapshot(), runtime.active_input_mode);
+        let snapshot = snapshot_with_mode(runtime.machine.snapshot(), runtime.active_input_mode)
+            .with_result_window_mode(RESULT_WINDOW_MODE_HIDDEN);
         runtime.active_operation_id = None;
 
         if runtime.stored_settings.history_enabled {
@@ -1737,6 +1738,11 @@ fn snapshot_with_mode(
     input_mode: VoiceInputMode,
 ) -> RuntimeSnapshot {
     snapshot.input_mode = input_mode.as_contract_str().to_string();
+    snapshot.result_window_mode = if input_mode == VoiceInputMode::Transcription {
+        RESULT_WINDOW_MODE_HIDDEN.to_string()
+    } else {
+        RESULT_WINDOW_MODE_AUTO.to_string()
+    };
     snapshot
 }
 
@@ -2319,6 +2325,7 @@ mod tests {
         assert_eq!(snapshot.phase, "已完成");
         assert_eq!(snapshot.transcript, "最终识别结果");
         assert_eq!(snapshot.result, "这是 LLM 最终输出");
+        assert_eq!(snapshot.result_window_mode, "auto");
         assert_eq!(state.history_records().len(), 1);
         assert_eq!(state.history_records()[0].status, "done");
         assert!(state
@@ -2508,6 +2515,7 @@ mod tests {
         assert_eq!(snapshot.phase, "已完成");
         assert_eq!(snapshot.result, "已打开链接。");
         assert!(snapshot.detail.contains("工具执行已完成"));
+        assert_eq!(snapshot.result_window_mode, "hidden");
         assert_eq!(state.history_records().len(), 1);
         assert_eq!(state.history_records()[0].status, "done");
     }

@@ -8,6 +8,7 @@ type RuntimeSnapshot = {
   result: string
   detail: string
   input_mode: string
+  result_window_mode: string
 }
 
 type HistoryRecord = {
@@ -206,6 +207,7 @@ let runtimeSnapshot: RuntimeSnapshot = {
   result: '',
   detail: '等待下一次语音任务。',
   input_mode: 'none',
+  result_window_mode: 'auto',
 }
 let historyRecords: HistoryRecord[] = []
 let runtimeLogs: RuntimeLogEntry[] = []
@@ -246,6 +248,7 @@ beforeEach(() => {
     result: '',
     detail: '等待下一次语音任务。',
     input_mode: 'none',
+    result_window_mode: 'auto',
   }
   historyRecords = []
   runtimeLogs = [{ level: 'info', message: '语音运行时已就绪。' }]
@@ -486,6 +489,7 @@ function completeToolExecutionRuntime(transcript: string, createdAt: string) {
     result: '已将文本输出到当前输入位置。',
     detail: '本地工具执行已完成。',
     input_mode: 'agent',
+    result_window_mode: 'hidden',
   }
   historyRecords = [
     ...historyRecords,
@@ -511,6 +515,7 @@ function scheduleToolExecutionRuntime(transcript: string, createdAt: string) {
       result: '',
       detail: '正在输出文本到当前焦点。',
       input_mode: 'agent',
+      result_window_mode: 'auto',
     }
     emit('runtime-snapshot', runtimeSnapshot)
     pushInfoLog('LLM 已返回 1 个工具动作，正在进入本地执行。')
@@ -529,6 +534,7 @@ function startMicrophoneCaptureRuntime() {
     result: '',
     detail: '正在接收语音输入。',
     input_mode: 'agent',
+    result_window_mode: 'auto',
   }
   pushInfoLog('测试语音任务已开始，状态进入正在聆听。')
   emit('runtime-snapshot', runtimeSnapshot)
@@ -540,6 +546,7 @@ function startMicrophoneCaptureRuntime() {
       result: '',
       detail: '正在流式识别语音内容。',
       input_mode: 'agent',
+      result_window_mode: 'auto',
     }
     emit('runtime-snapshot', runtimeSnapshot)
   })
@@ -557,6 +564,7 @@ function stopMicrophoneCaptureRuntime() {
     result: '',
     detail: '正在等待豆包返回最终识别结果。',
     input_mode: 'agent',
+    result_window_mode: 'auto',
   }
   pushInfoLog('测试语音任务已结束录音，等待豆包完成识别。')
   emit('runtime-snapshot', runtimeSnapshot)
@@ -568,6 +576,7 @@ function stopMicrophoneCaptureRuntime() {
       result: '',
       detail: '正在等待 OpenAI-compatible LLM 输出。',
       input_mode: 'agent',
+      result_window_mode: 'auto',
     }
     emit('runtime-snapshot', runtimeSnapshot)
     pushInfoLog('豆包流式识别已完成，正在请求 OpenAI-compatible LLM。')
@@ -606,6 +615,7 @@ function previewHistoryRecordRuntime(recordId: number) {
     result: record.result,
     detail: record.detail,
     input_mode: 'agent',
+    result_window_mode: 'auto',
   }
   emit('runtime-snapshot', runtimeSnapshot)
   return runtimeSnapshot
@@ -623,6 +633,7 @@ function retryHistoryRecordRuntime(recordId: number) {
     result: '',
     detail: `正在根据任务 #${recordId} 的识别文本重新生成结果。`,
     input_mode: 'agent',
+    result_window_mode: 'auto',
   }
   emit('runtime-snapshot', runtimeSnapshot)
   pushInfoLog(`已开始重试任务 #${recordId}，正在重新请求 OpenAI-compatible LLM。`)
@@ -859,6 +870,7 @@ vi.mock('@tauri-apps/api/core', () => ({
         result: '',
         detail: '等待下一次语音任务。',
         input_mode: 'none',
+        result_window_mode: 'auto',
       }
       emit('runtime-snapshot', runtimeSnapshot)
       return runtimeSnapshot
