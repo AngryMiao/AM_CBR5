@@ -6,6 +6,22 @@ import {
   retryHistoryRecord,
   type HistoryRecord,
 } from '../../lib/tauri'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
+import { 
+  History, 
+  Search, 
+  RefreshCw, 
+  Eye, 
+  CheckCircle2, 
+  XCircle,
+  Clock
+} from 'lucide-react'
 
 export function HistoryPanel() {
   const [history, setHistory] = useState<HistoryRecord[]>([])
@@ -68,90 +84,150 @@ export function HistoryPanel() {
   }
 
   return (
-    <section className="panel history-panel">
-      <h2 className="sr-only">历史记录</h2>
-
-      <div className="history-toolbar">
-        <div className="history-filters">
-          <input
-            aria-label="搜索历史记录"
-            placeholder="搜索识别文本、结果或详情"
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
-          />
-          <select
-            aria-label="历史记录状态"
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-          >
-            <option value="">全部状态</option>
-            <option value="done">已完成</option>
-            <option value="error">识别失败</option>
-          </select>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <History className="w-6 h-6 text-primary" />
+            历史记录
+          </h2>
+          <p className="text-muted-foreground mt-1">查看和管理您的语音识别历史</p>
         </div>
-        <div className="panel-toolbar-meta history-toolbar-meta">
-          <span>已完成 {completedCount}</span>
-          <span>识别失败 {failedCount}</span>
-          <span>{statusFilter || '全部状态'}</span>
+        <div className="flex items-center gap-4">
+          <Badge variant="secondary" className="h-8">
+            <CheckCircle2 className="w-3 h-3 mr-1" />
+            已完成 {completedCount}
+          </Badge>
+          <Badge variant="destructive" className="h-8">
+            <XCircle className="w-3 h-3 mr-1" />
+            失败 {failedCount}
+          </Badge>
         </div>
       </div>
+
+      {/* Filters */}
+      <Card className="glass-card">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-4">
+            <div className="flex-1 min-w-[200px] max-w-md">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="搜索识别文本、结果或详情..."
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <Select value={statusFilter || 'all'} onValueChange={(value) => setStatusFilter(value === 'all' ? '' : value)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="全部状态" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部状态</SelectItem>
+                <SelectItem value="done">已完成</SelectItem>
+                <SelectItem value="error">识别失败</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* History List */}
       {orderedHistory.length === 0 ? (
-        <p>暂无历史记录。</p>
+        <Card className="glass-card">
+          <CardContent className="p-12 text-center">
+            <History className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+            <p className="text-muted-foreground">暂无历史记录</p>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="history-list-shell">
-          <ul className="history-list">
-            {orderedHistory.map((record) => (
-              <li key={`${record.id}-${record.status}`} className="history-item">
-                <div className="history-item-header">
-                  <div className="history-title-group">
-                    <strong>任务 #{record.id}</strong>
-                    <span className={`history-status history-status-${record.status}`}>
-                      {historyStatusLabel(record.status)}
-                    </span>
+        <div className="space-y-4">
+          {orderedHistory.map((record) => (
+            <Card key={`${record.id}-${record.status}`} className="glass-card card-hover">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <CardTitle className="text-base font-semibold">
+                      任务 #{record.id}
+                    </CardTitle>
+                    <Badge 
+                      variant={record.status === 'done' ? 'default' : 'destructive'}
+                      className="text-xs"
+                    >
+                      {record.status === 'done' ? (
+                        <><CheckCircle2 className="w-3 h-3 mr-1" /> 已完成</>
+                      ) : (
+                        <><XCircle className="w-3 h-3 mr-1" /> 识别失败</>
+                      )}
+                    </Badge>
                   </div>
-                  <div className="history-meta">
-                    <span>完成时间</span>
-                    <strong>{record.created_at || '未知'}</strong>
-                  </div>
-                </div>
-                <div className="history-item-grid">
-                  <div className="history-block">
-                    <span>识别文本</span>
-                    <strong>{record.transcript || '暂无识别文本。'}</strong>
-                  </div>
-                  <div className="history-block">
-                    <span>任务结果</span>
-                    <strong>{record.result || '暂无任务结果。'}</strong>
-                  </div>
-                  <div className="history-block">
-                    <span>详情</span>
-                    <strong>{record.detail || '暂无详情。'}</strong>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="w-3 h-3" />
+                    {record.created_at || '未知时间'}
                   </div>
                 </div>
-                <div className="history-actions">
-                  <button type="button" onClick={() => void handlePreview(record.id)}>
+              </CardHeader>
+              <CardContent className="pt-0 space-y-4">
+                <div className="grid gap-3">
+                  <div className="p-3 rounded-lg bg-secondary/20 border border-border/30">
+                    <p className="text-xs text-muted-foreground mb-1">识别文本</p>
+                    <p className="text-sm font-medium">{record.transcript || '暂无识别文本'}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-secondary/20 border border-border/30">
+                    <p className="text-xs text-muted-foreground mb-1">任务结果</p>
+                    <p className="text-sm">{record.result || '暂无任务结果'}</p>
+                  </div>
+                  {record.detail && (
+                    <div className="p-3 rounded-lg bg-secondary/20 border border-border/30">
+                      <p className="text-xs text-muted-foreground mb-1">详情</p>
+                      <p className="text-sm text-muted-foreground">{record.detail}</p>
+                    </div>
+                  )}
+                </div>
+                <Separator />
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => void handlePreview(record.id)}
+                    className="gap-1"
+                  >
+                    <Eye className="w-3 h-3" />
                     预览
-                  </button>
-                  <button type="button" onClick={() => void handleRetry(record.id)}>
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => void handleRetry(record.id)}
+                    className="gap-1"
+                  >
+                    <RefreshCw className="w-3 h-3" />
                     重新生成
-                  </button>
+                  </Button>
                 </div>
-              </li>
-            ))}
-          </ul>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
-      {feedback ? (
-        <p className="settings-feedback" role="status">
+
+      {/* Feedback */}
+      {feedback && (
+        <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-sm">
           {feedback}
-        </p>
-      ) : null}
-      {error ? (
-        <p className="runtime-error" role="alert">
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm">
           {error}
-        </p>
-      ) : null}
-    </section>
+        </div>
+      )}
+    </div>
   )
 }
 
