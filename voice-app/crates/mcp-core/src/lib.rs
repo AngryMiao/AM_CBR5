@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 const MCP_PROTOCOL_VERSION: &str = "2025-11-05";
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct McpServerConfig {
     pub id: String,
@@ -90,6 +93,7 @@ impl McpTransportFactory for StdioMcpTransportFactory {
                 child.stdin(Stdio::piped());
                 child.stdout(Stdio::piped());
                 child.stderr(Stdio::null());
+                configure_stdio_child_process(&mut child);
                 if !env.is_empty() {
                     child.envs(env);
                 }
@@ -114,6 +118,21 @@ impl McpTransportFactory for StdioMcpTransportFactory {
             }
         }
     }
+}
+
+#[cfg(windows)]
+fn configure_stdio_child_process(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+
+    command.creation_flags(stdio_child_creation_flags());
+}
+
+#[cfg(not(windows))]
+fn configure_stdio_child_process(_command: &mut Command) {}
+
+#[cfg(windows)]
+fn stdio_child_creation_flags() -> u32 {
+    CREATE_NO_WINDOW
 }
 
 pub struct McpRuntime {
@@ -382,4 +401,13 @@ fn extract_result_text(content: &Value) -> Option<String> {
             .map(|text| text.trim().to_string())
             .filter(|text| !text.is_empty())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(windows)]
+    #[test]
+    fn stdio_child_process_hides_console_window_on_windows() {
+        assert_eq!(super::stdio_child_creation_flags(), 0x0800_0000);
+    }
 }
