@@ -795,32 +795,6 @@ input:focus, textarea:focus, select:focus {
   line-height: 1.5;
 }
 
-.settings-sticky-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 12px;
-  padding: 14px 0 0;
-  border-top: 1px solid rgba(203, 213, 225, 0.76);
-  background: linear-gradient(180deg, rgba(247, 249, 252, 0) 0%, rgba(247, 249, 252, 0.96) 22%);
-  backdrop-filter: blur(14px);
-}
-
-.settings-sticky-message {
-  color: rgba(71, 85, 105, 0.9);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.settings-sticky-actions {
-  display: flex;
-  gap: 10px;
-  flex-shrink: 0;
-}
 
 .shortcut-settings-header {
   display: flex;
@@ -1107,13 +1081,13 @@ input:focus, textarea:focus, select:focus {
   }
 
   .console-toolbar,
-  .settings-sticky-footer,
+  .settings-action-bar,
   .shortcut-settings-header,
   .skill-bundle-card-header {
     flex-direction: column;
   }
 
-  .settings-sticky-actions {
+  .settings-action-bar {
     width: 100%;
   }
 
@@ -1385,36 +1359,117 @@ html[data-window='result'] #root {
 }
 
 /* ============================================
-   Simplified Tabs Pill Styles
+   Settings Pill Tabs - Glassmorphism Style
    ============================================ */
 
-.settings-tabs-pill {
+.settings-pill-tabs {
   display: flex;
   gap: 8px;
-  padding: 12px 0;
+  padding: 0;
   background: transparent;
   border: none;
   height: auto;
 }
 
-.settings-tabs-pill [role="tab"] {
-  padding: 6px 14px;
-  border-radius: 6px;
-  background: rgba(241, 245, 249, 0.9);
-  border: 1px solid rgba(203, 213, 225, 0.6);
+.settings-pill-tab {
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  border: none;
   font-size: 13px;
+  color: #64748b;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.settings-pill-tab:hover {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.settings-pill-tab[data-state="active"] {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(203, 213, 225, 0.78);
+  color: hsl(var(--primary));
+  box-shadow: 0 2px 8px rgba(148, 163, 184, 0.12);
+}
+
+.settings-pill-panel {
+  margin-top: 0;
+}
+
+/* ============================================
+   Settings Glass Card - Glassmorphism Style
+   ============================================ */
+
+.settings-glass-card {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(203, 213, 225, 0.72);
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.settings-toggle-simple {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+}
+
+.settings-toggle-simple:first-child {
+  padding-top: 0;
+}
+
+.settings-divider {
+  height: 1px;
+  background: rgba(203, 213, 225, 0.5);
+  margin: 4px 0;
+}
+
+.settings-action-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.settings-btn-glass {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(203, 213, 225, 0.72);
+  border-radius: 8px;
   color: #475569;
+  font-size: 13px;
+  padding: 8px 16px;
+  cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.settings-tabs-pill [role="tab"]:hover {
-  background: rgba(255, 255, 255, 0.95);
+.settings-btn-glass:hover {
+  background: rgba(255, 255, 255, 0.92);
 }
 
-.settings-tabs-pill [data-state="active"] {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: hsl(var(--primary));
-  color: hsl(var(--primary));
+.settings-btn-primary {
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(213, 91%, 45%) 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 13px;
+  padding: 8px 16px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+  transition: all 0.15s ease;
+}
+
+.settings-btn-primary:hover {
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+}
+
+.settings-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 /* ============================================
