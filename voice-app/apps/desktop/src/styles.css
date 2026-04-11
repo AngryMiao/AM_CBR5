@@ -4,26 +4,26 @@
 
 @layer base {
   :root {
-    --background: 210 20% 97%;
-    --foreground: 217 28% 14%;
+    --background: 0 0% 100%;
+    --foreground: 0 0% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 217 28% 14%;
+    --card-foreground: 0 0% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 217 28% 14%;
-    --primary: 213 91% 49%;
+    --popover-foreground: 0 0% 11%;
+    --primary: 212 100% 45%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 24% 94%;
-    --secondary-foreground: 217 28% 14%;
-    --muted: 210 24% 94%;
-    --muted-foreground: 215 15% 45%;
-    --accent: 210 24% 92%;
-    --accent-foreground: 217 28% 14%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 11%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 48%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 11%;
     --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214 21% 88%;
-    --input: 214 21% 88%;
-    --ring: 213 91% 49%;
-    --radius: 0.9rem;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 88%;
+    --input: 0 0% 88%;
+    --ring: 212 100% 45%;
+    --radius: 0.5rem;
   }
 }
 
@@ -40,9 +40,10 @@
 
   body {
     min-height: 100vh;
-    background:
-      radial-gradient(circle at top left, rgba(255, 255, 255, 0.92), transparent 28%),
-      linear-gradient(180deg, #f6f8fb 0%, #eef2f6 100%);
+    background: #f5f5f7; /* Apple light gray background */
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
@@ -1359,117 +1360,248 @@ html[data-window='result'] #root {
 }
 
 /* ============================================
-   Settings Pill Tabs - Glassmorphism Style
+   Settings - Apple Design System Style
    ============================================ */
 
 .settings-pill-tabs {
   display: flex;
-  gap: 8px;
-  padding: 0;
-  background: transparent;
+  gap: 6px;
+  padding: 6px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 980px;
   border: none;
   height: auto;
+  justify-content: flex-start;
 }
 
 .settings-pill-tab {
-  padding: 8px 16px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid transparent;
-  font-size: 13px;
-  color: #64748b;
-  transition: all 0.15s ease;
+  padding: 6px 18px;
+  border-radius: 980px;
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.8);
+  transition: all 0.2s ease;
   cursor: pointer;
+  letter-spacing: -0.022em;
 }
 
 .settings-pill-tab:hover {
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.6);
 }
 
 .settings-pill-tab[data-state="active"] {
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(203, 213, 225, 0.78);
-  color: hsl(var(--primary));
-  box-shadow: 0 2px 8px rgba(148, 163, 184, 0.12);
+  background: #ffffff;
+  border: none;
+  color: #1d1d1f;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .settings-pill-panel {
-  margin-top: 0;
+  margin-top: 20px;
 }
 
 /* ============================================
-   Settings Glass Card - Glassmorphism Style
+   Settings Apple Card - Minimal Design
    ============================================ */
 
 .settings-glass-card {
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(203, 213, 225, 0.72);
-  border-radius: 16px;
-  padding: 20px;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: rgba(0, 0, 0, 0.22) 3px 5px 30px 0px;
 }
 
 .settings-toggle-simple {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 0;
+  padding: 16px 0;
 }
 
 .settings-toggle-simple:first-child {
   padding-top: 0;
 }
 
-.settings-divider {
-  height: 1px;
-  background: rgba(203, 213, 225, 0.5);
-  margin: 4px 0;
+.settings-toggle-simple:last-child {
+  padding-bottom: 0;
 }
+
+/* ============================================
+   Settings Field Styling
+   ============================================ */
+
+.settings-field-block {
+  padding: 16px 0;
+}
+
+.settings-field-block:first-child {
+  padding-top: 0;
+}
+
+.settings-field-block:last-child {
+  padding-bottom: 0;
+}
+
+.settings-field-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d1d1f;
+  margin-bottom: 8px;
+  letter-spacing: -0.022em;
+}
+
+.settings-field span,
+.settings-hint {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.48);
+  margin-top: 4px;
+}
+
+/* ============================================
+   Settings Inputs - Apple Style
+   ============================================ */
+
+.settings-inline-control {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-native-select,
+.settings-inline-form input,
+.settings-field input,
+.settings-field textarea,
+.settings-field select {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 15px;
+  color: #1d1d1f;
+  background: #fafafa;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  -webkit-appearance: none;
+  appearance: none;
+  letter-spacing: -0.016em;
+}
+
+.settings-native-select:hover,
+.settings-inline-form input:hover,
+.settings-field input:hover,
+.settings-field textarea:hover,
+.settings-field select:hover {
+  border-color: rgba(0, 0, 0, 0.16);
+}
+
+.settings-native-select:focus,
+.settings-inline-form input:focus,
+.settings-field input:focus,
+.settings-field textarea:focus,
+.settings-field select:focus {
+  outline: none;
+  border-color: #0071e3;
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.2);
+  background: #ffffff;
+}
+
+.settings-field textarea {
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+/* ============================================
+   Settings Buttons - Apple Style
+   ============================================ */
 
 .settings-action-bar {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 16px;
-  padding-top: 16px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .settings-btn-glass {
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(203, 213, 225, 0.72);
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 8px;
-  color: #475569;
-  font-size: 13px;
+  color: #1d1d1f;
+  font-size: 14px;
+  font-weight: 500;
   padding: 8px 16px;
   cursor: pointer;
   transition: all 0.15s ease;
+  letter-spacing: -0.01em;
 }
 
 .settings-btn-glass:hover {
-  background: rgba(255, 255, 255, 0.92);
+  background: #f5f5f7;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.settings-btn-glass:active {
+  background: #e8e8ed;
 }
 
 .settings-btn-primary {
-  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(213, 91%, 45%) 100%);
+  background: #0071e3;
   border: none;
   border-radius: 8px;
-  color: white;
-  font-size: 13px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
   padding: 8px 16px;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
   transition: all 0.15s ease;
+  letter-spacing: -0.01em;
 }
 
 .settings-btn-primary:hover {
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+  background: #0077ed;
+}
+
+.settings-btn-primary:active {
+  background: #0065cb;
 }
 
 .settings-btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  box-shadow: none;
+}
+
+/* ============================================
+   Settings Feedback & Errors
+   ============================================ */
+
+.settings-feedback {
+  font-size: 13px;
+  padding: 10px 0;
+}
+
+.console-warning {
+  background: rgba(255, 149, 0, 0.1);
+  border: 1px solid rgba(255, 149, 0, 0.2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #b95900;
+  font-size: 13px;
+}
+
+.text-destructive {
+  color: #ff3b30;
+}
+
+.runtime-error {
+  color: #ff3b30;
+  font-size: 12px;
+  margin-top: 6px;
 }
 
 /* ============================================

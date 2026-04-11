@@ -5,5 +5,6 @@
       "Bash(cat \"e:/code/AM_CBR5/.superpowers/brainstorm/\"*/state/server-info)",
       "Bash(pnpm test:*)"
     ]
-  }
+  },
+  "spinnerTipsEnabled": true
 }
