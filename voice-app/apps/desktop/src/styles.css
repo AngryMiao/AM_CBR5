@@ -986,27 +986,6 @@ input:focus, textarea:focus, select:focus {
   color: #166534;
 }
 
-/* Two-column layout */
-.runtime-columns {
-  display: flex;
-  gap: 24px;
-  padding-top: 24px;
-}
-
-.runtime-main-column {
-  flex: 1.2;
-  display: grid;
-  gap: 24px;
-}
-
-.runtime-side-column-new {
-  flex: 0.8;
-  display: grid;
-  gap: 24px;
-  padding-left: 24px;
-  border-left: 1px solid #e2e8f0;
-}
-
 /* Section styles */
 .runtime-section-new {
   display: grid;
@@ -1106,8 +1085,24 @@ input:focus, textarea:focus, select:focus {
   line-height: 1.5;
 }
 
+/* Summary grid for single-column layout */
+.runtime-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0;
+}
+
+.runtime-summary-grid .runtime-detail-row-new {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
 @media (max-width: 960px) {
   .runtime-diagnostic-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .runtime-summary-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1122,18 +1117,7 @@ input:focus, textarea:focus, select:focus {
     width: 100%;
   }
 
-  /* Flow layout responsive */
-  .runtime-columns {
-    flex-direction: column;
-  }
-
-  .runtime-side-column-new {
-    padding-left: 0;
-    border-left: none;
-    padding-top: 24px;
-    border-top: 1px solid #e2e8f0;
-  }
-
+  /* Single-column layout responsive */
   .runtime-status-row {
     flex-direction: column;
   }

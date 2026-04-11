@@ -13,17 +13,16 @@ import {
 import { useRuntimeSnapshot } from './useRuntimeSnapshot'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { 
-  Activity, 
-  Server, 
-  Cpu, 
+import {
+  Activity,
+  Server,
+  Cpu,
   Settings,
   AlertCircle,
-  Zap
 } from 'lucide-react'
 
 export function RuntimeStatus() {
-  const { input_mode, result, detail, error: runtimeError } = useRuntimeSnapshot()
+  const { input_mode, detail, error: runtimeError } = useRuntimeSnapshot()
   const [error, setError] = useState<string | null>(null)
   const [platformDiagnostics, setPlatformDiagnostics] = useState<PlatformDiagnostics | null>(null)
   const [runtimeDiagnostics, setRuntimeDiagnostics] = useState<RuntimeDiagnostics | null>(null)
@@ -136,20 +135,6 @@ export function RuntimeStatus() {
           : `${runtimeDiagnostics.active_server_count}/${runtimeDiagnostics.configured_server_count}`,
     },
   ]
-  const runtimeNotices = [
-    platformDiagnostics?.last_deep_link
-      ? {
-          label: '最近深链',
-          value: platformDiagnostics.last_deep_link,
-        }
-      : null,
-    platformDiagnostics?.hotkey_backend_error
-      ? {
-          label: '热键错误',
-          value: platformDiagnostics.hotkey_backend_error,
-        }
-      : null,
-  ].filter(Boolean) as Array<{ label: string; value: string }>
   const topStatusItems = [
     {
       label: '输入模式',
@@ -202,194 +187,170 @@ export function RuntimeStatus() {
 
       <Separator />
 
-      {/* Main two-column layout */}
-      <div className="runtime-columns">
-        {/* Left column - main content */}
-        <div className="runtime-main-column">
-          {/* Task result section */}
-          <section className="runtime-section-new">
-            <div className="runtime-section-header-new">
-              <Zap className="h-4 w-4 runtime-section-header-icon" />
-              <span>任务结果</span>
-            </div>
-            <div className="runtime-detail-row-new">
-              <span className="runtime-detail-label-new runtime-entry-label">识别结果</span>
-            </div>
-            <p className="runtime-entry-value">{result || '等待 LLM 输出...'}</p>
-            {runtimeNotices.map((notice) => (
-              <div className="runtime-detail-row-new" key={notice.label}>
-                <span className="runtime-detail-label-new">{notice.label}</span>
-                <strong className="runtime-detail-value-new">{notice.value}</strong>
-              </div>
-            ))}
-            {platformDiagnostics?.permission_hint ? (
-              <div className="runtime-alert runtime-alert-warning">
-                <AlertCircle className="h-4 w-4" />
-                <span>{platformDiagnostics.permission_hint}</span>
-              </div>
-            ) : null}
-          </section>
-
-          {/* Real-time summary section */}
-          <section className="runtime-section-new">
-            <div className="runtime-section-header-new">
-              <Activity className="h-4 w-4 runtime-section-header-icon" />
-              <span>实时摘要</span>
-            </div>
-            {platformCards.map((card) => (
-              <div className="runtime-detail-row-new" key={card.label}>
-                <span className="runtime-detail-label-new">{card.label}</span>
-                <strong className="runtime-detail-value-new">{card.value}</strong>
-              </div>
-            ))}
-            {runtimeCards.map((card) => (
-              <div className="runtime-detail-row-new" key={card.label}>
-                <span className="runtime-detail-label-new">{card.label}</span>
-                <strong className="runtime-detail-value-new">{card.value}</strong>
-              </div>
-            ))}
-          </section>
+      {/* Single column flow layout */}
+      {/* 实时摘要 Section */}
+      <section className="runtime-section-new">
+        <div className="runtime-section-header-new">
+          <Activity className="h-4 w-4 runtime-section-header-icon" />
+          <span>实时摘要</span>
         </div>
-
-        {/* Right column - side info */}
-        <div className="runtime-side-column-new">
-          {/* System status section */}
-          <section className="runtime-section-new">
-            <div className="runtime-section-header-new">
-              <Settings className="h-4 w-4 runtime-section-header-icon" />
-              <span>系统状态</span>
+        <div className="runtime-summary-grid">
+          {platformCards.map((card) => (
+            <div className="runtime-detail-row-new" key={card.label}>
+              <span className="runtime-detail-label-new">{card.label}</span>
+              <strong className="runtime-detail-value-new">{card.value}</strong>
             </div>
-            {platformCards.map((card) => (
-              <div className="runtime-detail-row-new" key={`side-${card.label}`}>
-                <span className="runtime-detail-label-new">{card.label}</span>
-                <strong className="runtime-detail-value-new">{card.value}</strong>
-              </div>
-            ))}
-            <div className="runtime-detail-row-new">
-              <span className="runtime-detail-label-new">AngryMiao</span>
-              <Badge
-                variant={
-                  angrymiaoStatus.includes('异常') || angrymiaoStatus === '未启用'
-                    ? 'secondary'
-                    : 'default'
-                }
-              >
-                {angrymiaoStatus}
-              </Badge>
+          ))}
+          {runtimeCards.map((card) => (
+            <div className="runtime-detail-row-new" key={card.label}>
+              <span className="runtime-detail-label-new">{card.label}</span>
+              <strong className="runtime-detail-value-new">{card.value}</strong>
             </div>
-          </section>
+          ))}
+        </div>
+        {platformDiagnostics?.permission_hint ? (
+          <div className="runtime-alert runtime-alert-warning">
+            <AlertCircle className="h-4 w-4" />
+            <span>{platformDiagnostics.permission_hint}</span>
+          </div>
+        ) : null}
+      </section>
 
-          {/* MCP Runtime section */}
-          {runtimeDiagnostics ? (
-            <section className="runtime-section-new">
-              <div className="runtime-section-header-new">
-                <Server className="h-4 w-4 runtime-section-header-icon" />
-                <span>MCP 运行时</span>
-                <Badge variant="outline">
-                  {runtimeDiagnostics.active_server_count}/{runtimeDiagnostics.configured_server_count}
-                </Badge>
-              </div>
-              <p className="runtime-supporting-copy-new">
-                已配置 {runtimeDiagnostics.configured_server_count} 个服务，当前活跃 {runtimeDiagnostics.active_server_count} 个。
-              </p>
-              {runtimeDiagnostics.skill_bundle_root ? (
-                <p className="runtime-supporting-copy-new">内置技能包根目录：{runtimeDiagnostics.skill_bundle_root}</p>
-              ) : null}
-              {runtimeDiagnostics.mcp_servers.length === 0 ? (
-                <p className="runtime-supporting-copy-new">当前没有启用中的 MCP 服务。</p>
-              ) : (
-                <div className="runtime-server-list-new">
-                  {runtimeDiagnostics.mcp_servers.map((server) => (
-                    <div className="runtime-server-item" key={server.id}>
-                      <div className="runtime-server-info">
-                        <strong className="runtime-server-name">{server.name}</strong>
-                        <span className="runtime-server-id">{server.id}</span>
-                      </div>
-                      <Badge variant={server.active_in_runtime ? 'default' : 'secondary'}>
-                        {server.active_in_runtime ? '运行中' : '未接通'}
-                      </Badge>
-                    </div>
+      <Separator />
+
+      {/* 系统状态 Section */}
+      <section className="runtime-section-new">
+        <div className="runtime-section-header-new">
+          <Settings className="h-4 w-4 runtime-section-header-icon" />
+          <span>系统状态</span>
+        </div>
+        <div className="runtime-detail-row-new">
+          <span className="runtime-detail-label-new">AngryMiao</span>
+          <Badge
+            variant={
+              angrymiaoStatus.includes('异常') || angrymiaoStatus === '未启用'
+                ? 'secondary'
+                : 'default'
+            }
+          >
+            {angrymiaoStatus}
+          </Badge>
+        </div>
+      </section>
+
+      <Separator />
+
+      {/* MCP Runtime section */}
+      {runtimeDiagnostics ? (
+        <section className="runtime-section-new">
+          <div className="runtime-section-header-new">
+            <Server className="h-4 w-4 runtime-section-header-icon" />
+            <span>MCP 运行时</span>
+            <Badge variant="outline">
+              {runtimeDiagnostics.active_server_count}/{runtimeDiagnostics.configured_server_count}
+            </Badge>
+          </div>
+          <p className="runtime-supporting-copy-new">
+            已配置 {runtimeDiagnostics.configured_server_count} 个服务，当前活跃 {runtimeDiagnostics.active_server_count} 个。
+          </p>
+          {runtimeDiagnostics.skill_bundle_root ? (
+            <p className="runtime-supporting-copy-new">内置技能包根目录：{runtimeDiagnostics.skill_bundle_root}</p>
+          ) : null}
+          {runtimeDiagnostics.mcp_servers.length === 0 ? (
+            <p className="runtime-supporting-copy-new">当前没有启用中的 MCP 服务。</p>
+          ) : (
+            <div className="runtime-server-list-new">
+              {runtimeDiagnostics.mcp_servers.map((server) => (
+                <div className="runtime-server-item" key={server.id}>
+                  <div className="runtime-server-info">
+                    <strong className="runtime-server-name">{server.name}</strong>
+                    <span className="runtime-server-id">{server.id}</span>
+                  </div>
+                  <Badge variant={server.active_in_runtime ? 'default' : 'secondary'}>
+                    {server.active_in_runtime ? '运行中' : '未接通'}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {runtimeDiagnostics.active_tools.length > 0 ? (
+            <>
+              <Separator />
+              <div>
+                <span className="runtime-entry-label runtime-detail-label-new">已发现工具</span>
+                <div className="runtime-tool-chips">
+                  {runtimeDiagnostics.active_tools.map((tool) => (
+                    <span className="runtime-tool-chip" key={tool.qualified_name}>
+                      {tool.qualified_name}
+                    </span>
                   ))}
                 </div>
-              )}
-
-              {runtimeDiagnostics.active_tools.length > 0 ? (
-                <>
-                  <Separator />
-                  <div>
-                    <span className="runtime-entry-label runtime-detail-label-new">已发现工具</span>
-                    <div className="runtime-tool-chips">
-                      {runtimeDiagnostics.active_tools.map((tool) => (
-                        <span className="runtime-tool-chip" key={tool.qualified_name}>
-                          {tool.qualified_name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              ) : null}
-
-              {runtimeDiagnostics.mcp_last_sync_error ? (
-                <div className="runtime-alert runtime-alert-danger">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>MCP 运行时同步失败: {runtimeDiagnostics.mcp_last_sync_error}</span>
-                </div>
-              ) : null}
-            </section>
+              </div>
+            </>
           ) : null}
 
-          {/* AngryMiao Runtime section */}
-          {runtimeDiagnostics ? (
-            <section className="runtime-section-new">
-              <div className="runtime-section-header-new">
-                <Cpu className="h-4 w-4 runtime-section-header-icon" />
-                <span>AngryMiao 运行时</span>
-              </div>
-              <div className="runtime-diagnostic-grid">
-                <div className="runtime-diagnostic-stat">
-                  <span>技能包安装</span>
-                  <strong>{runtimeDiagnostics.angrymiao.bundle_installed ? '已安装' : '未安装'}</strong>
-                </div>
-                <div className="runtime-diagnostic-stat">
-                  <span>当前平台</span>
-                  <strong>{runtimeDiagnostics.angrymiao.supported_on_current_platform ? '已支持' : '未支持'}</strong>
-                </div>
-                <div className="runtime-diagnostic-stat">
-                  <span>运行入口</span>
-                  <strong>{runtimeDiagnostics.angrymiao.runtime_entry_exists ? '存在' : '缺失'}</strong>
-                </div>
-                <div className="runtime-diagnostic-stat">
-                  <span>键盘驱动</span>
-                  <strong>{runtimeDiagnostics.angrymiao.keyboard_driver_exists ? '已就绪' : '未就绪'}</strong>
-                </div>
-              </div>
-
-              {runtimeDiagnostics.angrymiao.keyboard_driver_source ? (
-                <div className="runtime-detail-row-new">
-                  <span className="runtime-detail-label-new">{getKeyboardDriverSourceLabel(runtimeDiagnostics.angrymiao.keyboard_driver_source)}</span>
-                  <strong className="runtime-detail-value-new">{runtimeDiagnostics.angrymiao.keyboard_driver_path ?? '未配置'}</strong>
-                </div>
-              ) : null}
-
-              {runtimeDiagnostics.angrymiao.missing_required_env.length > 0 ? (
-                <div className="runtime-alert runtime-alert-warning">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>
-                    缺少必填环境: {runtimeDiagnostics.angrymiao.missing_required_env.join('、')}
-                  </span>
-                </div>
-              ) : null}
-
-              {runtimeDiagnostics.angrymiao.error ? (
-                <div className="runtime-alert runtime-alert-danger">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>{runtimeDiagnostics.angrymiao.error}</span>
-                </div>
-              ) : null}
-            </section>
+          {runtimeDiagnostics.mcp_last_sync_error ? (
+            <div className="runtime-alert runtime-alert-danger">
+              <AlertCircle className="h-4 w-4" />
+              <span>MCP 运行时同步失败: {runtimeDiagnostics.mcp_last_sync_error}</span>
+            </div>
           ) : null}
-        </div>
-      </div>
+        </section>
+      ) : null}
+
+      <Separator />
+
+      {/* AngryMiao Runtime section */}
+      {runtimeDiagnostics ? (
+        <section className="runtime-section-new">
+          <div className="runtime-section-header-new">
+            <Cpu className="h-4 w-4 runtime-section-header-icon" />
+            <span>AngryMiao 运行时</span>
+          </div>
+          <div className="runtime-diagnostic-grid">
+            <div className="runtime-diagnostic-stat">
+              <span>技能包安装</span>
+              <strong>{runtimeDiagnostics.angrymiao.bundle_installed ? '已安装' : '未安装'}</strong>
+            </div>
+            <div className="runtime-diagnostic-stat">
+              <span>当前平台</span>
+              <strong>{runtimeDiagnostics.angrymiao.supported_on_current_platform ? '已支持' : '未支持'}</strong>
+            </div>
+            <div className="runtime-diagnostic-stat">
+              <span>运行入口</span>
+              <strong>{runtimeDiagnostics.angrymiao.runtime_entry_exists ? '存在' : '缺失'}</strong>
+            </div>
+            <div className="runtime-diagnostic-stat">
+              <span>键盘驱动</span>
+              <strong>{runtimeDiagnostics.angrymiao.keyboard_driver_exists ? '已就绪' : '未就绪'}</strong>
+            </div>
+          </div>
+
+          {runtimeDiagnostics.angrymiao.keyboard_driver_source ? (
+            <div className="runtime-detail-row-new">
+              <span className="runtime-detail-label-new">{getKeyboardDriverSourceLabel(runtimeDiagnostics.angrymiao.keyboard_driver_source)}</span>
+              <strong className="runtime-detail-value-new">{runtimeDiagnostics.angrymiao.keyboard_driver_path ?? '未配置'}</strong>
+            </div>
+          ) : null}
+
+          {runtimeDiagnostics.angrymiao.missing_required_env.length > 0 ? (
+            <div className="runtime-alert runtime-alert-warning">
+              <AlertCircle className="h-4 w-4" />
+              <span>
+                缺少必填环境: {runtimeDiagnostics.angrymiao.missing_required_env.join('、')}
+              </span>
+            </div>
+          ) : null}
+
+          {runtimeDiagnostics.angrymiao.error ? (
+            <div className="runtime-alert runtime-alert-danger">
+              <AlertCircle className="h-4 w-4" />
+              <span>{runtimeDiagnostics.angrymiao.error}</span>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {/* Error display */}
       {(error ?? runtimeError) ? (
