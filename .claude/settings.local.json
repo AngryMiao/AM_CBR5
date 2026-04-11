@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash scripts/start-server.sh --project-dir \"e:/code/AM_CBR5\")",
+      "Bash(cat \"e:/code/AM_CBR5/.superpowers/brainstorm/\"*/state/server-info)",
+      "Bash(pnpm test:*)"
+    ]
+  }
+}

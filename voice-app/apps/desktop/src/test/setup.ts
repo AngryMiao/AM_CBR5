@@ -2,6 +2,20 @@ import '@testing-library/jest-dom/vitest'
 import { beforeEach, vi } from 'vitest'
 import { getDefaultKeyboardShortcuts } from '../features/settings/keyboardShortcuts'
 
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+vi.stubGlobal('ResizeObserver', ResizeObserverMock)
+
+Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+  configurable: true,
+  writable: true,
+  value: vi.fn(),
+})
+
 type RuntimeSnapshot = {
   phase: string
   transcript: string
@@ -233,7 +247,19 @@ let editableSettings = createDefaultEditableSettings()
 let storedSecrets = createDefaultSecrets()
 let microphoneInputs = createDefaultMicrophoneInputs()
 const listeners = new Map<string, Set<(event: { payload: unknown }) => void>>()
-const getCurrentWindow = vi.fn(() => ({ label: 'main', hide: vi.fn() }))
+
+function createMockWindow(label: 'main' | 'overlay' | 'result' = 'main') {
+  return {
+    label,
+    hide: vi.fn(),
+    close: vi.fn(),
+    minimize: vi.fn(),
+    toggleMaximize: vi.fn(),
+    startDragging: vi.fn(),
+  }
+}
+
+const getCurrentWindow = vi.fn(() => createMockWindow('main'))
 const pendingTimers = new Set<ReturnType<typeof setTimeout>>()
 const defaultAsrAudioRate = 16000
 
@@ -274,7 +300,7 @@ beforeEach(() => {
   storedSecrets = createDefaultSecrets()
   microphoneInputs = createDefaultMicrophoneInputs()
   listeners.clear()
-  getCurrentWindow.mockImplementation(() => ({ label: 'main', hide: vi.fn() }))
+  getCurrentWindow.mockImplementation(() => createMockWindow('main'))
 })
 
 function createDefaultEditableSettings(): EditableVoiceSettings {

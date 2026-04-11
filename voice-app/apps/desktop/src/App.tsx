@@ -5,7 +5,13 @@ import { OverlayWindow } from './features/runtime/OverlayWindow'
 import { ResultWindow } from './features/runtime/ResultWindow'
 import { RuntimeStatus } from './features/runtime/RuntimeStatus'
 import { SettingsPanel } from './features/settings/SettingsPanel'
-import { getCurrentWindowLabel } from './lib/tauri'
+import {
+  closeCurrentWindow,
+  getCurrentWindowLabel,
+  minimizeCurrentWindow,
+  startCurrentWindowDragging,
+  toggleCurrentWindowMaximize,
+} from './lib/tauri'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { 
@@ -14,7 +20,9 @@ import {
   Settings, 
   FileText, 
   Mic,
-  Cpu
+  Minus,
+  Square,
+  X
 } from 'lucide-react'
 
 type MainPanelKey = 'runtime' | 'history' | 'settings' | 'logs'
@@ -22,26 +30,41 @@ type MainPanelKey = 'runtime' | 'history' | 'settings' | 'logs'
 const MAIN_PANELS: Array<{
   key: MainPanelKey
   label: string
+  title: string
+  description: string
+  footer: string
   icon: React.ReactNode
 }> = [
   {
     key: 'runtime',
     label: '首页',
+    title: '运行控制',
+    description: '当前语音任务、系统状态与运行摘要。',
+    footer: 'Quiet Console',
     icon: <Home className="w-4 h-4" />,
   },
   {
     key: 'history',
     label: '历史记录',
+    title: '任务历史',
+    description: '查看识别结果、重试任务并预览输出。',
+    footer: 'History Stream',
     icon: <History className="w-4 h-4" />,
   },
   {
     key: 'settings',
     label: '设置',
+    title: '设置中心',
+    description: '管理热键、模型、设备和 MCP 配置。',
+    footer: 'Settings',
     icon: <Settings className="w-4 h-4" />,
   },
   {
     key: 'logs',
     label: '日志',
+    title: '运行日志',
+    description: '查看运行日志、筛选错误并导出记录。',
+    footer: 'Runtime Logs',
     icon: <FileText className="w-4 h-4" />,
   },
 ]
@@ -49,6 +72,7 @@ const MAIN_PANELS: Array<{
 export default function App() {
   const windowLabel = getCurrentWindowLabel()
   const [activePanel, setActivePanel] = useState<MainPanelKey>('runtime')
+  const currentPanel = MAIN_PANELS.find((panel) => panel.key === activePanel) ?? MAIN_PANELS[0]
 
   useLayoutEffect(() => {
     document.documentElement.dataset.window = windowLabel
@@ -69,59 +93,102 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-border/50 bg-card/30 flex flex-col">
-        {/* Logo */}
-        <div className="p-6 border-b border-border/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-              <Mic className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="font-semibold text-lg leading-tight">AngryMiao</h1>
-              <p className="text-xs text-muted-foreground">Voice Control</p>
+    <div className="desktop-shell">
+      <header className="desktop-titlebar">
+        <div
+          aria-label="窗口拖拽区"
+          className="desktop-titlebar-drag"
+          onMouseDown={(event) => {
+            if (event.button !== 0) return
+            void startCurrentWindowDragging()
+          }}
+        />
+
+        <div className="desktop-window-controls">
+          <Button
+            aria-label="最小化窗口"
+            className="desktop-window-button"
+            onClick={() => void minimizeCurrentWindow()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
+            <Minus className="h-4 w-4" />
+          </Button>
+          <Button
+            aria-label="切换窗口最大化"
+            className="desktop-window-button"
+            onClick={() => void toggleCurrentWindowMaximize()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
+            <Square className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            aria-label="关闭窗口"
+            className="desktop-window-button desktop-window-button-danger"
+            onClick={() => void closeCurrentWindow()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </header>
+
+      <div className="desktop-workspace">
+        <aside className="workspace-sidebar">
+          <div className="workspace-sidebar-head">
+            <div className="workspace-sidebar-heading">
+              <span className="workspace-sidebar-brand-mark" aria-hidden="true">
+                <Mic className="w-4 h-4" />
+              </span>
+              <strong>AngryMiao</strong>
             </div>
           </div>
-        </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 p-4">
-          <div className="space-y-1">
+          <nav aria-label="主导航" className="workspace-nav">
             {MAIN_PANELS.map((panel) => (
               <Button
                 key={panel.key}
-                variant={activePanel === panel.key ? 'secondary' : 'ghost'}
-                className={`w-full justify-start gap-3 h-11 ${activePanel === panel.key ? 'bg-secondary/80 text-foreground' : 'text-muted-foreground'}`}
+                aria-current={activePanel === panel.key ? 'page' : undefined}
+                className={`workspace-nav-button ${activePanel === panel.key ? 'workspace-nav-button-active' : ''}`}
                 onClick={() => setActivePanel(panel.key)}
+                variant="ghost"
               >
-                {panel.icon}
+                <span className="workspace-nav-icon">{panel.icon}</span>
                 <span>{panel.label}</span>
               </Button>
             ))}
-          </div>
-        </nav>
+          </nav>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-border/50">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Cpu className="w-3 h-3" />
-            <span>System Ready</span>
+          <div className="workspace-sidebar-footer">
+            <span className="workspace-sidebar-status">System Ready</span>
+            <small>{currentPanel.footer}</small>
           </div>
-        </div>
-      </aside>
+        </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-hidden">
-        <ScrollArea className="h-screen">
-          <div className="p-8 max-w-6xl">
-            {activePanel === 'runtime' && <RuntimeStatus />}
-            {activePanel === 'history' && <HistoryPanel />}
-            {activePanel === 'settings' && <SettingsPanel />}
-            {activePanel === 'logs' && <LogsPanel />}
-          </div>
-        </ScrollArea>
-      </main>
+        <main className="workspace-main">
+          <ScrollArea className="workspace-scroll">
+            <div className="workspace-page">
+              <section className="workspace-panel" data-panel={activePanel}>
+                {activePanel === 'runtime' && <RuntimeStatus />}
+                {activePanel === 'history' && <HistoryPanel />}
+                {activePanel === 'settings' && <SettingsPanel />}
+                {activePanel === 'logs' && <LogsPanel />}
+              </section>
+            </div>
+          </ScrollArea>
+        </main>
+      </div>
     </div>
   )
 }

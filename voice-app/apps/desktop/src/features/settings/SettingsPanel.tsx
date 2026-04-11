@@ -294,11 +294,11 @@ export function SettingsPanel() {
             value={activeTab}
           >
             <TabsList className="settings-pill-tabs">
-              <TabsTrigger className="settings-pill-tab" value="general">通用</TabsTrigger>
-              <TabsTrigger className="settings-pill-tab" value="hotkey">快捷键</TabsTrigger>
-              <TabsTrigger className="settings-pill-tab" value="asr">ASR</TabsTrigger>
-              <TabsTrigger className="settings-pill-tab" value="model">模型</TabsTrigger>
-              <TabsTrigger className="settings-pill-tab" value="mcp">MCP</TabsTrigger>
+              <TabsTrigger className="settings-pill-tab" onClick={() => setActiveTab('general')} value="general">通用</TabsTrigger>
+              <TabsTrigger className="settings-pill-tab" onClick={() => setActiveTab('hotkey')} value="hotkey">快捷键</TabsTrigger>
+              <TabsTrigger className="settings-pill-tab" onClick={() => setActiveTab('asr')} value="asr">ASR</TabsTrigger>
+              <TabsTrigger className="settings-pill-tab" onClick={() => setActiveTab('model')} value="model">模型</TabsTrigger>
+              <TabsTrigger className="settings-pill-tab" onClick={() => setActiveTab('mcp')} value="mcp">MCP</TabsTrigger>
             </TabsList>
 
             <TabsContent className="settings-pill-panel" value="general">
@@ -337,7 +337,7 @@ export function SettingsPanel() {
                   disabled={isBusy || hasBlockingErrors}
                   type="submit"
                 >
-                  保存
+                  保存设置
                 </button>
               </div>
             </TabsContent>
@@ -369,7 +369,7 @@ export function SettingsPanel() {
                   disabled={isBusy || hasBlockingErrors}
                   type="submit"
                 >
-                  保存
+                  保存设置
                 </button>
               </div>
             </TabsContent>
@@ -517,7 +517,7 @@ export function SettingsPanel() {
                   disabled={isBusy || hasBlockingErrors}
                   type="submit"
                 >
-                  保存
+                  保存设置
                 </button>
               </div>
             </TabsContent>
@@ -598,7 +598,7 @@ export function SettingsPanel() {
                   disabled={isBusy || hasBlockingErrors}
                   type="submit"
                 >
-                  保存
+                  保存设置
                 </button>
               </div>
             </TabsContent>
@@ -656,7 +656,7 @@ export function SettingsPanel() {
                   disabled={isBusy || hasBlockingErrors}
                   type="submit"
                 >
-                  保存
+                  保存设置
                 </button>
               </div>
             </TabsContent>

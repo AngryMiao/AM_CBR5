@@ -336,6 +336,30 @@ export async function closeCurrentWindow() {
   await currentWindow.hide()
 }
 
+export async function minimizeCurrentWindow() {
+  const currentWindow = getCurrentWindow()
+
+  if (typeof currentWindow.minimize === 'function') {
+    await currentWindow.minimize()
+  }
+}
+
+export async function toggleCurrentWindowMaximize() {
+  const currentWindow = getCurrentWindow()
+
+  if (typeof currentWindow.toggleMaximize === 'function') {
+    await currentWindow.toggleMaximize()
+  }
+}
+
+export async function startCurrentWindowDragging() {
+  const currentWindow = getCurrentWindow()
+
+  if (typeof currentWindow.startDragging === 'function') {
+    await currentWindow.startDragging()
+  }
+}
+
 export async function listenRuntimeSnapshot(
   onSnapshot: (snapshot: RuntimeSnapshot) => void,
 ) {
