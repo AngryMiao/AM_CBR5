@@ -93,10 +93,7 @@ export function SkillBundleInventory() {
   return (
     <section className="skill-bundle-panel">
       <div className="shortcut-settings-header">
-        <div>
-          <h3>已安装 Skill Bundles</h3>
-          <p>查看本地 bundle 清单、runtime 声明以及提示词文件。</p>
-        </div>
+        <h3>已安装 Skill Bundles</h3>
         <div className="settings-inline-actions">
           <button type="button" onClick={() => void loadBundles()}>
             刷新列表
@@ -114,6 +111,7 @@ export function SkillBundleInventory() {
             onChange={(event) => setInstallPath(event.target.value)}
           />
           <button
+            aria-label="安装 Bundle"
             type="button"
             disabled={installing}
             onClick={() => void handleInstallBundle()}
@@ -121,9 +119,6 @@ export function SkillBundleInventory() {
             {installing ? '安装中...' : '安装 Bundle'}
           </button>
         </div>
-        <p className="settings-hint">
-          当前先支持输入本地目录路径安装到应用的 `skill-bundles` 根目录。
-        </p>
       </div>
       {installMessage ? (
         <p className="settings-feedback" role="status">

@@ -65,10 +65,7 @@ export function KeyboardShortcutSettings({
   return (
     <section className="shortcut-settings">
       <div className="shortcut-settings-header">
-        <div>
-          <h3>键盘控制</h3>
-          <p>维护 driver 路径和语音触发词到快捷键的映射关系。</p>
-        </div>
+        <h3>键盘控制</h3>
         <div className="settings-inline-actions">
           <button type="button" onClick={() => setAddingNew(true)}>
             添加快捷键
@@ -85,6 +82,7 @@ export function KeyboardShortcutSettings({
       <label className="settings-field settings-field-wide">
         <span>键盘驱动路径</span>
         <input
+          aria-label="键盘驱动路径"
           placeholder="可选，自定义 AIKeyBoardDriver.exe 绝对路径"
           value={keyboardDriverPath}
           onChange={(event) => onKeyboardDriverPathChange(event.target.value)}
