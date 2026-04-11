@@ -312,7 +312,6 @@ export function SettingsPanel() {
                     onCheckedChange={(checked) => updateDraft('history_enabled', checked)}
                   />
                 </div>
-                <div className="settings-divider" />
                 <div className="settings-toggle-simple">
                   <strong>开机自启动</strong>
                   <Switch
@@ -376,7 +375,7 @@ export function SettingsPanel() {
 
             <TabsContent className="settings-pill-panel" value="asr">
               <div className="settings-glass-card">
-                <div className="settings-field-block" style={{ padding: '0' }}>
+                <div className="settings-field-block" style={{ padding: '0', marginBottom: '16px' }}>
                   <label className="settings-field-title">豆包 WebSocket URL</label>
                   <Input
                     aria-invalid={Boolean(validationErrors.doubao_asr_url)}
@@ -388,9 +387,7 @@ export function SettingsPanel() {
                   {renderFieldError('doubao_asr_url')}
                 </div>
 
-                <div className="settings-divider" />
-
-                <div className="settings-field-block" style={{ padding: '0' }}>
+                <div className="settings-field-block" style={{ padding: '0', marginBottom: '16px' }}>
                   <label className="settings-field-title">豆包 App ID</label>
                   <Input
                     aria-label="豆包 App ID"
@@ -399,9 +396,7 @@ export function SettingsPanel() {
                   />
                 </div>
 
-                <div className="settings-divider" />
-
-                <div className="settings-field-block" style={{ padding: '0' }}>
+                <div className="settings-field-block" style={{ padding: '0', marginBottom: '16px' }}>
                   <label className="settings-field-title">默认麦克风</label>
                   <div className="settings-inline-control">
                     <select
@@ -433,9 +428,7 @@ export function SettingsPanel() {
                   {microphoneStatus === 'error' && microphoneMessage ? <p className="runtime-error">{microphoneMessage}</p> : null}
                 </div>
 
-                <div className="settings-divider" />
-
-                <div className="settings-field-block" style={{ padding: '0' }}>
+                <div className="settings-field-block" style={{ padding: '0', marginBottom: '16px' }}>
                   <label className="settings-field-title">豆包 Access Token</label>
                   <div className="settings-inline-control">
                     <Input
@@ -457,9 +450,7 @@ export function SettingsPanel() {
                   </div>
                 </div>
 
-                <div className="settings-divider" />
-
-                <div className="settings-field-block" style={{ padding: '0' }}>
+                <div className="settings-field-block" style={{ padding: '0', marginBottom: '16px' }}>
                   <label className="settings-field-title">豆包 Resource ID</label>
                   <Input
                     aria-invalid={Boolean(validationErrors.doubao_asr_resource_id)}
@@ -471,9 +462,7 @@ export function SettingsPanel() {
                   {renderFieldError('doubao_asr_resource_id')}
                 </div>
 
-                <div className="settings-divider" />
-
-                <div className="settings-field-block" style={{ padding: '0' }}>
+                <div className="settings-field-block" style={{ padding: '0', marginBottom: '16px' }}>
                   <label className="settings-field-title">豆包模型</label>
                   <Input
                     aria-invalid={Boolean(validationErrors.doubao_asr_model)}
@@ -484,8 +473,6 @@ export function SettingsPanel() {
                   />
                   {renderFieldError('doubao_asr_model')}
                 </div>
-
-                <div className="settings-divider" />
 
                 <div className="settings-field-block" style={{ padding: '0' }}>
                   <label className="settings-field-title">转录静音自动结束（ms）</label>
@@ -524,7 +511,7 @@ export function SettingsPanel() {
 
             <TabsContent className="settings-pill-panel" value="model">
               <div className="settings-glass-card">
-                <div className="settings-field-block" style={{ padding: '0' }}>
+                <div className="settings-field-block" style={{ padding: '0', marginBottom: '16px' }}>
                   <label className="settings-field-title">LLM 服务地址</label>
                   <Input
                     aria-invalid={Boolean(validationErrors.llm_base_url)}
@@ -536,9 +523,7 @@ export function SettingsPanel() {
                   {renderFieldError('llm_base_url')}
                 </div>
 
-                <div className="settings-divider" />
-
-                <div className="settings-field-block" style={{ padding: '0' }}>
+                <div className="settings-field-block" style={{ padding: '0', marginBottom: '16px' }}>
                   <label className="settings-field-title">LLM API Key</label>
                   <div className="settings-inline-control">
                     <Input
@@ -558,9 +543,7 @@ export function SettingsPanel() {
                   </div>
                 </div>
 
-                <div className="settings-divider" />
-
-                <div className="settings-field-block" style={{ padding: '0' }}>
+                <div className="settings-field-block" style={{ padding: '0', marginBottom: '16px' }}>
                   <label className="settings-field-title">LLM 模型</label>
                   <Input
                     aria-invalid={Boolean(validationErrors.llm_model)}
@@ -571,8 +554,6 @@ export function SettingsPanel() {
                   />
                   {renderFieldError('llm_model')}
                 </div>
-
-                <div className="settings-divider" />
 
                 <div className="settings-field-block" style={{ padding: '0' }}>
                   <label className="settings-field-title">系统提示词</label>
@@ -615,8 +596,6 @@ export function SettingsPanel() {
                   />
                 </div>
 
-                <div className="settings-divider" />
-
                 <SkillBundleInventory />
 
                 <KeyboardShortcutSettings
@@ -627,9 +606,7 @@ export function SettingsPanel() {
                 />
                 {renderFieldError('keyboard_shortcuts')}
 
-                <div className="settings-divider" />
-
-                <div className="settings-field-block" style={{ padding: '0' }}>
+                <div className="settings-field-block" style={{ padding: '0', marginTop: '16px' }}>
                   <label className="settings-field-title">MCP 服务 JSON</label>
                   <Textarea
                     aria-invalid={Boolean(validationErrors.mcp_servers_json)}
