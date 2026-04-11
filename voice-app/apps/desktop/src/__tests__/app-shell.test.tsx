@@ -24,17 +24,8 @@ async function openMainPanel(name: '首页' | '历史记录' | '设置' | '日�
   return within(getPanel(targetPanel))
 }
 
-async function openSettingsSection(name: '通用' | '快捷键' | '语音' | '模型' | 'MCP') {
-  const section = within(getPanel('settings'))
-  const tabLabel =
-    name === '语音' ? 'ASR' : name === '模型' ? '模型' : name
-  fireEvent.click(await section.findByRole('tab', { name: tabLabel }))
-
-  await waitFor(() => {
-    expect(section.getByRole('tab', { name: tabLabel })).toHaveAttribute('aria-selected', 'true')
-  })
-
-  return section
+function getSettingsSection() {
+  return within(getPanel('settings'))
 }
 
 function getPanel(panel: 'runtime' | 'history' | 'settings' | 'logs') {
@@ -114,7 +105,7 @@ describe('App shell', () => {
     render(<App />)
 
     let section = await openMainPanel('设置')
-    expect(await section.findByRole('tab', { name: '通用' })).toBeInTheDocument()
+    expect(await section.findByRole('heading', { name: '设置中心' })).toBeInTheDocument()
 
     section = await openMainPanel('历史记录')
     expect(await section.findByLabelText('搜索历史记录')).toBeInTheDocument()
@@ -289,37 +280,30 @@ describe('App shell', () => {
   it('renders editable settings fields from the runtime', async () => {
     render(<App />)
     const section = await openMainPanel('设置')
-    expect(await section.findByRole('tab', { name: '通用' })).toBeInTheDocument()
-    expect(section.getByRole('tab', { name: '快捷键' })).toBeInTheDocument()
-    expect(section.getByRole('tab', { name: 'ASR' })).toBeInTheDocument()
-    expect(section.getByRole('tab', { name: '模型' })).toBeInTheDocument()
-    expect(section.getByRole('tab', { name: 'MCP' })).toBeInTheDocument()
+    expect(await section.findByRole('heading', { name: '设置中心' })).toBeInTheDocument()
+    expect(section.getByText('通用设置')).toBeInTheDocument()
+    expect(section.getByText('快捷键')).toBeInTheDocument()
+    expect(section.getByText('豆包 ASR')).toBeInTheDocument()
+    expect(section.getByText('OpenAI-compatible LLM')).toBeInTheDocument()
+    expect(section.getByText('MCP')).toBeInTheDocument()
     expect(section.getByRole('switch', { name: '开机自启动' })).toBeInTheDocument()
-
-    await openSettingsSection('快捷键')
-    expect(await section.findByDisplayValue('RightAlt')).toBeInTheDocument()
+    expect(section.getByDisplayValue('RightAlt')).toBeInTheDocument()
     expect(section.getByRole('button', { name: '录制默认热键' })).toBeInTheDocument()
     expect(section.queryByLabelText('工作模式')).toBeNull()
-
-    await openSettingsSection('语音')
-    expect(await section.findByLabelText('豆包 App ID')).toBeInTheDocument()
+    expect(section.getByLabelText('豆包 App ID')).toBeInTheDocument()
     expect(section.getByLabelText('默认麦克风')).toBeInTheDocument()
     expect(section.getByRole('button', { name: '刷新设备列表' })).toBeInTheDocument()
     expect(section.getByLabelText('转录静音自动结束（ms）')).toBeInTheDocument()
     expect(section.queryByLabelText('音频位深')).toBeNull()
-
-    await openSettingsSection('模型')
-    expect(await section.findByLabelText('LLM API Key')).toHaveAttribute('type', 'password')
-
-    await openSettingsSection('MCP')
-    expect(await section.findByLabelText('启用 AngryMiao 系统控制')).toBeInTheDocument()
+    expect(section.getByLabelText('LLM API Key')).toHaveAttribute('type', 'password')
+    expect(section.getByLabelText('启用 AngryMiao 系统控制')).toBeInTheDocument()
     expect(section.getByLabelText('键盘驱动路径')).toBeInTheDocument()
     expect(section.getByText('键盘控制')).toBeInTheDocument()
     expect(section.getByRole('button', { name: '添加快捷键' })).toBeInTheDocument()
     expect(section.getByText('已安装 Skill Bundles')).toBeInTheDocument()
     expect(section.getByText('Angrymiao Voice Control')).toBeInTheDocument()
     expect(section.getByText('system-control')).toBeInTheDocument()
-    expect(await section.findByLabelText('MCP 服务 JSON')).toBeInTheDocument()
+    expect(section.getByLabelText('MCP 服务 JSON')).toBeInTheDocument()
     expect(section.queryByRole('button', { name: '从 .env 重新导入' })).toBeNull()
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith('get_editable_settings')
@@ -329,7 +313,6 @@ describe('App shell', () => {
   it('installs a skill bundle from a local directory path and refreshes the list', async () => {
     render(<App />)
     const section = await openMainPanel('设置')
-    await openSettingsSection('MCP')
 
     fireEvent.change(await section.findByLabelText('Skill Bundle 目录路径'), {
       target: { value: 'D:/bundles/custom-skill' },
@@ -352,7 +335,6 @@ describe('App shell', () => {
   it('records the default hotkey and saves it in exact voice-hotkey format', async () => {
     render(<App />)
     const section = await openMainPanel('设置')
-    await openSettingsSection('快捷键')
 
     fireEvent.click(await section.findByRole('button', { name: '录制默认热键' }))
     expect(section.getByDisplayValue('请按住默认热键...')).toHaveFocus()
@@ -375,7 +357,6 @@ describe('App shell', () => {
   it('saves edited settings without clearing unchanged secrets', async () => {
     render(<App />)
     const section = await openMainPanel('设置')
-    await openSettingsSection('模型')
 
     fireEvent.change(await section.findByLabelText('LLM 模型'), {
       target: { value: 'gpt-4.1-mini' },
@@ -405,7 +386,6 @@ describe('App shell', () => {
   it('saves the selected microphone preference from voice settings', async () => {
     render(<App />)
     const section = await openMainPanel('设置')
-    await openSettingsSection('语音')
 
     fireEvent.change(await section.findByLabelText('默认麦克风'), {
       target: { value: 'usb-mic' },
@@ -427,7 +407,6 @@ describe('App shell', () => {
   it('reloads persisted settings after a failed save rolls back on the backend', async () => {
     render(<App />)
     const section = await openMainPanel('设置')
-    await openSettingsSection('快捷键')
 
     const invokeMock = vi.mocked(invoke)
     const originalImplementation = invokeMock.getMockImplementation()
@@ -477,7 +456,6 @@ describe('App shell', () => {
   it('shows string error details from the backend instead of generic save failure text', async () => {
     render(<App />)
     const section = await openMainPanel('设置')
-    await openSettingsSection('快捷键')
 
     const invokeMock = vi.mocked(invoke)
     const originalImplementation = invokeMock.getMockImplementation()
@@ -511,7 +489,6 @@ describe('App shell', () => {
   it('shows save warnings when runtime hotkey reload cannot take effect immediately', async () => {
     render(<App />)
     const section = await openMainPanel('设置')
-    await openSettingsSection('快捷键')
 
     const invokeMock = vi.mocked(invoke)
     const originalImplementation = invokeMock.getMockImplementation()
@@ -552,10 +529,10 @@ describe('App shell', () => {
   it('shows setup warning when required credentials are missing but does not block saving', async () => {
     render(<App />)
     const section = await openMainPanel('设置')
-    await openSettingsSection('模型')
 
-    const clearButtons = await section.findAllByRole('button', { name: '清空密钥' })
-    fireEvent.click(clearButtons[0])
+    const clearButtons = await section.findAllByRole('button', { name: '清空' })
+    // The second "清空" button is for LLM API Key
+    fireEvent.click(clearButtons[1])
 
     expect(
       await section.findByText('当前语音任务还不能运行，请补齐：LLM API Key。'),
@@ -566,7 +543,6 @@ describe('App shell', () => {
   it('adds a custom keyboard shortcut and includes it in the saved settings', async () => {
     render(<App />)
     const section = await openMainPanel('设置')
-    await openSettingsSection('MCP')
 
     fireEvent.click(await section.findByRole('button', { name: '添加快捷键' }))
     fireEvent.change(await section.findByLabelText('触发词（逗号分隔）'), {
@@ -603,32 +579,23 @@ describe('App shell', () => {
     render(<App />)
     const section = await openMainPanel('设置')
 
-    await openSettingsSection('快捷键')
     fireEvent.click(await section.findByRole('button', { name: '录制默认热键' }))
     fireEvent.keyDown(window, { code: 'Backspace', key: 'Backspace' })
 
-    await openSettingsSection('语音')
     fireEvent.change(await section.findByLabelText('转录静音自动结束（ms）'), {
       target: { value: '200' },
     })
 
-    await openSettingsSection('MCP')
     fireEvent.change(await section.findByLabelText('MCP 服务 JSON'), {
       target: { value: '[{"id":"","name":"Broken"}]' },
     })
     vi.mocked(invoke).mockClear()
 
     expect(await section.findByText('MCP 服务 JSON 格式无效。')).toBeInTheDocument()
-
-    await openSettingsSection('快捷键')
     expect(await section.findByText('默认热键不能为空。')).toBeInTheDocument()
-
-    await openSettingsSection('语音')
     expect(
       await section.findByText('转录静音自动结束需为 0 或 500 到 5000 毫秒。'),
     ).toBeInTheDocument()
-
-    await openSettingsSection('MCP')
     expect(section.getByRole('button', { name: '保存设置' })).toBeDisabled()
 
     await waitFor(() => {

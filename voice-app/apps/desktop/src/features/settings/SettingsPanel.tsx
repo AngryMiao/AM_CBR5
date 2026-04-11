@@ -23,17 +23,21 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { 
-  Save, 
-  RotateCcw, 
+import { Separator } from '@/components/ui/separator'
+import {
+  Save,
+  RotateCcw,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Settings,
+  Keyboard,
+  Mic,
+  Brain,
+  Server,
 } from 'lucide-react'
 
 type PanelStatus = 'loading' | 'idle' | 'saving' | 'saved' | 'error'
 type MicrophoneStatus = 'idle' | 'loading' | 'error'
-type SettingsTabValue = 'general' | 'hotkey' | 'asr' | 'model' | 'mcp'
 
 function createUnchangedSecretDraft(): SecretDraftState {
   return { action: 'unchanged', value: '' }
@@ -124,7 +128,6 @@ function getSecretHint(hasSecret: boolean, secret: SecretDraftState, providerNam
 
 export function SettingsPanel() {
   const [draft, setDraft] = useState<EditableVoiceSettings | null>(null)
-  const [activeTab, setActiveTab] = useState<SettingsTabValue>('general')
   const [status, setStatus] = useState<PanelStatus>('loading')
   const [message, setMessage] = useState<string | null>(null)
   const [microphoneInputs, setMicrophoneInputs] = useState<MicrophoneInputDevice[]>([])
@@ -278,7 +281,7 @@ export function SettingsPanel() {
   }
 
   return (
-    <section className="console-page settings-page">
+    <section className="runtime-panel settings-panel-flow">
       {!draft ? (
         <div className="console-empty-state">
           <div className="animate-spin h-8 w-8 rounded-full border-2 border-primary border-t-transparent" />
@@ -292,308 +295,314 @@ export function SettingsPanel() {
             void handleSave()
           }}
         >
+          {/* Header section */}
+          <header className="runtime-header">
+            <div className="runtime-eyebrow">
+              <span className="runtime-label">SETTINGS</span>
+            </div>
+            <h1 className="runtime-title">设置中心</h1>
+            <p className="runtime-description">管理热键、模型、设备和 MCP 配置</p>
+          </header>
+
           {runtimeReadinessWarnings.length > 0 ? (
-            <div className="console-warning" role="status">
+            <div className="runtime-alert runtime-alert-warning" role="status">
               <AlertTriangle className="h-4 w-4" />
               <span>当前语音任务还不能运行，请补齐：{runtimeReadinessWarnings.join('、')}。</span>
             </div>
           ) : null}
 
-          <Tabs
-            className="settings-tabs-shell"
-            onValueChange={(value) => setActiveTab(value as SettingsTabValue)}
-            value={activeTab}
-          >
-            <div className="settings-tabs-bar">
-              <TabsList className="settings-tabs-list">
-                <TabsTrigger onClick={() => setActiveTab('general')} value="general">通用</TabsTrigger>
-                <TabsTrigger onClick={() => setActiveTab('hotkey')} value="hotkey">快捷键</TabsTrigger>
-                <TabsTrigger onClick={() => setActiveTab('asr')} value="asr">ASR</TabsTrigger>
-                <TabsTrigger onClick={() => setActiveTab('model')} value="model">模型</TabsTrigger>
-                <TabsTrigger onClick={() => setActiveTab('mcp')} value="mcp">MCP</TabsTrigger>
-              </TabsList>
+          <Separator />
+
+          {/* 通用设置 Section */}
+          <section className="runtime-section-new">
+            <div className="runtime-section-header-new">
+              <Settings className="h-4 w-4 runtime-section-header-icon" />
+              <span>通用设置</span>
             </div>
-            <TabsContent className="settings-tab-panel" value="general">
-              <section className="settings-pane">
-                <div className="settings-pane-header">
-                  <h3>通用</h3>
-                </div>
 
-                <div className="settings-toggle-row">
-                  <div>
-                    <strong>保存历史记录</strong>
-                  </div>
-                  <Switch
-                    aria-label="保存历史记录"
-                    checked={draft.history_enabled}
-                    disabled={isBusy}
-                    onCheckedChange={(checked) => updateDraft('history_enabled', checked)}
-                  />
-                </div>
+            <div className="settings-toggle-row-flow">
+              <span className="runtime-detail-label-new">保存历史记录</span>
+              <Switch
+                aria-label="保存历史记录"
+                checked={draft.history_enabled}
+                disabled={isBusy}
+                onCheckedChange={(checked) => updateDraft('history_enabled', checked)}
+              />
+            </div>
 
-                <div className="settings-toggle-row">
-                  <div>
-                    <strong>开机自启动</strong>
-                  </div>
-                  <Switch
-                    aria-label="开机自启动"
-                    checked={draft.auto_launch_enabled}
-                    disabled={isBusy}
-                    onCheckedChange={(checked) => updateDraft('auto_launch_enabled', checked)}
-                  />
-                </div>
-              </section>
-            </TabsContent>
+            <div className="settings-toggle-row-flow">
+              <span className="runtime-detail-label-new">开机自启动</span>
+              <Switch
+                aria-label="开机自启动"
+                checked={draft.auto_launch_enabled}
+                disabled={isBusy}
+                onCheckedChange={(checked) => updateDraft('auto_launch_enabled', checked)}
+              />
+            </div>
+          </section>
 
-            <TabsContent className="settings-tab-panel" value="hotkey">
-              <section className="settings-pane">
-                <div className="settings-pane-header">
-                  <h3>快捷键</h3>
-                </div>
+          <Separator />
 
-                <div className="settings-field-block">
-                  <label className="settings-field-title">默认热键</label>
-                  <DefaultHotkeyRecorder
-                    inputAriaInvalid={Boolean(validationErrors.default_hotkey)}
-                    inputClassName={inputClassName('default_hotkey')}
-                    value={draft.default_hotkey}
-                    onChange={(value) => updateDraft('default_hotkey', value)}
-                  />
-                  {renderFieldError('default_hotkey')}
-                </div>
-              </section>
-            </TabsContent>
+          {/* 快捷键 Section */}
+          <section className="runtime-section-new">
+            <div className="runtime-section-header-new">
+              <Keyboard className="h-4 w-4 runtime-section-header-icon" />
+              <span>快捷键</span>
+            </div>
 
-            <TabsContent className="settings-tab-panel" value="asr">
-              <section className="settings-pane">
-                <div className="settings-pane-header">
-                  <h3>豆包 ASR</h3>
-                </div>
+            <div className="settings-field-block-flow">
+              <label className="runtime-detail-label-new">默认热键</label>
+              <DefaultHotkeyRecorder
+                inputAriaInvalid={Boolean(validationErrors.default_hotkey)}
+                inputClassName={inputClassName('default_hotkey')}
+                value={draft.default_hotkey}
+                onChange={(value) => updateDraft('default_hotkey', value)}
+              />
+              {renderFieldError('default_hotkey')}
+            </div>
+          </section>
 
-                <div className="settings-field-block">
-                  <label className="settings-field-title">豆包 WebSocket URL</label>
-                  <Input
-                    aria-invalid={Boolean(validationErrors.doubao_asr_url)}
-                    aria-label="豆包 WebSocket URL"
-                    className={inputClassName('doubao_asr_url')}
-                    value={draft.doubao_asr_url}
-                    onChange={(event) => updateDraft('doubao_asr_url', event.target.value)}
-                  />
-                  {renderFieldError('doubao_asr_url')}
-                </div>
+          <Separator />
 
-                <div className="settings-field-block">
-                  <label className="settings-field-title">豆包 App ID</label>
-                  <Input
-                    aria-label="豆包 App ID"
-                    value={draft.doubao_asr_app_id}
-                    onChange={(event) => updateDraft('doubao_asr_app_id', event.target.value)}
-                  />
-                </div>
+          {/* ASR Section */}
+          <section className="runtime-section-new">
+            <div className="runtime-section-header-new">
+              <Mic className="h-4 w-4 runtime-section-header-icon" />
+              <span>豆包 ASR</span>
+            </div>
 
-                <div className="settings-field-block">
-                  <label className="settings-field-title">默认麦克风</label>
-                  <div className="settings-inline-control">
-                    <select
-                      aria-label="默认麦克风"
-                      className="settings-native-select"
-                      value={draft.microphone_device_id}
-                      onChange={(event) => updateDraft('microphone_device_id', event.target.value)}
-                    >
-                      {isSavedMicrophoneUnavailable ? (
-                        <option value={draft.microphone_device_id}>已保存设备不可用</option>
-                      ) : null}
-                      <option value="">系统默认麦克风</option>
-                      {microphoneInputs.map((device) => (
-                        <option key={device.id} value={device.id}>
-                          {getMicrophoneOptionLabel(device)}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      aria-label="刷新设备列表"
-                      disabled={isBusy || microphoneStatus === 'loading'}
-                      onClick={() => void handleRefreshMicrophoneInputs()}
-                      type="button"
-                      variant="outline"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  {microphoneStatus === 'error' && microphoneMessage ? <p className="runtime-error">{microphoneMessage}</p> : null}
-                </div>
+            <div className="settings-field-block-flow">
+              <label className="runtime-detail-label-new">豆包 WebSocket URL</label>
+              <Input
+                aria-invalid={Boolean(validationErrors.doubao_asr_url)}
+                aria-label="豆包 WebSocket URL"
+                className={inputClassName('doubao_asr_url')}
+                value={draft.doubao_asr_url}
+                onChange={(event) => updateDraft('doubao_asr_url', event.target.value)}
+              />
+              {renderFieldError('doubao_asr_url')}
+            </div>
 
-                <div className="settings-field-block">
-                  <label className="settings-field-title">豆包 Access Token</label>
-                  <div className="settings-inline-control">
-                    <Input
-                      aria-label="豆包 Access Token"
-                      className="flex-1"
-                      placeholder={draft.has_doubao_asr_access_token ? '已保存，留空则保持不变' : '当前未设置'}
-                      type="password"
-                      value={doubaoSecret.action === 'replace' ? doubaoSecret.value : ''}
-                      onChange={(event) =>
-                        updateSecret(event.target.value, draft.has_doubao_asr_access_token, setDoubaoSecret)
-                      }
-                    />
-                    <Button type="button" variant="outline" onClick={() => updateSecretDraft(setDoubaoSecret, createUnchangedSecretDraft())}>
-                      保持当前密钥
-                    </Button>
-                    <Button type="button" variant="outline" onClick={() => updateSecretDraft(setDoubaoSecret, { action: 'clear', value: '' })}>
-                      清空密钥
-                    </Button>
-                  </div>
-                </div>
+            <div className="settings-field-block-flow">
+              <label className="runtime-detail-label-new">豆包 App ID</label>
+              <Input
+                aria-label="豆包 App ID"
+                value={draft.doubao_asr_app_id}
+                onChange={(event) => updateDraft('doubao_asr_app_id', event.target.value)}
+              />
+            </div>
 
-                <div className="settings-field-block">
-                  <label className="settings-field-title">豆包 Resource ID</label>
-                  <Input
-                    aria-invalid={Boolean(validationErrors.doubao_asr_resource_id)}
-                    aria-label="豆包 Resource ID"
-                    className={inputClassName('doubao_asr_resource_id')}
-                    value={draft.doubao_asr_resource_id}
-                    onChange={(event) => updateDraft('doubao_asr_resource_id', event.target.value)}
-                  />
-                  {renderFieldError('doubao_asr_resource_id')}
-                </div>
+            <div className="settings-field-block-flow">
+              <label className="runtime-detail-label-new">默认麦克风</label>
+              <div className="settings-inline-control">
+                <select
+                  aria-label="默认麦克风"
+                  className="settings-native-select-flow"
+                  value={draft.microphone_device_id}
+                  onChange={(event) => updateDraft('microphone_device_id', event.target.value)}
+                >
+                  {isSavedMicrophoneUnavailable ? (
+                    <option value={draft.microphone_device_id}>已保存设备不可用</option>
+                  ) : null}
+                  <option value="">系统默认麦克风</option>
+                  {microphoneInputs.map((device) => (
+                    <option key={device.id} value={device.id}>
+                      {getMicrophoneOptionLabel(device)}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  aria-label="刷新设备列表"
+                  disabled={isBusy || microphoneStatus === 'loading'}
+                  onClick={() => void handleRefreshMicrophoneInputs()}
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
+              {microphoneStatus === 'error' && microphoneMessage ? <p className="runtime-error">{microphoneMessage}</p> : null}
+            </div>
 
-                <div className="settings-field-block">
-                  <label className="settings-field-title">豆包模型</label>
-                  <Input
-                    aria-invalid={Boolean(validationErrors.doubao_asr_model)}
-                    aria-label="豆包模型"
-                    className={inputClassName('doubao_asr_model')}
-                    value={draft.doubao_asr_model}
-                    onChange={(event) => updateDraft('doubao_asr_model', event.target.value)}
-                  />
-                  {renderFieldError('doubao_asr_model')}
-                </div>
-
-                <div className="settings-field-block">
-                  <label className="settings-field-title">转录静音自动结束（ms）</label>
-                  <Input
-                    aria-invalid={Boolean(validationErrors.transcription_silence_timeout_ms)}
-                    aria-label="转录静音自动结束（ms）"
-                    className={inputClassName('transcription_silence_timeout_ms')}
-                    max={5000}
-                    min={0}
-                    step={100}
-                    type="number"
-                    value={draft.transcription_silence_timeout_ms}
-                    onChange={(event) => updateDraft('transcription_silence_timeout_ms', Number(event.target.value) || 0)}
-                  />
-                  {renderFieldError('transcription_silence_timeout_ms')}
-                </div>
-              </section>
-            </TabsContent>
-
-            <TabsContent className="settings-tab-panel" value="model">
-              <section className="settings-pane">
-                <div className="settings-pane-header">
-                  <h3>OpenAI-compatible LLM</h3>
-                </div>
-
-                <div className="settings-field-block">
-                  <label className="settings-field-title">LLM 服务地址</label>
-                  <Input
-                    aria-invalid={Boolean(validationErrors.llm_base_url)}
-                    aria-label="LLM 服务地址"
-                    className={inputClassName('llm_base_url')}
-                    value={draft.llm_base_url}
-                    onChange={(event) => updateDraft('llm_base_url', event.target.value)}
-                  />
-                  {renderFieldError('llm_base_url')}
-                </div>
-
-                <div className="settings-field-block">
-                  <label className="settings-field-title">LLM API Key</label>
-                  <div className="settings-inline-control">
-                    <Input
-                      aria-label="LLM API Key"
-                      className="flex-1"
-                      placeholder={draft.has_llm_api_key ? '已保存，留空则保持不变' : '当前未设置'}
-                      type="password"
-                      value={llmSecret.action === 'replace' ? llmSecret.value : ''}
-                      onChange={(event) => updateSecret(event.target.value, draft.has_llm_api_key, setLlmSecret)}
-                    />
-                    <Button type="button" variant="outline" onClick={() => updateSecretDraft(setLlmSecret, createUnchangedSecretDraft())}>
-                      保持当前密钥
-                    </Button>
-                    <Button type="button" variant="outline" onClick={() => updateSecretDraft(setLlmSecret, { action: 'clear', value: '' })}>
-                      清空密钥
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="settings-field-block">
-                  <label className="settings-field-title">LLM 模型</label>
-                  <Input
-                    aria-invalid={Boolean(validationErrors.llm_model)}
-                    aria-label="LLM 模型"
-                    className={inputClassName('llm_model')}
-                    value={draft.llm_model}
-                    onChange={(event) => updateDraft('llm_model', event.target.value)}
-                  />
-                  {renderFieldError('llm_model')}
-                </div>
-
-                <div className="settings-field-block">
-                  <label className="settings-field-title">系统提示词</label>
-                  <Textarea
-                    aria-label="系统提示词"
-                    rows={6}
-                    value={draft.llm_system_prompt}
-                    onChange={(event) => updateDraft('llm_system_prompt', event.target.value)}
-                  />
-                </div>
-              </section>
-            </TabsContent>
-
-            <TabsContent className="settings-tab-panel" value="mcp">
-              <section className="settings-pane">
-                <div className="settings-pane-header">
-                  <h3>MCP</h3>
-                </div>
-
-                <div className="settings-toggle-row">
-                  <div>
-                    <strong>启用 AngryMiao 系统控制</strong>
-                  </div>
-                  <Switch
-                    aria-label="启用 AngryMiao 系统控制"
-                    checked={draft.angrymiao_skill_enabled}
-                    disabled={isBusy}
-                    onCheckedChange={(checked) => updateDraft('angrymiao_skill_enabled', checked)}
-                  />
-                </div>
-
-                <SkillBundleInventory />
-
-                <KeyboardShortcutSettings
-                  keyboardDriverPath={draft.keyboard_driver_path}
-                  keyboardShortcuts={draft.keyboard_shortcuts}
-                  onKeyboardDriverPathChange={(value) => updateDraft('keyboard_driver_path', value)}
-                  onKeyboardShortcutsChange={(value) => updateDraft('keyboard_shortcuts', value)}
+            <div className="settings-field-block-flow">
+              <label className="runtime-detail-label-new">豆包 Access Token</label>
+              <div className="settings-inline-control">
+                <Input
+                  aria-label="豆包 Access Token"
+                  className="flex-1"
+                  placeholder={draft.has_doubao_asr_access_token ? '已保存，留空则保持不变' : '当前未设置'}
+                  type="password"
+                  value={doubaoSecret.action === 'replace' ? doubaoSecret.value : ''}
+                  onChange={(event) =>
+                    updateSecret(event.target.value, draft.has_doubao_asr_access_token, setDoubaoSecret)
+                  }
                 />
-                {renderFieldError('keyboard_shortcuts')}
+                <Button type="button" variant="outline" size="sm" onClick={() => updateSecretDraft(setDoubaoSecret, createUnchangedSecretDraft())}>
+                  保持
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => updateSecretDraft(setDoubaoSecret, { action: 'clear', value: '' })}>
+                  清空
+                </Button>
+              </div>
+            </div>
 
-                <div className="settings-field-block">
-                  <label className="settings-field-title">MCP 服务 JSON</label>
-                  <Textarea
-                    aria-invalid={Boolean(validationErrors.mcp_servers_json)}
-                    aria-label="MCP 服务 JSON"
-                    className={inputClassName('mcp_servers_json')}
-                    rows={8}
-                    value={draft.mcp_servers_json}
-                    onChange={(event) => updateDraft('mcp_servers_json', event.target.value)}
-                  />
-                  {renderFieldError('mcp_servers_json')}
-                </div>
-              </section>
-            </TabsContent>
-          </Tabs>
+            <div className="settings-field-block-flow">
+              <label className="runtime-detail-label-new">豆包 Resource ID</label>
+              <Input
+                aria-invalid={Boolean(validationErrors.doubao_asr_resource_id)}
+                aria-label="豆包 Resource ID"
+                className={inputClassName('doubao_asr_resource_id')}
+                value={draft.doubao_asr_resource_id}
+                onChange={(event) => updateDraft('doubao_asr_resource_id', event.target.value)}
+              />
+              {renderFieldError('doubao_asr_resource_id')}
+            </div>
 
-          <div className="settings-sticky-footer">
+            <div className="settings-field-block-flow">
+              <label className="runtime-detail-label-new">豆包模型</label>
+              <Input
+                aria-invalid={Boolean(validationErrors.doubao_asr_model)}
+                aria-label="豆包模型"
+                className={inputClassName('doubao_asr_model')}
+                value={draft.doubao_asr_model}
+                onChange={(event) => updateDraft('doubao_asr_model', event.target.value)}
+              />
+              {renderFieldError('doubao_asr_model')}
+            </div>
+
+            <div className="settings-field-block-flow">
+              <label className="runtime-detail-label-new">转录静音自动结束（ms）</label>
+              <Input
+                aria-invalid={Boolean(validationErrors.transcription_silence_timeout_ms)}
+                aria-label="转录静音自动结束（ms）"
+                className={inputClassName('transcription_silence_timeout_ms')}
+                max={5000}
+                min={0}
+                step={100}
+                type="number"
+                value={draft.transcription_silence_timeout_ms}
+                onChange={(event) => updateDraft('transcription_silence_timeout_ms', Number(event.target.value) || 0)}
+              />
+              {renderFieldError('transcription_silence_timeout_ms')}
+            </div>
+          </section>
+
+          <Separator />
+
+          {/* LLM Section */}
+          <section className="runtime-section-new">
+            <div className="runtime-section-header-new">
+              <Brain className="h-4 w-4 runtime-section-header-icon" />
+              <span>OpenAI-compatible LLM</span>
+            </div>
+
+            <div className="settings-field-block-flow">
+              <label className="runtime-detail-label-new">LLM 服务地址</label>
+              <Input
+                aria-invalid={Boolean(validationErrors.llm_base_url)}
+                aria-label="LLM 服务地址"
+                className={inputClassName('llm_base_url')}
+                value={draft.llm_base_url}
+                onChange={(event) => updateDraft('llm_base_url', event.target.value)}
+              />
+              {renderFieldError('llm_base_url')}
+            </div>
+
+            <div className="settings-field-block-flow">
+              <label className="runtime-detail-label-new">LLM API Key</label>
+              <div className="settings-inline-control">
+                <Input
+                  aria-label="LLM API Key"
+                  className="flex-1"
+                  placeholder={draft.has_llm_api_key ? '已保存，留空则保持不变' : '当前未设置'}
+                  type="password"
+                  value={llmSecret.action === 'replace' ? llmSecret.value : ''}
+                  onChange={(event) => updateSecret(event.target.value, draft.has_llm_api_key, setLlmSecret)}
+                />
+                <Button type="button" variant="outline" size="sm" onClick={() => updateSecretDraft(setLlmSecret, createUnchangedSecretDraft())}>
+                  保持
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => updateSecretDraft(setLlmSecret, { action: 'clear', value: '' })}>
+                  清空
+                </Button>
+              </div>
+            </div>
+
+            <div className="settings-field-block-flow">
+              <label className="runtime-detail-label-new">LLM 模型</label>
+              <Input
+                aria-invalid={Boolean(validationErrors.llm_model)}
+                aria-label="LLM 模型"
+                className={inputClassName('llm_model')}
+                value={draft.llm_model}
+                onChange={(event) => updateDraft('llm_model', event.target.value)}
+              />
+              {renderFieldError('llm_model')}
+            </div>
+
+            <div className="settings-field-block-flow">
+              <label className="runtime-detail-label-new">系统提示词</label>
+              <Textarea
+                aria-label="系统提示词"
+                rows={4}
+                value={draft.llm_system_prompt}
+                onChange={(event) => updateDraft('llm_system_prompt', event.target.value)}
+              />
+            </div>
+          </section>
+
+          <Separator />
+
+          {/* MCP Section */}
+          <section className="runtime-section-new">
+            <div className="runtime-section-header-new">
+              <Server className="h-4 w-4 runtime-section-header-icon" />
+              <span>MCP</span>
+            </div>
+
+            <div className="settings-toggle-row-flow">
+              <span className="runtime-detail-label-new">启用 AngryMiao 系统控制</span>
+              <Switch
+                aria-label="启用 AngryMiao 系统控制"
+                checked={draft.angrymiao_skill_enabled}
+                disabled={isBusy}
+                onCheckedChange={(checked) => updateDraft('angrymiao_skill_enabled', checked)}
+              />
+            </div>
+
+            <Separator className="my-4" />
+
+            <SkillBundleInventory />
+
+            <Separator className="my-4" />
+
+            <KeyboardShortcutSettings
+              keyboardDriverPath={draft.keyboard_driver_path}
+              keyboardShortcuts={draft.keyboard_shortcuts}
+              onKeyboardDriverPathChange={(value) => updateDraft('keyboard_driver_path', value)}
+              onKeyboardShortcutsChange={(value) => updateDraft('keyboard_shortcuts', value)}
+            />
+            {renderFieldError('keyboard_shortcuts')}
+
+            <Separator className="my-4" />
+
+            <div className="settings-field-block-flow">
+              <label className="runtime-detail-label-new">MCP 服务 JSON</label>
+              <Textarea
+                aria-invalid={Boolean(validationErrors.mcp_servers_json)}
+                aria-label="MCP 服务 JSON"
+                className={inputClassName('mcp_servers_json')}
+                rows={6}
+                value={draft.mcp_servers_json}
+                onChange={(event) => updateDraft('mcp_servers_json', event.target.value)}
+              />
+              {renderFieldError('mcp_servers_json')}
+            </div>
+          </section>
+
+          {/* Footer */}
+          <div className="settings-sticky-footer-flow">
             <div className="settings-sticky-message">
               {message ? (
                 <span className={status === 'error' ? 'text-destructive' : 'text-emerald-600'}>{message}</span>
@@ -602,7 +611,7 @@ export function SettingsPanel() {
               ) : runtimeReadinessWarnings.length > 0 ? (
                 <span className="text-amber-700">仍缺少运行前置条件：{runtimeReadinessWarnings.join('、')}。</span>
               ) : (
-                <span>设置修改会在保存后立即写入本地配置。</span>
+                <span className="runtime-detail-label-new">设置修改会在保存后立即写入本地配置。</span>
               )}
             </div>
 

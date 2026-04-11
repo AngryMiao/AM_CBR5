@@ -1097,6 +1097,57 @@ input:focus, textarea:focus, select:focus {
   border-bottom: 1px solid #f1f5f9;
 }
 
+/* ============================================
+   Settings Panel Flow Layout Styles
+   ============================================ */
+
+.settings-panel-flow {
+  gap: 0;
+}
+
+.settings-toggle-row-flow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.settings-toggle-row-flow:last-child {
+  border-bottom: none;
+}
+
+.settings-field-block-flow {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.settings-field-block-flow:last-child {
+  border-bottom: none;
+}
+
+.settings-native-select-flow {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(203, 213, 225, 0.82);
+  background: rgba(248, 250, 252, 0.94);
+  color: #0f172a;
+  border-radius: 0;
+}
+
+.settings-sticky-footer-flow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
 @media (max-width: 960px) {
   .runtime-diagnostic-grid {
     grid-template-columns: 1fr;
