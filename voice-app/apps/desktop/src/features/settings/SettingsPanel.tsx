@@ -320,251 +320,301 @@ export function SettingsPanel() {
                     onCheckedChange={(checked) => updateDraft('auto_launch_enabled', checked)}
                   />
                 </div>
-                <div className="settings-field-block">
-                  <label className="settings-field-title">默认热键</label>
-                  <DefaultHotkeyRecorder
-                    inputAriaInvalid={Boolean(validationErrors.default_hotkey)}
-                    inputClassName={inputClassName('default_hotkey')}
-                    value={draft.default_hotkey}
-                    onChange={(value) => updateDraft('default_hotkey', value)}
-                  />
-                  {renderFieldError('default_hotkey')}
+                <div className="settings-field-row">
+                  <div className="settings-field-row-label">
+                    <label className="settings-field-title">默认热键</label>
+                  </div>
+                  <div className="settings-field-row-input">
+                    <DefaultHotkeyRecorder
+                      inputAriaInvalid={Boolean(validationErrors.default_hotkey)}
+                      inputClassName={inputClassName('default_hotkey')}
+                      value={draft.default_hotkey}
+                      onChange={(value) => updateDraft('default_hotkey', value)}
+                    />
+                    {renderFieldError('default_hotkey')}
+                  </div>
                 </div>
-              </div>
-              <div className="settings-action-bar">
-                <button
-                  className="settings-btn-glass"
-                  disabled={isBusy}
-                  onClick={() => void handleReset()}
-                  type="button"
-                >
-                  重置
-                </button>
-                <button
-                  className="settings-btn-primary"
-                  disabled={isBusy || hasBlockingErrors}
-                  type="submit"
-                >
-                  保存设置
-                </button>
+                <div className="settings-action-bar">
+                  <button
+                    className="settings-btn-glass"
+                    disabled={isBusy}
+                    onClick={() => void handleReset()}
+                    type="button"
+                  >
+                    重置
+                  </button>
+                  <button
+                    className="settings-btn-primary"
+                    disabled={isBusy || hasBlockingErrors}
+                    type="submit"
+                  >
+                    保存设置
+                  </button>
+                </div>
               </div>
             </TabsContent>
 
             <TabsContent className="settings-pill-panel" value="asr">
               <div className="settings-glass-card">
-                <div className="settings-field-block">
-                  <label className="settings-field-title">豆包 WebSocket URL</label>
-                  <Input
-                    aria-invalid={Boolean(validationErrors.doubao_asr_url)}
-                    aria-label="豆包 WebSocket URL"
-                    className={inputClassName('doubao_asr_url')}
-                    value={draft.doubao_asr_url}
-                    onChange={(event) => updateDraft('doubao_asr_url', event.target.value)}
-                  />
-                  {renderFieldError('doubao_asr_url')}
-                </div>
-
-                <div className="settings-field-block">
-                  <label className="settings-field-title">豆包 App ID</label>
-                  <Input
-                    aria-label="豆包 App ID"
-                    value={draft.doubao_asr_app_id}
-                    onChange={(event) => updateDraft('doubao_asr_app_id', event.target.value)}
-                  />
-                </div>
-
-                <div className="settings-field-block">
-                  <label className="settings-field-title">默认麦克风</label>
-                  <div className="settings-inline-control">
-                    <select
-                      aria-label="默认麦克风"
-                      className="settings-native-select"
-                      value={draft.microphone_device_id}
-                      onChange={(event) => updateDraft('microphone_device_id', event.target.value)}
-                    >
-                      {isSavedMicrophoneUnavailable ? (
-                        <option value={draft.microphone_device_id}>已保存设备不可用</option>
-                      ) : null}
-                      <option value="">系统默认麦克风</option>
-                      {microphoneInputs.map((device) => (
-                        <option key={device.id} value={device.id}>
-                          {getMicrophoneOptionLabel(device)}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      aria-label="刷新设备列表"
-                      disabled={isBusy || microphoneStatus === 'loading'}
-                      onClick={() => void handleRefreshMicrophoneInputs()}
-                      type="button"
-                      variant="outline"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </Button>
+                <div className="settings-field-row">
+                  <div className="settings-field-row-label">
+                    <label className="settings-field-title">豆包 WebSocket URL</label>
                   </div>
-                  {microphoneStatus === 'error' && microphoneMessage ? <p className="runtime-error">{microphoneMessage}</p> : null}
-                </div>
-
-                <div className="settings-field-block">
-                  <label className="settings-field-title">豆包 Access Token</label>
-                  <div className="settings-inline-control">
+                  <div className="settings-field-row-input">
                     <Input
-                      aria-label="豆包 Access Token"
-                      className="flex-1"
-                      placeholder={draft.has_doubao_asr_access_token ? '已保存，留空则保持不变' : '当前未设置'}
-                      type="password"
-                      value={doubaoSecret.action === 'replace' ? doubaoSecret.value : ''}
-                      onChange={(event) =>
-                        updateSecret(event.target.value, draft.has_doubao_asr_access_token, setDoubaoSecret)
-                      }
+                      aria-invalid={Boolean(validationErrors.doubao_asr_url)}
+                      aria-label="豆包 WebSocket URL"
+                      className={inputClassName('doubao_asr_url')}
+                      value={draft.doubao_asr_url}
+                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('doubao_asr_url', event.target.value)}
                     />
-                    <Button type="button" variant="outline" onClick={() => updateSecretDraft(setDoubaoSecret, createUnchangedSecretDraft())}>
-                      保持当前密钥
-                    </Button>
-                    <Button type="button" variant="outline" onClick={() => updateSecretDraft(setDoubaoSecret, { action: 'clear', value: '' })}>
-                      清空密钥
-                    </Button>
+                    {renderFieldError('doubao_asr_url')}
                   </div>
                 </div>
 
-                <div className="settings-field-block">
-                  <label className="settings-field-title">豆包 Resource ID</label>
-                  <Input
-                    aria-invalid={Boolean(validationErrors.doubao_asr_resource_id)}
-                    aria-label="豆包 Resource ID"
-                    className={inputClassName('doubao_asr_resource_id')}
-                    value={draft.doubao_asr_resource_id}
-                    onChange={(event) => updateDraft('doubao_asr_resource_id', event.target.value)}
-                  />
-                  {renderFieldError('doubao_asr_resource_id')}
+                <div className="settings-field-row">
+                  <div className="settings-field-row-label">
+                    <label className="settings-field-title">豆包 App ID</label>
+                  </div>
+                  <div className="settings-field-row-input">
+                    <Input
+                      aria-label="豆包 App ID"
+                      value={draft.doubao_asr_app_id}
+                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('doubao_asr_app_id', event.target.value)}
+                    />
+                  </div>
                 </div>
 
-                <div className="settings-field-block">
-                  <label className="settings-field-title">豆包模型</label>
-                  <Input
-                    aria-invalid={Boolean(validationErrors.doubao_asr_model)}
-                    aria-label="豆包模型"
-                    className={inputClassName('doubao_asr_model')}
-                    value={draft.doubao_asr_model}
-                    onChange={(event) => updateDraft('doubao_asr_model', event.target.value)}
-                  />
-                  {renderFieldError('doubao_asr_model')}
+                <div className="settings-field-row">
+                  <div className="settings-field-row-label">
+                    <label className="settings-field-title">默认麦克风</label>
+                  </div>
+                  <div className="settings-field-row-input">
+                    <div className="settings-inline-control">
+                      <select
+                        aria-label="默认麦克风"
+                        className="settings-native-select"
+                        value={draft.microphone_device_id}
+                        onChange={(event: React.ChangeEvent<HTMLSelectElement>) => updateDraft('microphone_device_id', event.target.value)}
+                      >
+                        {isSavedMicrophoneUnavailable ? (
+                          <option value={draft.microphone_device_id}>已保存设备不可用</option>
+                        ) : null}
+                        <option value="">系统默认麦克风</option>
+                        {microphoneInputs.map((device) => (
+                          <option key={device.id} value={device.id}>
+                            {getMicrophoneOptionLabel(device)}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        aria-label="刷新设备列表"
+                        disabled={isBusy || microphoneStatus === 'loading'}
+                        onClick={() => void handleRefreshMicrophoneInputs()}
+                        type="button"
+                        variant="outline"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {microphoneStatus === 'error' && microphoneMessage ? <p className="runtime-error">{microphoneMessage}</p> : null}
+                  </div>
                 </div>
 
-                <div className="settings-field-block">
-                  <label className="settings-field-title">转录静音自动结束（ms）</label>
-                  <Input
-                    aria-invalid={Boolean(validationErrors.transcription_silence_timeout_ms)}
-                    aria-label="转录静音自动结束（ms）"
-                    className={inputClassName('transcription_silence_timeout_ms')}
-                    max={5000}
-                    min={0}
-                    step={100}
-                    type="number"
-                    value={draft.transcription_silence_timeout_ms}
-                    onChange={(event) => updateDraft('transcription_silence_timeout_ms', Number(event.target.value) || 0)}
-                  />
-                  {renderFieldError('transcription_silence_timeout_ms')}
+                <div className="settings-field-row">
+                  <div className="settings-field-row-label">
+                    <label className="settings-field-title">豆包 Access Token</label>
+                  </div>
+                  <div className="settings-field-row-input">
+                    <div className="settings-inline-control">
+                      <Input
+                        aria-label="豆包 Access Token"
+                        className="flex-1"
+                        placeholder={draft.has_doubao_asr_access_token ? '已保存，留空则保持不变' : '当前未设置'}
+                        type="password"
+                        value={doubaoSecret.action === 'replace' ? doubaoSecret.value : ''}
+                        onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
+                          updateSecret(event.target.value, draft.has_doubao_asr_access_token, setDoubaoSecret)
+                        }
+                      />
+                      <Button type="button" variant="outline" onClick={() => updateSecretDraft(setDoubaoSecret, createUnchangedSecretDraft())}>
+                        保持当前密钥
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => updateSecretDraft(setDoubaoSecret, { action: 'clear', value: '' })}>
+                        清空密钥
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="settings-action-bar">
-                <button
-                  className="settings-btn-glass"
-                  disabled={isBusy}
-                  onClick={() => void handleReset()}
-                  type="button"
-                >
-                  重置
-                </button>
-                <button
-                  className="settings-btn-primary"
-                  disabled={isBusy || hasBlockingErrors}
-                  type="submit"
-                >
-                  保存设置
-                </button>
+
+                <div className="settings-field-row">
+                  <div className="settings-field-row-label">
+                    <label className="settings-field-title">豆包 Resource ID</label>
+                  </div>
+                  <div className="settings-field-row-input">
+                    <Input
+                      aria-invalid={Boolean(validationErrors.doubao_asr_resource_id)}
+                      aria-label="豆包 Resource ID"
+                      className={inputClassName('doubao_asr_resource_id')}
+                      value={draft.doubao_asr_resource_id}
+                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('doubao_asr_resource_id', event.target.value)}
+                    />
+                    {renderFieldError('doubao_asr_resource_id')}
+                  </div>
+                </div>
+
+                <div className="settings-field-row">
+                  <div className="settings-field-row-label">
+                    <label className="settings-field-title">豆包模型</label>
+                  </div>
+                  <div className="settings-field-row-input">
+                    <Input
+                      aria-invalid={Boolean(validationErrors.doubao_asr_model)}
+                      aria-label="豆包模型"
+                      className={inputClassName('doubao_asr_model')}
+                      value={draft.doubao_asr_model}
+                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('doubao_asr_model', event.target.value)}
+                    />
+                    {renderFieldError('doubao_asr_model')}
+                  </div>
+                </div>
+
+                <div className="settings-field-row">
+                  <div className="settings-field-row-label">
+                    <label className="settings-field-title">转录静音自动结束（ms）</label>
+                  </div>
+                  <div className="settings-field-row-input">
+                    <Input
+                      aria-invalid={Boolean(validationErrors.transcription_silence_timeout_ms)}
+                      aria-label="转录静音自动结束（ms）"
+                      className={inputClassName('transcription_silence_timeout_ms')}
+                      max={5000}
+                      min={0}
+                      step={100}
+                      type="number"
+                      value={draft.transcription_silence_timeout_ms}
+                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('transcription_silence_timeout_ms', Number(event.target.value) || 0)}
+                    />
+                    {renderFieldError('transcription_silence_timeout_ms')}
+                  </div>
+                </div>
+
+                <div className="settings-action-bar">
+                  <button
+                    className="settings-btn-glass"
+                    disabled={isBusy}
+                    onClick={() => void handleReset()}
+                    type="button"
+                  >
+                    重置
+                  </button>
+                  <button
+                    className="settings-btn-primary"
+                    disabled={isBusy || hasBlockingErrors}
+                    type="submit"
+                  >
+                    保存设置
+                  </button>
+                </div>
               </div>
             </TabsContent>
 
             <TabsContent className="settings-pill-panel" value="model">
               <div className="settings-glass-card">
-                <div className="settings-field-block">
-                  <label className="settings-field-title">LLM 服务地址</label>
-                  <Input
-                    aria-invalid={Boolean(validationErrors.llm_base_url)}
-                    aria-label="LLM 服务地址"
-                    className={inputClassName('llm_base_url')}
-                    value={draft.llm_base_url}
-                    onChange={(event) => updateDraft('llm_base_url', event.target.value)}
-                  />
-                  {renderFieldError('llm_base_url')}
-                </div>
-
-                <div className="settings-field-block">
-                  <label className="settings-field-title">LLM API Key</label>
-                  <div className="settings-inline-control">
+                <div className="settings-field-row">
+                  <div className="settings-field-row-label">
+                    <label className="settings-field-title">LLM 服务地址</label>
+                  </div>
+                  <div className="settings-field-row-input">
                     <Input
-                      aria-label="LLM API Key"
-                      className="flex-1"
-                      placeholder={draft.has_llm_api_key ? '已保存，留空则保持不变' : '当前未设置'}
-                      type="password"
-                      value={llmSecret.action === 'replace' ? llmSecret.value : ''}
-                      onChange={(event) => updateSecret(event.target.value, draft.has_llm_api_key, setLlmSecret)}
+                      aria-invalid={Boolean(validationErrors.llm_base_url)}
+                      aria-label="LLM 服务地址"
+                      className={inputClassName('llm_base_url')}
+                      value={draft.llm_base_url}
+                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('llm_base_url', event.target.value)}
                     />
-                    <Button type="button" variant="outline" onClick={() => updateSecretDraft(setLlmSecret, createUnchangedSecretDraft())}>
-                      保持当前密钥
-                    </Button>
-                    <Button type="button" variant="outline" onClick={() => updateSecretDraft(setLlmSecret, { action: 'clear', value: '' })}>
-                      清空密钥
-                    </Button>
+                    {renderFieldError('llm_base_url')}
                   </div>
                 </div>
 
-                <div className="settings-field-block">
-                  <label className="settings-field-title">LLM 模型</label>
-                  <Input
-                    aria-invalid={Boolean(validationErrors.llm_model)}
-                    aria-label="LLM 模型"
-                    className={inputClassName('llm_model')}
-                    value={draft.llm_model}
-                    onChange={(event) => updateDraft('llm_model', event.target.value)}
-                  />
-                  {renderFieldError('llm_model')}
+                <div className="settings-field-row">
+                  <div className="settings-field-row-label">
+                    <label className="settings-field-title">LLM API Key</label>
+                  </div>
+                  <div className="settings-field-row-input">
+                    <div className="settings-inline-control">
+                      <Input
+                        aria-label="LLM API Key"
+                        className="flex-1"
+                        placeholder={draft.has_llm_api_key ? '已保存，留空则保持不变' : '当前未设置'}
+                        type="password"
+                        value={llmSecret.action === 'replace' ? llmSecret.value : ''}
+                        onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateSecret(event.target.value, draft.has_llm_api_key, setLlmSecret)}
+                      />
+                      <Button type="button" variant="outline" onClick={() => updateSecretDraft(setLlmSecret, createUnchangedSecretDraft())}>
+                        保持当前密钥
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => updateSecretDraft(setLlmSecret, { action: 'clear', value: '' })}>
+                        清空密钥
+                      </Button>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="settings-field-block">
-                  <label className="settings-field-title">系统提示词</label>
-                  <Textarea
-                    aria-label="系统提示词"
-                    rows={6}
-                    value={draft.llm_system_prompt}
-                    onChange={(event) => updateDraft('llm_system_prompt', event.target.value)}
-                  />
+                <div className="settings-field-row">
+                  <div className="settings-field-row-label">
+                    <label className="settings-field-title">LLM 模型</label>
+                  </div>
+                  <div className="settings-field-row-input">
+                    <Input
+                      aria-invalid={Boolean(validationErrors.llm_model)}
+                      aria-label="LLM 模型"
+                      className={inputClassName('llm_model')}
+                      value={draft.llm_model}
+                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('llm_model', event.target.value)}
+                    />
+                    {renderFieldError('llm_model')}
+                  </div>
                 </div>
-              </div>
-              <div className="settings-action-bar">
-                <button
-                  className="settings-btn-glass"
-                  disabled={isBusy}
-                  onClick={() => void handleReset()}
-                  type="button"
-                >
-                  重置
-                </button>
-                <button
-                  className="settings-btn-primary"
-                  disabled={isBusy || hasBlockingErrors}
-                  type="submit"
-                >
-                  保存设置
-                </button>
+
+                <div className="settings-field-row">
+                  <div className="settings-field-row-label">
+                    <label className="settings-field-title">系统提示词</label>
+                  </div>
+                  <div className="settings-field-row-input">
+                    <Textarea
+                      aria-label="系统提示词"
+                      rows={6}
+                      value={draft.llm_system_prompt}
+                      onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => updateDraft('llm_system_prompt', event.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="settings-action-bar">
+                  <button
+                    className="settings-btn-glass"
+                    disabled={isBusy}
+                    onClick={() => void handleReset()}
+                    type="button"
+                  >
+                    重置
+                  </button>
+                  <button
+                    className="settings-btn-primary"
+                    disabled={isBusy || hasBlockingErrors}
+                    type="submit"
+                  >
+                    保存设置
+                  </button>
+                </div>
               </div>
             </TabsContent>
 
             <TabsContent className="settings-pill-panel" value="mcp">
               <div className="settings-glass-card">
                 <div className="settings-toggle-simple">
-                  <strong>启用 AngryMiao 系统控制</strong>
+                  <span>启用 AngryMiao 系统控制</span>
                   <Switch
                     aria-label="启用 AngryMiao 系统控制"
                     checked={draft.angrymiao_skill_enabled}
@@ -583,35 +633,40 @@ export function SettingsPanel() {
                 />
                 {renderFieldError('keyboard_shortcuts')}
 
-                <div className="settings-field-block" style={{ padding: '0', marginTop: '16px' }}>
-                  <label className="settings-field-title">MCP 服务 JSON</label>
-                  <Textarea
-                    aria-invalid={Boolean(validationErrors.mcp_servers_json)}
-                    aria-label="MCP 服务 JSON"
-                    className={inputClassName('mcp_servers_json')}
-                    rows={8}
-                    value={draft.mcp_servers_json}
-                    onChange={(event) => updateDraft('mcp_servers_json', event.target.value)}
-                  />
-                  {renderFieldError('mcp_servers_json')}
+                <div className="settings-field-row">
+                  <div className="settings-field-row-label">
+                    <label className="settings-field-title">MCP 服务 JSON</label>
+                  </div>
+                  <div className="settings-field-row-input">
+                    <Textarea
+                      aria-invalid={Boolean(validationErrors.mcp_servers_json)}
+                      aria-label="MCP 服务 JSON"
+                      className={inputClassName('mcp_servers_json')}
+                      rows={8}
+                      value={draft.mcp_servers_json}
+                      onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => updateDraft('mcp_servers_json', event.target.value)}
+                    />
+                    {renderFieldError('mcp_servers_json')}
+                  </div>
                 </div>
-              </div>
-              <div className="settings-action-bar">
-                <button
-                  className="settings-btn-glass"
-                  disabled={isBusy}
-                  onClick={() => void handleReset()}
-                  type="button"
-                >
-                  重置
-                </button>
-                <button
-                  className="settings-btn-primary"
-                  disabled={isBusy || hasBlockingErrors}
-                  type="submit"
-                >
-                  保存设置
-                </button>
+
+                <div className="settings-action-bar">
+                  <button
+                    className="settings-btn-glass"
+                    disabled={isBusy}
+                    onClick={() => void handleReset()}
+                    type="button"
+                  >
+                    重置
+                  </button>
+                  <button
+                    className="settings-btn-primary"
+                    disabled={isBusy || hasBlockingErrors}
+                    type="submit"
+                  >
+                    保存设置
+                  </button>
+                </div>
               </div>
             </TabsContent>
           </Tabs>

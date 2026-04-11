@@ -1363,6 +1363,23 @@ html[data-window='result'] #root {
    Settings - Apple Design System Style
    ============================================ */
 
+.settings-form-shell {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 20px 24px;
+}
+
+.settings-tabs-shell {
+  position: sticky;
+  top: 0;
+  background: #f5f5f7;
+  padding: 16px 20px;
+  margin: -20px -24px 20px -24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  backdrop-filter: saturate(180%) blur(20px);
+  z-index: 100;
+}
+
 .settings-pill-tabs {
   display: flex;
   gap: 6px;
@@ -1375,7 +1392,7 @@ html[data-window='result'] #root {
 }
 
 .settings-pill-tab {
-  padding: 6px 18px;
+  padding: 8px 20px;
   border-radius: 980px;
   background: transparent;
   border: none;
@@ -1400,7 +1417,7 @@ html[data-window='result'] #root {
 }
 
 .settings-pill-panel {
-  margin-top: 20px;
+  margin-top: 0;
 }
 
 /* ============================================
@@ -1410,39 +1427,29 @@ html[data-window='result'] #root {
 .settings-glass-card {
   background: #ffffff;
   border-radius: 12px;
-  padding: 24px;
+  padding: 0;
   box-shadow: rgba(0, 0, 0, 0.22) 3px 5px 30px 0px;
 }
 
-.settings-toggle-simple {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 0;
-}
-
-.settings-toggle-simple:first-child {
-  padding-top: 0;
-}
-
-.settings-toggle-simple:last-child {
-  padding-bottom: 0;
-}
-
 /* ============================================
-   Settings Field Styling
+   Settings Field Row - Two Column Layout
    ============================================ */
 
-.settings-field-block {
-  padding: 16px 0;
+.settings-field-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 20px;
+  align-items: start;
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-.settings-field-block:first-child {
-  padding-top: 0;
+.settings-field-row:last-child {
+  border-bottom: none;
 }
 
-.settings-field-block:last-child {
-  padding-bottom: 0;
+.settings-field-row-label {
+  padding-top: 10px;
 }
 
 .settings-field-title {
@@ -1450,15 +1457,45 @@ html[data-window='result'] #root {
   font-size: 14px;
   font-weight: 600;
   color: #1d1d1f;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   letter-spacing: -0.022em;
 }
 
-.settings-field span,
-.settings-hint {
+.settings-field-row-label .settings-hint {
   font-size: 12px;
   color: rgba(0, 0, 0, 0.48);
-  margin-top: 4px;
+  font-weight: 400;
+}
+
+.settings-field-row-input {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ============================================
+   Settings Toggle Row
+   ============================================ */
+
+.settings-toggle-simple {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 20px;
+  align-items: center;
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.settings-toggle-simple:last-child {
+  border-bottom: none;
+}
+
+.settings-toggle-simple span {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d1d1f;
+  padding-top: 10px;
+  letter-spacing: -0.022em;
 }
 
 /* ============================================
@@ -1523,9 +1560,11 @@ html[data-window='result'] #root {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 20px;
-  padding-top: 20px;
+  padding: 18px 24px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
 }
 
 .settings-btn-glass {
@@ -1592,6 +1631,7 @@ html[data-window='result'] #root {
   padding: 12px 16px;
   color: #b95900;
   font-size: 13px;
+  margin: 0 24px;
 }
 
 .text-destructive {
