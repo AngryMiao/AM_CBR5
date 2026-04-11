@@ -24,7 +24,7 @@ async function openMainPanel(name: '首页' | '历史记录' | '设置' | '日�
   return within(getPanel(targetPanel))
 }
 
-async function openSettingsSection(name: '通用' | '快捷键' | '语音' | '模型' | 'MCP') {
+async function openSettingsSection(name: '通用' | '语音' | '模型' | 'MCP') {
   const section = within(getPanel('settings'))
   const tabLabel =
     name === '语音' ? 'ASR' : name === '模型' ? '模型' : name
@@ -290,13 +290,12 @@ describe('App shell', () => {
     render(<App />)
     const section = await openMainPanel('设置')
     expect(await section.findByRole('tab', { name: '通用' })).toBeInTheDocument()
-    expect(section.getByRole('tab', { name: '快捷键' })).toBeInTheDocument()
     expect(section.getByRole('tab', { name: 'ASR' })).toBeInTheDocument()
     expect(section.getByRole('tab', { name: '模型' })).toBeInTheDocument()
     expect(section.getByRole('tab', { name: 'MCP' })).toBeInTheDocument()
     expect(section.getByRole('switch', { name: '开机自启动' })).toBeInTheDocument()
 
-    await openSettingsSection('快捷键')
+    await openSettingsSection('通用')
     expect(await section.findByDisplayValue('RightAlt')).toBeInTheDocument()
     expect(section.getByRole('button', { name: '录制默认热键' })).toBeInTheDocument()
     expect(section.queryByLabelText('工作模式')).toBeNull()
@@ -352,7 +351,7 @@ describe('App shell', () => {
   it('records the default hotkey and saves it in exact voice-hotkey format', async () => {
     render(<App />)
     const section = await openMainPanel('设置')
-    await openSettingsSection('快捷键')
+    await openSettingsSection('通用')
 
     fireEvent.click(await section.findByRole('button', { name: '录制默认热键' }))
     expect(section.getByDisplayValue('请按住默认热键...')).toHaveFocus()
@@ -427,7 +426,7 @@ describe('App shell', () => {
   it('reloads persisted settings after a failed save rolls back on the backend', async () => {
     render(<App />)
     const section = await openMainPanel('设置')
-    await openSettingsSection('快捷键')
+    await openSettingsSection('通用')
 
     const invokeMock = vi.mocked(invoke)
     const originalImplementation = invokeMock.getMockImplementation()
@@ -477,7 +476,7 @@ describe('App shell', () => {
   it('shows string error details from the backend instead of generic save failure text', async () => {
     render(<App />)
     const section = await openMainPanel('设置')
-    await openSettingsSection('快捷键')
+    await openSettingsSection('通用')
 
     const invokeMock = vi.mocked(invoke)
     const originalImplementation = invokeMock.getMockImplementation()
@@ -511,7 +510,7 @@ describe('App shell', () => {
   it('shows save warnings when runtime hotkey reload cannot take effect immediately', async () => {
     render(<App />)
     const section = await openMainPanel('设置')
-    await openSettingsSection('快捷键')
+    await openSettingsSection('通用')
 
     const invokeMock = vi.mocked(invoke)
     const originalImplementation = invokeMock.getMockImplementation()
@@ -603,7 +602,7 @@ describe('App shell', () => {
     render(<App />)
     const section = await openMainPanel('设置')
 
-    await openSettingsSection('快捷键')
+    await openSettingsSection('通用')
     fireEvent.click(await section.findByRole('button', { name: '录制默认热键' }))
     fireEvent.keyDown(window, { code: 'Backspace', key: 'Backspace' })
 
@@ -620,7 +619,7 @@ describe('App shell', () => {
 
     expect(await section.findByText('MCP 服务 JSON 格式无效。')).toBeInTheDocument()
 
-    await openSettingsSection('快捷键')
+    await openSettingsSection('通用')
     expect(await section.findByText('默认热键不能为空。')).toBeInTheDocument()
 
     await openSettingsSection('语音')

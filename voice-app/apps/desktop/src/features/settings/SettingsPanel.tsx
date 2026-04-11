@@ -30,7 +30,7 @@ import {
 
 type PanelStatus = 'loading' | 'idle' | 'saving' | 'saved' | 'error'
 type MicrophoneStatus = 'idle' | 'loading' | 'error'
-type SettingsTabValue = 'general' | 'hotkey' | 'asr' | 'model' | 'mcp'
+type SettingsTabValue = 'general' | 'asr' | 'model' | 'mcp'
 
 function createUnchangedSecretDraft(): SecretDraftState {
   return { action: 'unchanged', value: '' }
@@ -295,7 +295,6 @@ export function SettingsPanel() {
           >
             <TabsList className="settings-pill-tabs">
               <TabsTrigger className="settings-pill-tab" onClick={() => setActiveTab('general')} value="general">通用</TabsTrigger>
-              <TabsTrigger className="settings-pill-tab" onClick={() => setActiveTab('hotkey')} value="hotkey">快捷键</TabsTrigger>
               <TabsTrigger className="settings-pill-tab" onClick={() => setActiveTab('asr')} value="asr">ASR</TabsTrigger>
               <TabsTrigger className="settings-pill-tab" onClick={() => setActiveTab('model')} value="model">模型</TabsTrigger>
               <TabsTrigger className="settings-pill-tab" onClick={() => setActiveTab('mcp')} value="mcp">MCP</TabsTrigger>
@@ -321,29 +320,7 @@ export function SettingsPanel() {
                     onCheckedChange={(checked) => updateDraft('auto_launch_enabled', checked)}
                   />
                 </div>
-              </div>
-              <div className="settings-action-bar">
-                <button
-                  className="settings-btn-glass"
-                  disabled={isBusy}
-                  onClick={() => void handleReset()}
-                  type="button"
-                >
-                  重置
-                </button>
-                <button
-                  className="settings-btn-primary"
-                  disabled={isBusy || hasBlockingErrors}
-                  type="submit"
-                >
-                  保存设置
-                </button>
-              </div>
-            </TabsContent>
-
-            <TabsContent className="settings-pill-panel" value="hotkey">
-              <div className="settings-glass-card">
-                <div className="settings-field-block" style={{ padding: '0' }}>
+                <div className="settings-field-block" style={{ padding: '0', marginTop: '16px' }}>
                   <label className="settings-field-title">默认热键</label>
                   <DefaultHotkeyRecorder
                     inputAriaInvalid={Boolean(validationErrors.default_hotkey)}
