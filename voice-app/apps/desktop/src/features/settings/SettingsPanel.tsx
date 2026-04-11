@@ -24,10 +24,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { 
-  Save, 
-  RotateCcw, 
-  AlertTriangle,
+import {
   RefreshCw
 } from 'lucide-react'
 
@@ -107,19 +104,6 @@ function getMutationFeedback(
       ? '设置已保存，但以下项目未即时生效：'
       : '已恢复为当前已保存设置，但以下项目未即时生效：'
   return `${prefix}${result.warnings.join('；')}`
-}
-
-function getSecretHint(hasSecret: boolean, secret: SecretDraftState, providerName: string) {
-  if (secret.action === 'clear') {
-    return `保存后会清空当前已保存的 ${providerName}。`
-  }
-  if (secret.action === 'replace' && secret.value.trim()) {
-    return `保存后会覆盖当前已保存的 ${providerName}。`
-  }
-  if (hasSecret) {
-    return `当前已保存 ${providerName}，留空并直接保存会保持不变。`
-  }
-  return `当前未设置 ${providerName}，输入后保存即可生效。`
 }
 
 export function SettingsPanel() {
@@ -292,10 +276,15 @@ export function SettingsPanel() {
             void handleSave()
           }}
         >
+          {message ? (
+            <div className={status === 'error' ? 'text-destructive' : 'text-emerald-600'} style={{ marginBottom: '12px', fontSize: '13px' }}>
+              {message}
+            </div>
+          ) : null}
+
           {runtimeReadinessWarnings.length > 0 ? (
-            <div className="console-warning" role="status">
-              <AlertTriangle className="h-4 w-4" />
-              <span>当前语音任务还不能运行，请补齐：{runtimeReadinessWarnings.join('、')}。</span>
+            <div className="console-warning" role="status" style={{ marginBottom: '12px' }}>
+              当前语音任务还不能运行，请补齐：{runtimeReadinessWarnings.join('、')}。
             </div>
           ) : null}
 
@@ -304,25 +293,18 @@ export function SettingsPanel() {
             onValueChange={(value) => setActiveTab(value as SettingsTabValue)}
             value={activeTab}
           >
-            <div className="settings-tabs-bar">
-              <TabsList className="settings-tabs-pill">
-                <TabsTrigger onClick={() => setActiveTab('general')} value="general">通用</TabsTrigger>
-                <TabsTrigger onClick={() => setActiveTab('hotkey')} value="hotkey">快捷键</TabsTrigger>
-                <TabsTrigger onClick={() => setActiveTab('asr')} value="asr">ASR</TabsTrigger>
-                <TabsTrigger onClick={() => setActiveTab('model')} value="model">模型</TabsTrigger>
-                <TabsTrigger onClick={() => setActiveTab('mcp')} value="mcp">MCP</TabsTrigger>
-              </TabsList>
-            </div>
-            <TabsContent className="settings-tab-panel" value="general">
-              <section className="settings-pane">
-                <div className="settings-pane-header">
-                  <h3>通用</h3>
-                </div>
+            <TabsList className="settings-pill-tabs">
+              <TabsTrigger className="settings-pill-tab" value="general">通用</TabsTrigger>
+              <TabsTrigger className="settings-pill-tab" value="hotkey">快捷键</TabsTrigger>
+              <TabsTrigger className="settings-pill-tab" value="asr">ASR</TabsTrigger>
+              <TabsTrigger className="settings-pill-tab" value="model">模型</TabsTrigger>
+              <TabsTrigger className="settings-pill-tab" value="mcp">MCP</TabsTrigger>
+            </TabsList>
 
-                <div className="settings-toggle-row">
-                  <div>
-                    <strong>保存历史记录</strong>
-                  </div>
+            <TabsContent className="settings-pill-panel" value="general">
+              <div className="settings-glass-card">
+                <div className="settings-toggle-simple">
+                  <strong>保存历史记录</strong>
                   <Switch
                     aria-label="保存历史记录"
                     checked={draft.history_enabled}
@@ -330,11 +312,9 @@ export function SettingsPanel() {
                     onCheckedChange={(checked) => updateDraft('history_enabled', checked)}
                   />
                 </div>
-
-                <div className="settings-toggle-row">
-                  <div>
-                    <strong>开机自启动</strong>
-                  </div>
+                <div className="settings-divider" />
+                <div className="settings-toggle-simple">
+                  <strong>开机自启动</strong>
                   <Switch
                     aria-label="开机自启动"
                     checked={draft.auto_launch_enabled}
@@ -342,16 +322,29 @@ export function SettingsPanel() {
                     onCheckedChange={(checked) => updateDraft('auto_launch_enabled', checked)}
                   />
                 </div>
-              </section>
+              </div>
+              <div className="settings-action-bar">
+                <button
+                  className="settings-btn-glass"
+                  disabled={isBusy}
+                  onClick={() => void handleReset()}
+                  type="button"
+                >
+                  重置
+                </button>
+                <button
+                  className="settings-btn-primary"
+                  disabled={isBusy || hasBlockingErrors}
+                  type="submit"
+                >
+                  保存
+                </button>
+              </div>
             </TabsContent>
 
-            <TabsContent className="settings-tab-panel" value="hotkey">
-              <section className="settings-pane">
-                <div className="settings-pane-header">
-                  <h3>快捷键</h3>
-                </div>
-
-                <div className="settings-field-block">
+            <TabsContent className="settings-pill-panel" value="hotkey">
+              <div className="settings-glass-card">
+                <div className="settings-field-block" style={{ padding: '0' }}>
                   <label className="settings-field-title">默认热键</label>
                   <DefaultHotkeyRecorder
                     inputAriaInvalid={Boolean(validationErrors.default_hotkey)}
@@ -361,16 +354,29 @@ export function SettingsPanel() {
                   />
                   {renderFieldError('default_hotkey')}
                 </div>
-              </section>
+              </div>
+              <div className="settings-action-bar">
+                <button
+                  className="settings-btn-glass"
+                  disabled={isBusy}
+                  onClick={() => void handleReset()}
+                  type="button"
+                >
+                  重置
+                </button>
+                <button
+                  className="settings-btn-primary"
+                  disabled={isBusy || hasBlockingErrors}
+                  type="submit"
+                >
+                  保存
+                </button>
+              </div>
             </TabsContent>
 
-            <TabsContent className="settings-tab-panel" value="asr">
-              <section className="settings-pane">
-                <div className="settings-pane-header">
-                  <h3>豆包 ASR</h3>
-                </div>
-
-                <div className="settings-field-block">
+            <TabsContent className="settings-pill-panel" value="asr">
+              <div className="settings-glass-card">
+                <div className="settings-field-block" style={{ padding: '0' }}>
                   <label className="settings-field-title">豆包 WebSocket URL</label>
                   <Input
                     aria-invalid={Boolean(validationErrors.doubao_asr_url)}
@@ -382,7 +388,9 @@ export function SettingsPanel() {
                   {renderFieldError('doubao_asr_url')}
                 </div>
 
-                <div className="settings-field-block">
+                <div className="settings-divider" />
+
+                <div className="settings-field-block" style={{ padding: '0' }}>
                   <label className="settings-field-title">豆包 App ID</label>
                   <Input
                     aria-label="豆包 App ID"
@@ -391,7 +399,9 @@ export function SettingsPanel() {
                   />
                 </div>
 
-                <div className="settings-field-block">
+                <div className="settings-divider" />
+
+                <div className="settings-field-block" style={{ padding: '0' }}>
                   <label className="settings-field-title">默认麦克风</label>
                   <div className="settings-inline-control">
                     <select
@@ -423,7 +433,9 @@ export function SettingsPanel() {
                   {microphoneStatus === 'error' && microphoneMessage ? <p className="runtime-error">{microphoneMessage}</p> : null}
                 </div>
 
-                <div className="settings-field-block">
+                <div className="settings-divider" />
+
+                <div className="settings-field-block" style={{ padding: '0' }}>
                   <label className="settings-field-title">豆包 Access Token</label>
                   <div className="settings-inline-control">
                     <Input
@@ -445,7 +457,9 @@ export function SettingsPanel() {
                   </div>
                 </div>
 
-                <div className="settings-field-block">
+                <div className="settings-divider" />
+
+                <div className="settings-field-block" style={{ padding: '0' }}>
                   <label className="settings-field-title">豆包 Resource ID</label>
                   <Input
                     aria-invalid={Boolean(validationErrors.doubao_asr_resource_id)}
@@ -457,7 +471,9 @@ export function SettingsPanel() {
                   {renderFieldError('doubao_asr_resource_id')}
                 </div>
 
-                <div className="settings-field-block">
+                <div className="settings-divider" />
+
+                <div className="settings-field-block" style={{ padding: '0' }}>
                   <label className="settings-field-title">豆包模型</label>
                   <Input
                     aria-invalid={Boolean(validationErrors.doubao_asr_model)}
@@ -469,7 +485,9 @@ export function SettingsPanel() {
                   {renderFieldError('doubao_asr_model')}
                 </div>
 
-                <div className="settings-field-block">
+                <div className="settings-divider" />
+
+                <div className="settings-field-block" style={{ padding: '0' }}>
                   <label className="settings-field-title">转录静音自动结束（ms）</label>
                   <Input
                     aria-invalid={Boolean(validationErrors.transcription_silence_timeout_ms)}
@@ -484,16 +502,29 @@ export function SettingsPanel() {
                   />
                   {renderFieldError('transcription_silence_timeout_ms')}
                 </div>
-              </section>
+              </div>
+              <div className="settings-action-bar">
+                <button
+                  className="settings-btn-glass"
+                  disabled={isBusy}
+                  onClick={() => void handleReset()}
+                  type="button"
+                >
+                  重置
+                </button>
+                <button
+                  className="settings-btn-primary"
+                  disabled={isBusy || hasBlockingErrors}
+                  type="submit"
+                >
+                  保存
+                </button>
+              </div>
             </TabsContent>
 
-            <TabsContent className="settings-tab-panel" value="model">
-              <section className="settings-pane">
-                <div className="settings-pane-header">
-                  <h3>OpenAI-compatible LLM</h3>
-                </div>
-
-                <div className="settings-field-block">
+            <TabsContent className="settings-pill-panel" value="model">
+              <div className="settings-glass-card">
+                <div className="settings-field-block" style={{ padding: '0' }}>
                   <label className="settings-field-title">LLM 服务地址</label>
                   <Input
                     aria-invalid={Boolean(validationErrors.llm_base_url)}
@@ -505,7 +536,9 @@ export function SettingsPanel() {
                   {renderFieldError('llm_base_url')}
                 </div>
 
-                <div className="settings-field-block">
+                <div className="settings-divider" />
+
+                <div className="settings-field-block" style={{ padding: '0' }}>
                   <label className="settings-field-title">LLM API Key</label>
                   <div className="settings-inline-control">
                     <Input
@@ -525,7 +558,9 @@ export function SettingsPanel() {
                   </div>
                 </div>
 
-                <div className="settings-field-block">
+                <div className="settings-divider" />
+
+                <div className="settings-field-block" style={{ padding: '0' }}>
                   <label className="settings-field-title">LLM 模型</label>
                   <Input
                     aria-invalid={Boolean(validationErrors.llm_model)}
@@ -537,7 +572,9 @@ export function SettingsPanel() {
                   {renderFieldError('llm_model')}
                 </div>
 
-                <div className="settings-field-block">
+                <div className="settings-divider" />
+
+                <div className="settings-field-block" style={{ padding: '0' }}>
                   <label className="settings-field-title">系统提示词</label>
                   <Textarea
                     aria-label="系统提示词"
@@ -546,19 +583,30 @@ export function SettingsPanel() {
                     onChange={(event) => updateDraft('llm_system_prompt', event.target.value)}
                   />
                 </div>
-              </section>
+              </div>
+              <div className="settings-action-bar">
+                <button
+                  className="settings-btn-glass"
+                  disabled={isBusy}
+                  onClick={() => void handleReset()}
+                  type="button"
+                >
+                  重置
+                </button>
+                <button
+                  className="settings-btn-primary"
+                  disabled={isBusy || hasBlockingErrors}
+                  type="submit"
+                >
+                  保存
+                </button>
+              </div>
             </TabsContent>
 
-            <TabsContent className="settings-tab-panel" value="mcp">
-              <section className="settings-pane">
-                <div className="settings-pane-header">
-                  <h3>MCP</h3>
-                </div>
-
-                <div className="settings-toggle-row">
-                  <div>
-                    <strong>启用 AngryMiao 系统控制</strong>
-                  </div>
+            <TabsContent className="settings-pill-panel" value="mcp">
+              <div className="settings-glass-card">
+                <div className="settings-toggle-simple">
+                  <strong>启用 AngryMiao 系统控制</strong>
                   <Switch
                     aria-label="启用 AngryMiao 系统控制"
                     checked={draft.angrymiao_skill_enabled}
@@ -566,6 +614,8 @@ export function SettingsPanel() {
                     onCheckedChange={(checked) => updateDraft('angrymiao_skill_enabled', checked)}
                   />
                 </div>
+
+                <div className="settings-divider" />
 
                 <SkillBundleInventory />
 
@@ -577,7 +627,9 @@ export function SettingsPanel() {
                 />
                 {renderFieldError('keyboard_shortcuts')}
 
-                <div className="settings-field-block">
+                <div className="settings-divider" />
+
+                <div className="settings-field-block" style={{ padding: '0' }}>
                   <label className="settings-field-title">MCP 服务 JSON</label>
                   <Textarea
                     aria-invalid={Boolean(validationErrors.mcp_servers_json)}
@@ -589,34 +641,26 @@ export function SettingsPanel() {
                   />
                   {renderFieldError('mcp_servers_json')}
                 </div>
-              </section>
+              </div>
+              <div className="settings-action-bar">
+                <button
+                  className="settings-btn-glass"
+                  disabled={isBusy}
+                  onClick={() => void handleReset()}
+                  type="button"
+                >
+                  重置
+                </button>
+                <button
+                  className="settings-btn-primary"
+                  disabled={isBusy || hasBlockingErrors}
+                  type="submit"
+                >
+                  保存
+                </button>
+              </div>
             </TabsContent>
           </Tabs>
-
-          <div className="settings-sticky-footer">
-            <div className="settings-sticky-message">
-              {message ? (
-                <span className={status === 'error' ? 'text-destructive' : 'text-emerald-600'}>{message}</span>
-              ) : hasBlockingErrors ? (
-                <span className="text-destructive">请先修正设置项后再保存。</span>
-              ) : runtimeReadinessWarnings.length > 0 ? (
-                <span className="text-amber-700">仍缺少运行前置条件：{runtimeReadinessWarnings.join('、')}。</span>
-              ) : (
-                <span>设置修改会在保存后立即写入本地配置。</span>
-              )}
-            </div>
-
-            <div className="settings-sticky-actions">
-              <Button className="gap-1" disabled={isBusy} onClick={() => void handleReset()} type="button" variant="outline">
-                <RotateCcw className="h-4 w-4" />
-                重置
-              </Button>
-              <Button className="gap-1" disabled={isBusy || hasBlockingErrors} type="submit">
-                <Save className="h-4 w-4" />
-                保存设置
-              </Button>
-            </div>
-          </div>
         </form>
       )}
     </section>
