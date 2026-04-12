@@ -43,20 +43,20 @@ const MAIN_PANELS: Array<{
     icon: <Home className="w-4 h-4" />,
   },
   {
-    key: 'history',
-    label: '历史记录',
-    title: '任务历史',
-    description: '查看识别结果、重试任务并预览输出。',
-    footer: 'History Stream',
-    icon: <History className="w-4 h-4" />,
-  },
-  {
     key: 'settings',
     label: '设置',
     title: '设置中心',
     description: '管理热键、模型、设备和 MCP 配置。',
     footer: 'Settings',
     icon: <Settings className="w-4 h-4" />,
+  },
+  {
+    key: 'history',
+    label: '历史记录',
+    title: '任务历史',
+    description: '查看识别结果、重试任务并预览输出。',
+    footer: 'History Stream',
+    icon: <History className="w-4 h-4" />,
   },
   {
     key: 'logs',

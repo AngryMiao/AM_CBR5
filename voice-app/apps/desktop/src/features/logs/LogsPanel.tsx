@@ -7,12 +7,16 @@ import {
   type RuntimeLogEntry,
 } from '../../lib/tauri'
 import {
+  Badge,
+} from '@/components/ui/badge'
+import {
   Search,
   Download,
   Trash2,
   FileText,
   Info,
   AlertCircle,
+  CheckCircle,
 } from 'lucide-react'
 
 export function LogsPanel() {
@@ -125,7 +129,7 @@ export function LogsPanel() {
                   onClick={() => setLevelFilter('info')}
                   type="button"
                 >
-                  <Info className="h-3.5 w-3.5" />
+                  <CheckCircle className="h-3.5 w-3.5" />
                   INFO
                 </button>
                 <button
@@ -167,13 +171,15 @@ export function LogsPanel() {
       {/* Feedback messages */}
       {feedback ? (
         <div className="logs-feedback logs-feedback-success" role="status">
-          {feedback}
+          <CheckCircle className="h-4 w-4" />
+          <span>{feedback}</span>
         </div>
       ) : null}
 
       {error ? (
         <div className="logs-feedback logs-feedback-error" role="alert">
-          {error}
+          <AlertCircle className="h-4 w-4" />
+          <span>{error}</span>
         </div>
       ) : null}
 
@@ -189,13 +195,21 @@ export function LogsPanel() {
           <div className="logs-list">
             {filteredLogs.map((entry, index) => (
               <div
-                className={`logs-item ${entry.level === 'error' ? 'logs-item-error' : ''}`}
+                className="logs-card"
                 key={`${entry.level}-${entry.message}-${index}`}
               >
-                <span className={`logs-level-badge ${entry.level}`}>
-                  {entry.level === 'error' ? 'ERROR' : 'INFO'}
-                </span>
-                <p className="logs-message">{entry.message}</p>
+                <Badge
+                  variant={entry.level === 'error' ? 'destructive' : 'secondary'}
+                  className="logs-badge"
+                >
+                  {entry.level === 'error' ? (
+                    <AlertCircle className="h-3 w-3 mr-1" />
+                  ) : (
+                    <Info className="h-3 w-3 mr-1" />
+                  )}
+                  {entry.level.toUpperCase()}
+                </Badge>
+                <span className="logs-message">{entry.message}</span>
               </div>
             ))}
           </div>
