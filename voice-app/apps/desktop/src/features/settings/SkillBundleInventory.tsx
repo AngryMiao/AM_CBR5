@@ -92,44 +92,52 @@ export function SkillBundleInventory() {
 
   return (
     <section className="skill-bundle-panel">
-      <div className="shortcut-settings-header">
-        <h3>已安装 Skill Bundles</h3>
-        <div className="settings-inline-actions">
-          <button type="button" onClick={() => void loadBundles()}>
-            刷新列表
-          </button>
+      <div className="settings-field-row">
+        <div className="settings-field-row-label">
+          <label className="settings-field-title">已安装 Skill Bundles</label>
+        </div>
+        <div className="settings-field-row-input">
+          <div className="settings-inline-actions" style={{ justifyContent: 'flex-end' }}>
+            <button type="button" onClick={() => void loadBundles()}>
+              刷新列表
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="settings-field settings-field-wide">
-        <span>安装本地 Skill Bundle</span>
-        <div className="settings-inline-form">
-          <input
-            aria-label="Skill Bundle 目录路径"
-            placeholder="输入待安装 bundle 的本地目录路径"
-            value={installPath}
-            onChange={(event) => setInstallPath(event.target.value)}
-          />
-          <button
-            aria-label="安装 Bundle"
-            type="button"
-            disabled={installing}
-            onClick={() => void handleInstallBundle()}
-          >
-            {installing ? '安装中...' : '安装 Bundle'}
-          </button>
+      <div className="settings-field-row">
+        <div className="settings-field-row-label">
+          <label className="settings-field-title">安装本地 Skill Bundle</label>
+        </div>
+        <div className="settings-field-row-input">
+          <div className="settings-inline-form">
+            <input
+              aria-label="Skill Bundle 目录路径"
+              placeholder="输入待安装 bundle 的本地目录路径"
+              value={installPath}
+              onChange={(event) => setInstallPath(event.target.value)}
+            />
+            <button
+              aria-label="安装 Bundle"
+              type="button"
+              disabled={installing}
+              onClick={() => void handleInstallBundle()}
+            >
+              {installing ? '安装中...' : '安装 Bundle'}
+            </button>
+          </div>
+          {installMessage ? (
+            <p className="settings-feedback" role="status">
+              {installMessage}
+            </p>
+          ) : null}
+          {installError ? (
+            <p className="runtime-error" role="alert">
+              {installError}
+            </p>
+          ) : null}
         </div>
       </div>
-      {installMessage ? (
-        <p className="settings-feedback" role="status">
-          {installMessage}
-        </p>
-      ) : null}
-      {installError ? (
-        <p className="runtime-error" role="alert">
-          {installError}
-        </p>
-      ) : null}
 
       {status === 'loading' ? <p className="settings-hint">正在读取 Skill Bundle...</p> : null}
       {status === 'error' && message ? (
@@ -197,7 +205,7 @@ export function SkillBundleInventory() {
                     </p>
                     {runtime.missing_required_env.length > 0 ? (
                       <p className="shortcut-warning">
-                        缺少环境变量：{runtime.missing_required_env.join('、')}
+                        缺少环境变量：{runtime.missing_required_env.join(', ')}
                       </p>
                     ) : null}
                   </div>

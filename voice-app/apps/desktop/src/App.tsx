@@ -13,12 +13,11 @@ import {
   toggleCurrentWindowMaximize,
 } from './lib/tauri'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { 
-  Home, 
-  History, 
-  Settings, 
-  FileText, 
+import {
+  Home,
+  History,
+  Settings,
+  FileText,
   Mic,
   Minus,
   Square,
@@ -102,6 +101,10 @@ export default function App() {
             if (event.button !== 0) return
             void startCurrentWindowDragging()
           }}
+          onDoubleClick={(event) => {
+            event.preventDefault()
+            void toggleCurrentWindowMaximize()
+          }}
         />
 
         <div className="desktop-window-controls">
@@ -177,16 +180,23 @@ export default function App() {
         </aside>
 
         <main className="workspace-main">
-          <ScrollArea className="workspace-scroll">
-            <div className="workspace-page">
-              <section className="workspace-panel" data-panel={activePanel}>
-                {activePanel === 'runtime' && <RuntimeStatus />}
-                {activePanel === 'history' && <HistoryPanel />}
-                {activePanel === 'settings' && <SettingsPanel />}
-                {activePanel === 'logs' && <LogsPanel />}
-              </section>
-            </div>
-          </ScrollArea>
+          {activePanel === 'settings' ? (
+            <section className="workspace-panel" data-panel={activePanel}>
+              <SettingsPanel />
+            </section>
+          ) : activePanel === 'history' ? (
+            <section className="workspace-panel" data-panel={activePanel}>
+              <HistoryPanel />
+            </section>
+          ) : activePanel === 'logs' ? (
+            <section className="workspace-panel" data-panel={activePanel}>
+              <LogsPanel />
+            </section>
+          ) : activePanel === 'runtime' ? (
+            <section className="workspace-panel" data-panel={activePanel}>
+              <RuntimeStatus />
+            </section>
+          ) : null}
         </main>
       </div>
     </div>

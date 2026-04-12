@@ -6,13 +6,13 @@ import {
   listenRuntimeLogs,
   type RuntimeLogEntry,
 } from '../../lib/tauri'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Search,
   Download,
-  Trash2
+  Trash2,
+  FileText,
+  Info,
+  AlertCircle,
 } from 'lucide-react'
 
 export function LogsPanel() {
@@ -83,86 +83,124 @@ export function LogsPanel() {
   }
 
   return (
-    <section className="runtime-panel">
-      <header className="page-header-minimal">
-        <h3>运行日志</h3>
+    <section className="logs-page">
+      {/* Sticky header with title and filters */}
+      <header className="logs-page-header">
+        <div className="logs-header-content">
+          <div className="logs-title-section">
+            <div className="logs-eyebrow">
+              <FileText className="h-4 w-4" />
+              <span>Runtime Logs</span>
+            </div>
+            <h2 className="logs-title">运行日志</h2>
+            <p className="logs-description">查看运行日志、筛选错误并导出记录</p>
+          </div>
+
+          <div className="logs-toolbar">
+            <div className="logs-filter-row">
+              <div className="logs-search-wrapper">
+                <Search className="logs-search-icon" />
+                <input
+                  aria-label="筛选日志"
+                  className="logs-search-input"
+                  placeholder="按内容筛选..."
+                  type="text"
+                  value={keyword}
+                  onChange={(event) => setKeyword(event.target.value)}
+                />
+              </div>
+
+              <div className="logs-filter-buttons">
+                <button
+                  aria-label="筛选全部级别"
+                  className={`logs-filter-btn ${levelFilter === '' ? 'active' : ''}`}
+                  onClick={() => setLevelFilter('')}
+                  type="button"
+                >
+                  全部
+                </button>
+                <button
+                  aria-label="筛选 INFO"
+                  className={`logs-filter-btn ${levelFilter === 'info' ? 'active' : ''}`}
+                  onClick={() => setLevelFilter('info')}
+                  type="button"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                  INFO
+                </button>
+                <button
+                  aria-label="筛选 ERROR"
+                  className={`logs-filter-btn ${levelFilter === 'error' ? 'active' : ''}`}
+                  onClick={() => setLevelFilter('error')}
+                  type="button"
+                >
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  ERROR
+                </button>
+              </div>
+            </div>
+
+            <div className="logs-action-buttons">
+              <button
+                aria-label="导出日志"
+                className="logs-action-btn"
+                onClick={() => void handleExport()}
+                type="button"
+              >
+                <Download className="h-3.5 w-3.5" />
+                导出
+              </button>
+              <button
+                aria-label="清空日志"
+                className="logs-action-btn logs-action-btn-danger"
+                onClick={() => void handleClear()}
+                type="button"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                清空
+              </button>
+            </div>
+          </div>
+        </div>
       </header>
 
-      <div className="filter-bar-inline">
-        <div className="search-input-minimal">
-          <Search className="h-4 w-4" />
-          <Input
-            aria-label="筛选日志"
-            placeholder="按内容筛选..."
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
-          />
-        </div>
-        <Select
-          value={levelFilter || 'all'}
-          onValueChange={(value: string) => setLevelFilter(value === 'all' ? '' : value)}
-        >
-          <SelectTrigger aria-label="日志级别" className="w-[120px]">
-            <SelectValue placeholder="全部级别" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部级别</SelectItem>
-            <SelectItem value="info">INFO</SelectItem>
-            <SelectItem value="error">ERROR</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="action-buttons-flow">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => void handleExport()}
-          >
-            <Download className="h-4 w-4 mr-1" />
-            导出
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-destructive hover:text-destructive"
-            onClick={() => void handleClear()}
-          >
-            <Trash2 className="h-4 w-4 mr-1" />
-            清空
-          </Button>
-        </div>
-      </div>
-
-      {filteredLogs.length === 0 ? (
-        <div className="empty-state-minimal">
-          <p>暂无匹配日志</p>
-        </div>
-      ) : (
-        <div className="flow-list">
-          {filteredLogs.map((entry, index) => (
-            <div
-              className={`log-item-flow ${entry.level === 'error' ? 'log-item-flow-error' : ''}`}
-              key={`${entry.level}-${entry.message}-${index}`}
-            >
-              <span className={`log-level-badge ${entry.level}`}>
-                {entry.level === 'error' ? 'ERROR' : 'INFO'}
-              </span>
-              <p className="log-text-flow">{entry.message}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
+      {/* Feedback messages */}
       {feedback ? (
-        <div className="mt-4 p-3 rounded-md bg-green-50 text-green-800 text-sm dark:bg-green-950 dark:text-green-200" role="status">
+        <div className="logs-feedback logs-feedback-success" role="status">
           {feedback}
         </div>
       ) : null}
 
       {error ? (
-        <div className="mt-4 p-3 rounded-md bg-red-50 text-red-800 text-sm dark:bg-red-950 dark:text-red-200" role="alert">
+        <div className="logs-feedback logs-feedback-error" role="alert">
           {error}
         </div>
       ) : null}
+
+      {/* Content area */}
+      <div className="logs-content">
+        {filteredLogs.length === 0 ? (
+          <div className="logs-empty-state">
+            <FileText className="h-12 w-12" />
+            <p>暂无匹配日志</p>
+            <span>调整筛选条件或等待新的运行日志</span>
+          </div>
+        ) : (
+          <div className="logs-list">
+            {filteredLogs.map((entry, index) => (
+              <div
+                className={`logs-item ${entry.level === 'error' ? 'logs-item-error' : ''}`}
+                key={`${entry.level}-${entry.message}-${index}`}
+              >
+                <span className={`logs-level-badge ${entry.level}`}>
+                  {entry.level === 'error' ? 'ERROR' : 'INFO'}
+                </span>
+                <p className="logs-message">{entry.message}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   )
 }

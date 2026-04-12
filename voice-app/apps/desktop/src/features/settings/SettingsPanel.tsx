@@ -269,36 +269,40 @@ export function SettingsPanel() {
           <p>正在加载设置...</p>
         </div>
       ) : (
-        <form
-          className="settings-form-shell"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void handleSave()
-          }}
+        <Tabs
+          className="settings-tabs-shell"
+          onValueChange={(value) => setActiveTab(value as SettingsTabValue)}
+          value={activeTab}
         >
-          {message ? (
-            <div className={status === 'error' ? 'text-destructive' : 'text-emerald-600'} style={{ marginBottom: '12px', fontSize: '13px' }}>
-              {message}
-            </div>
-          ) : null}
-
-          {runtimeReadinessWarnings.length > 0 ? (
-            <div className="console-warning" role="status" style={{ marginBottom: '12px' }}>
-              当前语音任务还不能运行，请补齐：{runtimeReadinessWarnings.join('、')}。
-            </div>
-          ) : null}
-
-          <Tabs
-            className="settings-tabs-shell"
-            onValueChange={(value) => setActiveTab(value as SettingsTabValue)}
-            value={activeTab}
-          >
+          {/* Fixed tabs header - stays at top, never scrolls */}
+          <div className="settings-pill-tabs-header">
             <TabsList className="settings-pill-tabs">
               <TabsTrigger className="settings-pill-tab" onClick={() => setActiveTab('general')} value="general">通用</TabsTrigger>
               <TabsTrigger className="settings-pill-tab" onClick={() => setActiveTab('asr')} value="asr">ASR</TabsTrigger>
               <TabsTrigger className="settings-pill-tab" onClick={() => setActiveTab('model')} value="model">模型</TabsTrigger>
               <TabsTrigger className="settings-pill-tab" onClick={() => setActiveTab('mcp')} value="mcp">MCP</TabsTrigger>
             </TabsList>
+          </div>
+
+          {/* Scrollable form content */}
+          <form
+            className="settings-form-shell"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void handleSave()
+            }}
+          >
+            {message ? (
+              <div className={status === 'error' ? 'text-destructive' : 'text-emerald-600'} style={{ marginBottom: '12px', fontSize: '13px' }}>
+                {message}
+              </div>
+            ) : null}
+
+            {runtimeReadinessWarnings.length > 0 ? (
+              <div className="console-warning" role="status" style={{ marginBottom: '12px' }}>
+                当前语音任务还不能运行，请补齐：{runtimeReadinessWarnings.join('、')}。
+              </div>
+            ) : null}
 
             <TabsContent className="settings-pill-panel" value="general">
               <div className="settings-glass-card">
@@ -669,8 +673,8 @@ export function SettingsPanel() {
                 </div>
               </div>
             </TabsContent>
-          </Tabs>
-        </form>
+          </form>
+        </Tabs>
       )}
     </section>
   )

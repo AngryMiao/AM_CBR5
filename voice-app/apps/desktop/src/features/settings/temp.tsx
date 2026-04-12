@@ -64,22 +64,18 @@ export function KeyboardShortcutSettings({
 
   return (
     <section className="shortcut-settings">
-      <div className="settings-field-row">
-        <div className="settings-field-row-label">
-          <label className="settings-field-title">键盘控制</label>
-        </div>
-        <div className="settings-field-row-input">
-          <div className="settings-inline-actions" style={{ justifyContent: 'flex-end' }}>
-            <button type="button" onClick={() => setAddingNew(true)}>
-              添加快捷键
-            </button>
-            <button
-              type="button"
-              onClick={() => onKeyboardShortcutsChange(getDefaultKeyboardShortcuts())}
-            >
-              恢复默认
-            </button>
-          </div>
+      <div className="shortcut-settings-header">
+        <h3>键盘控制</h3>
+        <div className="settings-inline-actions">
+          <button type="button" onClick={() => setAddingNew(true)}>
+            添加快捷键
+          </button>
+          <button
+            type="button"
+            onClick={() => onKeyboardShortcutsChange(getDefaultKeyboardShortcuts())}
+          >
+            恢复默认
+          </button>
         </div>
       </div>
 
@@ -140,13 +136,10 @@ export function KeyboardShortcutSettings({
                 <div className="shortcut-card-editor">
                   <div className="settings-field-row">
                     <div className="settings-field-row-label">
-                      <label className="settings-field-title" htmlFor={`trigger-words-${shortcut.id}`}>
-                        触发词（逗号分隔）
-                      </label>
+                      <label className="settings-field-title">触发词（逗号分隔）</label>
                     </div>
                     <div className="settings-field-row-input">
                       <input
-                        id={`trigger-words-${shortcut.id}`}
                         type="text"
                         value={shortcut.trigger_words.join(', ')}
                         onChange={(event) =>
@@ -189,53 +182,3 @@ export function KeyboardShortcutSettings({
 
       {addingNew ? (
         <div className="shortcut-create">
-          <div className="settings-field-row">
-            <div className="settings-field-row-label">
-              <label className="settings-field-title" htmlFor="new-trigger-words">
-                触发词（逗号分隔）
-              </label>
-            </div>
-            <div className="settings-field-row-input">
-              <input
-                id="new-trigger-words"
-                placeholder="如：截图，截屏"
-                type="text"
-                value={newTriggerWords}
-                onChange={(event) => setNewTriggerWords(event.target.value)}
-              />
-            </div>
-          </div>
-          <div className="settings-field-row">
-            <div className="settings-field-row-label">
-              <label className="settings-field-title">按键组合</label>
-            </div>
-            <div className="settings-field-row-input">
-              <KeyboardShortcutRecorder
-                value={newRecordedKeys}
-                onChange={setNewRecordedKeys}
-              />
-            </div>
-          </div>
-          {newRecordedKeys.length > 0 && !hasStableHidMapping(newRecordedKeys) ? (
-            <p className="shortcut-warning">{UNSTABLE_HID_MESSAGE}</p>
-          ) : null}
-          <div className="shortcut-card-actions">
-            <button
-              disabled={
-                parseTriggerWords(newTriggerWords).length === 0 ||
-                newRecordedKeys.length === 0
-              }
-              type="button"
-              onClick={addShortcut}
-            >
-              确认添加
-            </button>
-            <button type="button" onClick={() => setAddingNew(false)}>
-              取消
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </section>
-  )
-}
