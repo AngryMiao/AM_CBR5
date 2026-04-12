@@ -8,9 +8,6 @@ export type SecretDraftState = {
 
 export type SettingsFieldKey =
   | 'default_hotkey'
-  | 'doubao_asr_url'
-  | 'doubao_asr_resource_id'
-  | 'doubao_asr_model'
   | 'transcription_silence_timeout_ms'
   | 'llm_base_url'
   | 'llm_model'
@@ -30,23 +27,6 @@ export function validateSettingsDraft(
     errors.default_hotkey = '默认热键不能为空。'
   } else if (!isValidDefaultHotkey(draft.default_hotkey)) {
     errors.default_hotkey = '默认热键格式无效，请使用类似 RightAlt 或 LeftCtrl+K 的格式。'
-  }
-
-  validateUrl(
-    draft.doubao_asr_url,
-    ['ws:', 'wss:'],
-    '豆包 WebSocket URL 必须是合法的 ws:// 或 wss:// 地址。',
-    (message) => {
-      errors.doubao_asr_url = message
-    },
-  )
-
-  if (!draft.doubao_asr_resource_id.trim()) {
-    errors.doubao_asr_resource_id = '豆包 Resource ID 不能为空。'
-  }
-
-  if (!draft.doubao_asr_model.trim()) {
-    errors.doubao_asr_model = '豆包模型不能为空。'
   }
 
   const transcriptionTimeout = draft.transcription_silence_timeout_ms

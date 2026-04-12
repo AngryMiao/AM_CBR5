@@ -174,7 +174,7 @@ export function HistoryPanel() {
       ) : null}
 
       {/* Content area */}
-      <div className="history-content">
+      <div className="history-content animate-panel-fade-in" key={statusFilter}>
         {filteredHistory.length === 0 ? (
           <div className="history-empty-state">
             <History className="h-12 w-12" />

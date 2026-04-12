@@ -24,8 +24,10 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ToastContainer, useToast } from '@/components/ui/toast'
 import {
-  RefreshCw
+  RefreshCw,
 } from 'lucide-react'
 
 type PanelStatus = 'loading' | 'idle' | 'saving' | 'saved' | 'error'
@@ -54,10 +56,10 @@ function toSaveInput(
     auto_launch_enabled: draft.auto_launch_enabled,
     default_hotkey: draft.default_hotkey,
     microphone_device_id: draft.microphone_device_id,
-    doubao_asr_url: draft.doubao_asr_url,
+    doubao_asr_url: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
     doubao_asr_app_id: draft.doubao_asr_app_id,
-    doubao_asr_resource_id: draft.doubao_asr_resource_id,
-    doubao_asr_model: draft.doubao_asr_model,
+    doubao_asr_resource_id: 'volc.bigasr.sauc.duration',
+    doubao_asr_model: 'bigmodel',
     transcription_silence_timeout_ms: draft.transcription_silence_timeout_ms,
     llm_base_url: draft.llm_base_url,
     llm_model: draft.llm_model,
@@ -110,12 +112,12 @@ export function SettingsPanel() {
   const [draft, setDraft] = useState<EditableVoiceSettings | null>(null)
   const [activeTab, setActiveTab] = useState<SettingsTabValue>('general')
   const [status, setStatus] = useState<PanelStatus>('loading')
-  const [message, setMessage] = useState<string | null>(null)
   const [microphoneInputs, setMicrophoneInputs] = useState<MicrophoneInputDevice[]>([])
   const [microphoneStatus, setMicrophoneStatus] = useState<MicrophoneStatus>('loading')
   const [microphoneMessage, setMicrophoneMessage] = useState<string | null>(null)
   const [doubaoSecret, setDoubaoSecret] = useState<SecretDraftState>(createUnchangedSecretDraft())
   const [llmSecret, setLlmSecret] = useState<SecretDraftState>(createUnchangedSecretDraft())
+  const { toast, showSuccess, showError, hideToast } = useToast()
 
   useEffect(() => {
     void loadInitialSettings()
@@ -123,7 +125,6 @@ export function SettingsPanel() {
 
   async function loadInitialSettings() {
     setStatus('loading')
-    setMessage(null)
     setMicrophoneStatus('loading')
     setMicrophoneMessage(null)
 
@@ -150,7 +151,7 @@ export function SettingsPanel() {
       setStatus('idle')
     } catch (cause) {
       setStatus('error')
-      setMessage(toErrorMessage(cause))
+      showError(toErrorMessage(cause))
     }
   }
 
@@ -163,13 +164,11 @@ export function SettingsPanel() {
   function updateDraft<Key extends keyof EditableVoiceSettings>(key: Key, value: EditableVoiceSettings[Key]) {
     setDraft((current) => (current ? { ...current, [key]: value } : current))
     setStatus('idle')
-    setMessage(null)
   }
 
   function updateSecretDraft(setter: (next: SecretDraftState) => void, next: SecretDraftState) {
     setter(next)
     setStatus('idle')
-    setMessage(null)
   }
 
   async function handleRefreshMicrophoneInputs() {
@@ -190,16 +189,15 @@ export function SettingsPanel() {
     if (!draft) return
     if (hasBlockingErrors) {
       setStatus('error')
-      setMessage('请先修正设置项后再保存。')
+      showError('请先修正设置项后再保存。')
       return
     }
     setStatus('saving')
-    setMessage(null)
     try {
       const result = await saveEditableSettings(toSaveInput(draft, doubaoSecret, llmSecret))
       hydrateDraft(result.settings)
       setStatus('saved')
-      setMessage(getMutationFeedback('设置已保存。', result))
+      showSuccess(getMutationFeedback('设置已保存。', result))
     } catch (cause) {
       await reloadPersistedSettingsAfterSaveError(toErrorMessage(cause))
     }
@@ -207,15 +205,14 @@ export function SettingsPanel() {
 
   async function handleReset() {
     setStatus('saving')
-    setMessage(null)
     try {
       const result = await resetEditableSettings()
       hydrateDraft(result.settings)
       setStatus('saved')
-      setMessage(getMutationFeedback('已恢复为当前已保存设置。', result))
+      showSuccess(getMutationFeedback('已恢复为当前已保存设置。', result))
     } catch (cause) {
       setStatus('error')
-      setMessage(toErrorMessage(cause))
+      showError(toErrorMessage(cause))
     }
   }
 
@@ -235,7 +232,7 @@ export function SettingsPanel() {
       // keep user draft
     }
     setStatus('error')
-    setMessage(errorMessage)
+    showError(errorMessage)
   }
 
   const isBusy = status === 'loading' || status === 'saving'
@@ -292,11 +289,7 @@ export function SettingsPanel() {
               void handleSave()
             }}
           >
-            {message ? (
-              <div className={status === 'error' ? 'text-destructive' : 'text-emerald-600'} style={{ marginBottom: '12px', fontSize: '13px' }}>
-                {message}
-              </div>
-            ) : null}
+            <ToastContainer toast={toast} hideToast={hideToast} />
 
             {runtimeReadinessWarnings.length > 0 ? (
               <div className="console-warning" role="status" style={{ marginBottom: '12px' }}>
@@ -304,10 +297,11 @@ export function SettingsPanel() {
               </div>
             ) : null}
 
-            <TabsContent className="settings-pill-panel" value="general">
+            <TabsContent className="settings-pill-panel animate-panel-fade-in" value="general" key="general">
               <div className="settings-glass-card">
-                <div className="settings-toggle-simple">
-                  <span>保存历史记录</span>
+                {/* Save History */}
+                <div className="settings-toggle-card">
+                  <span className="settings-toggle-title">保存历史记录</span>
                   <Switch
                     aria-label="保存历史记录"
                     checked={draft.history_enabled}
@@ -315,8 +309,10 @@ export function SettingsPanel() {
                     onCheckedChange={(checked) => updateDraft('history_enabled', checked)}
                   />
                 </div>
-                <div className="settings-toggle-simple">
-                  <span>开机自启动</span>
+
+                {/* Auto Launch */}
+                <div className="settings-toggle-card">
+                  <span className="settings-toggle-title">开机自启动</span>
                   <Switch
                     aria-label="开机自启动"
                     checked={draft.auto_launch_enabled}
@@ -324,95 +320,49 @@ export function SettingsPanel() {
                     onCheckedChange={(checked) => updateDraft('auto_launch_enabled', checked)}
                   />
                 </div>
-                <div className="settings-field-row">
-                  <div className="settings-field-row-label">
-                    <label className="settings-field-title">默认热键</label>
-                  </div>
-                  <div className="settings-field-row-input">
+
+                {/* Default Hotkey */}
+                <div className="settings-device-card">
+                  <span className="settings-device-title">默认热键</span>
+                  <div className="settings-device-control">
                     <DefaultHotkeyRecorder
                       inputAriaInvalid={Boolean(validationErrors.default_hotkey)}
-                      inputClassName={inputClassName('default_hotkey')}
+                      inputClassName="settings-hotkey-input"
                       value={draft.default_hotkey}
                       onChange={(value) => updateDraft('default_hotkey', value)}
                     />
                     {renderFieldError('default_hotkey')}
                   </div>
                 </div>
-                <div className="settings-action-bar">
-                  <button
-                    className="settings-btn-glass"
-                    disabled={isBusy}
-                    onClick={() => void handleReset()}
-                    type="button"
-                  >
-                    重置
-                  </button>
-                  <button
-                    className="settings-btn-primary"
-                    disabled={isBusy || hasBlockingErrors}
-                    type="submit"
-                  >
-                    保存设置
-                  </button>
-                </div>
-              </div>
-            </TabsContent>
 
-            <TabsContent className="settings-pill-panel" value="asr">
-              <div className="settings-glass-card">
-                <div className="settings-field-row">
-                  <div className="settings-field-row-label">
-                    <label className="settings-field-title">豆包 WebSocket URL</label>
-                  </div>
-                  <div className="settings-field-row-input">
-                    <Input
-                      aria-invalid={Boolean(validationErrors.doubao_asr_url)}
-                      aria-label="豆包 WebSocket URL"
-                      className={inputClassName('doubao_asr_url')}
-                      value={draft.doubao_asr_url}
-                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('doubao_asr_url', event.target.value)}
-                    />
-                    {renderFieldError('doubao_asr_url')}
-                  </div>
-                </div>
-
-                <div className="settings-field-row">
-                  <div className="settings-field-row-label">
-                    <label className="settings-field-title">豆包 App ID</label>
-                  </div>
-                  <div className="settings-field-row-input">
-                    <Input
-                      aria-label="豆包 App ID"
-                      value={draft.doubao_asr_app_id}
-                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('doubao_asr_app_id', event.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="settings-field-row">
-                  <div className="settings-field-row-label">
-                    <label className="settings-field-title">默认麦克风</label>
-                  </div>
-                  <div className="settings-field-row-input">
-                    <div className="settings-inline-control">
-                      <select
-                        aria-label="默认麦克风"
-                        className="settings-native-select"
-                        value={draft.microphone_device_id}
-                        onChange={(event: React.ChangeEvent<HTMLSelectElement>) => updateDraft('microphone_device_id', event.target.value)}
+                {/* Default Microphone */}
+                <div className="settings-device-card">
+                  <span className="settings-device-title">默认麦克风</span>
+                  <div className="settings-device-control">
+                    <div className="settings-device-select-row">
+                      <Select
+                        value={draft.microphone_device_id || 'system-default'}
+                        onValueChange={(value) => updateDraft('microphone_device_id', value === 'system-default' ? '' : value)}
+                        disabled={isBusy}
                       >
-                        {isSavedMicrophoneUnavailable ? (
-                          <option value={draft.microphone_device_id}>已保存设备不可用</option>
-                        ) : null}
-                        <option value="">系统默认麦克风</option>
-                        {microphoneInputs.map((device) => (
-                          <option key={device.id} value={device.id}>
-                            {getMicrophoneOptionLabel(device)}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="settings-device-select">
+                          <SelectValue placeholder="选择麦克风" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {isSavedMicrophoneUnavailable ? (
+                            <SelectItem value={draft.microphone_device_id}>已保存设备不可用</SelectItem>
+                          ) : null}
+                          <SelectItem value="system-default">系统默认麦克风</SelectItem>
+                          {microphoneInputs.map((device) => (
+                            <SelectItem key={device.id} value={device.id}>
+                              {getMicrophoneOptionLabel(device)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <Button
                         aria-label="刷新设备列表"
+                        className="settings-device-refresh-btn"
                         disabled={isBusy || microphoneStatus === 'loading'}
                         onClick={() => void handleRefreshMicrophoneInputs()}
                         type="button"
@@ -421,77 +371,86 @@ export function SettingsPanel() {
                         <RefreshCw className="h-4 w-4" />
                       </Button>
                     </div>
-                    {microphoneStatus === 'error' && microphoneMessage ? <p className="runtime-error">{microphoneMessage}</p> : null}
+                    {microphoneStatus === 'error' && microphoneMessage ? (
+                      <p className="settings-device-error">{microphoneMessage}</p>
+                    ) : null}
                   </div>
                 </div>
 
-                <div className="settings-field-row">
-                  <div className="settings-field-row-label">
-                    <label className="settings-field-title">豆包 Access Token</label>
-                  </div>
-                  <div className="settings-field-row-input">
-                    <div className="settings-inline-control">
-                      <Input
-                        aria-label="豆包 Access Token"
-                        className="flex-1"
-                        placeholder={draft.has_doubao_asr_access_token ? '已保存，留空则保持不变' : '当前未设置'}
-                        type="password"
-                        value={doubaoSecret.action === 'replace' ? doubaoSecret.value : ''}
-                        onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                          updateSecret(event.target.value, draft.has_doubao_asr_access_token, setDoubaoSecret)
-                        }
-                      />
-                      <Button type="button" variant="outline" onClick={() => updateSecretDraft(setDoubaoSecret, createUnchangedSecretDraft())}>
-                        保持当前密钥
-                      </Button>
-                      <Button type="button" variant="outline" onClick={() => updateSecretDraft(setDoubaoSecret, { action: 'clear', value: '' })}>
-                        清空密钥
-                      </Button>
-                    </div>
-                  </div>
+                <div className="settings-action-bar">
+                  <button
+                    className="settings-btn-glass"
+                    disabled={isBusy}
+                    onClick={() => void handleReset()}
+                    type="button"
+                  >
+                    重置
+                  </button>
+                  <button
+                    className="settings-btn-primary"
+                    disabled={isBusy || hasBlockingErrors}
+                    type="submit"
+                  >
+                    保存设置
+                  </button>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent className="settings-pill-panel animate-panel-fade-in" value="asr" key="asr">
+              <div className="settings-glass-card">
+                {/* App ID */}
+                <div className="settings-input-card">
+                  <span className="settings-input-title">豆包 App ID</span>
+                  <Input
+                    aria-label="豆包 App ID"
+                    className="settings-input-field"
+                    value={draft.doubao_asr_app_id}
+                    onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('doubao_asr_app_id', event.target.value)}
+                  />
                 </div>
 
-                <div className="settings-field-row">
-                  <div className="settings-field-row-label">
-                    <label className="settings-field-title">豆包 Resource ID</label>
-                  </div>
-                  <div className="settings-field-row-input">
+                {/* Access Token */}
+                <div className="settings-input-card">
+                  <span className="settings-input-title">豆包 Access Token</span>
+                  <div className="settings-secret-row">
                     <Input
-                      aria-invalid={Boolean(validationErrors.doubao_asr_resource_id)}
-                      aria-label="豆包 Resource ID"
-                      className={inputClassName('doubao_asr_resource_id')}
-                      value={draft.doubao_asr_resource_id}
-                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('doubao_asr_resource_id', event.target.value)}
+                      aria-label="豆包 Access Token"
+                      className="settings-input-field"
+                      placeholder={draft.has_doubao_asr_access_token ? '已保存，留空则保持不变' : '当前未设置'}
+                      type="password"
+                      value={doubaoSecret.action === 'replace' ? doubaoSecret.value : ''}
+                      onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
+                        updateSecret(event.target.value, draft.has_doubao_asr_access_token, setDoubaoSecret)
+                      }
                     />
-                    {renderFieldError('doubao_asr_resource_id')}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="settings-secret-btn"
+                      onClick={() => updateSecretDraft(setDoubaoSecret, createUnchangedSecretDraft())}
+                    >
+                      保持
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="settings-secret-btn settings-secret-btn-danger"
+                      onClick={() => updateSecretDraft(setDoubaoSecret, { action: 'clear', value: '' })}
+                    >
+                      清空
+                    </Button>
                   </div>
                 </div>
 
-                <div className="settings-field-row">
-                  <div className="settings-field-row-label">
-                    <label className="settings-field-title">豆包模型</label>
-                  </div>
-                  <div className="settings-field-row-input">
-                    <Input
-                      aria-invalid={Boolean(validationErrors.doubao_asr_model)}
-                      aria-label="豆包模型"
-                      className={inputClassName('doubao_asr_model')}
-                      value={draft.doubao_asr_model}
-                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('doubao_asr_model', event.target.value)}
-                    />
-                    {renderFieldError('doubao_asr_model')}
-                  </div>
-                </div>
-
-                <div className="settings-field-row">
-                  <div className="settings-field-row-label">
-                    <label className="settings-field-title">转录静音自动结束（ms）</label>
-                  </div>
-                  <div className="settings-field-row-input">
+                {/* Silence Timeout */}
+                <div className="settings-input-card">
+                  <span className="settings-input-title">转录静音自动结束</span>
+                  <div className="settings-number-row">
                     <Input
                       aria-invalid={Boolean(validationErrors.transcription_silence_timeout_ms)}
-                      aria-label="转录静音自动结束（ms）"
-                      className={inputClassName('transcription_silence_timeout_ms')}
+                      aria-label="转录静音自动结束"
+                      className="settings-input-field settings-input-number"
                       max={5000}
                       min={0}
                       step={100}
@@ -499,8 +458,9 @@ export function SettingsPanel() {
                       value={draft.transcription_silence_timeout_ms}
                       onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('transcription_silence_timeout_ms', Number(event.target.value) || 0)}
                     />
-                    {renderFieldError('transcription_silence_timeout_ms')}
+                    <span className="settings-number-unit">毫秒</span>
                   </div>
+                  {renderFieldError('transcription_silence_timeout_ms')}
                 </div>
 
                 <div className="settings-action-bar">
@@ -523,111 +483,104 @@ export function SettingsPanel() {
               </div>
             </TabsContent>
 
-            <TabsContent className="settings-pill-panel" value="model">
+            <TabsContent className="settings-pill-panel animate-panel-fade-in" value="model" key="model">
               <div className="settings-glass-card">
-                <div className="settings-field-row">
-                  <div className="settings-field-row-label">
-                    <label className="settings-field-title">LLM 服务地址</label>
-                  </div>
-                  <div className="settings-field-row-input">
+                {/* LLM Base URL */}
+                <div className="settings-input-card">
+                  <span className="settings-input-title">LLM 服务地址</span>
+                  <Input
+                    aria-invalid={Boolean(validationErrors.llm_base_url)}
+                    aria-label="LLM 服务地址"
+                    className="settings-input-field"
+                    value={draft.llm_base_url}
+                    onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('llm_base_url', event.target.value)}
+                  />
+                  {renderFieldError('llm_base_url')}
+                </div>
+
+                {/* LLM API Key */}
+                <div className="settings-input-card">
+                  <span className="settings-input-title">LLM API Key</span>
+                  <div className="settings-secret-row">
                     <Input
-                      aria-invalid={Boolean(validationErrors.llm_base_url)}
-                      aria-label="LLM 服务地址"
-                      className={inputClassName('llm_base_url')}
-                      value={draft.llm_base_url}
-                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('llm_base_url', event.target.value)}
+                      aria-label="LLM API Key"
+                      className="settings-input-field"
+                      placeholder={draft.has_llm_api_key ? '已保存，留空则保持不变' : '当前未设置'}
+                      type="password"
+                      value={llmSecret.action === 'replace' ? llmSecret.value : ''}
+                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateSecret(event.target.value, draft.has_llm_api_key, setLlmSecret)}
                     />
-                    {renderFieldError('llm_base_url')}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="settings-secret-btn"
+                      onClick={() => updateSecretDraft(setLlmSecret, createUnchangedSecretDraft())}
+                    >
+                      保持
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="settings-secret-btn settings-secret-btn-danger"
+                      onClick={() => updateSecretDraft(setLlmSecret, { action: 'clear', value: '' })}
+                    >
+                      清空
+                    </Button>
                   </div>
                 </div>
 
-                <div className="settings-field-row">
-                  <div className="settings-field-row-label">
-                    <label className="settings-field-title">LLM API Key</label>
-                  </div>
-                  <div className="settings-field-row-input">
-                    <div className="settings-inline-control">
-                      <Input
-                        aria-label="LLM API Key"
-                        className="flex-1"
-                        placeholder={draft.has_llm_api_key ? '已保存，留空则保持不变' : '当前未设置'}
-                        type="password"
-                        value={llmSecret.action === 'replace' ? llmSecret.value : ''}
-                        onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateSecret(event.target.value, draft.has_llm_api_key, setLlmSecret)}
-                      />
-                      <Button type="button" variant="outline" onClick={() => updateSecretDraft(setLlmSecret, createUnchangedSecretDraft())}>
-                        保持当前密钥
-                      </Button>
-                      <Button type="button" variant="outline" onClick={() => updateSecretDraft(setLlmSecret, { action: 'clear', value: '' })}>
-                        清空密钥
-                      </Button>
-                    </div>
-                  </div>
+                {/* LLM Model */}
+                <div className="settings-input-card">
+                  <span className="settings-input-title">LLM 模型</span>
+                  <Input
+                    aria-invalid={Boolean(validationErrors.llm_model)}
+                    aria-label="LLM 模型"
+                    className="settings-input-field"
+                    value={draft.llm_model}
+                    onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('llm_model', event.target.value)}
+                  />
+                  {renderFieldError('llm_model')}
                 </div>
 
-                <div className="settings-field-row">
-                  <div className="settings-field-row-label">
-                    <label className="settings-field-title">LLM 模型</label>
-                  </div>
-                  <div className="settings-field-row-input">
-                    <Input
-                      aria-invalid={Boolean(validationErrors.llm_model)}
-                      aria-label="LLM 模型"
-                      className={inputClassName('llm_model')}
-                      value={draft.llm_model}
-                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => updateDraft('llm_model', event.target.value)}
-                    />
-                    {renderFieldError('llm_model')}
-                  </div>
-                </div>
-
-                <div className="settings-field-row">
-                  <div className="settings-field-row-label">
-                    <label className="settings-field-title">系统提示词</label>
-                  </div>
-                  <div className="settings-field-row-input">
-                    <Textarea
-                      aria-label="系统提示词"
-                      rows={6}
-                      value={draft.llm_system_prompt}
-                      onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => updateDraft('llm_system_prompt', event.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="settings-action-bar">
-                  <button
-                    className="settings-btn-glass"
-                    disabled={isBusy}
-                    onClick={() => void handleReset()}
-                    type="button"
-                  >
-                    重置
-                  </button>
-                  <button
-                    className="settings-btn-primary"
-                    disabled={isBusy || hasBlockingErrors}
-                    type="submit"
-                  >
-                    保存设置
-                  </button>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent className="settings-pill-panel" value="mcp">
-              <div className="settings-glass-card">
-                <div className="settings-toggle-simple">
-                  <span>启用 AngryMiao 系统控制</span>
-                  <Switch
-                    aria-label="启用 AngryMiao 系统控制"
-                    checked={draft.angrymiao_skill_enabled}
-                    disabled={isBusy}
-                    onCheckedChange={(checked) => updateDraft('angrymiao_skill_enabled', checked)}
+                {/* System Prompt */}
+                <div className="settings-input-card settings-input-card-wide">
+                  <span className="settings-input-title">系统提示词</span>
+                  <Textarea
+                    aria-label="系统提示词"
+                    className="settings-textarea-field"
+                    rows={6}
+                    value={draft.llm_system_prompt}
+                    onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => updateDraft('llm_system_prompt', event.target.value)}
                   />
                 </div>
 
-                <SkillBundleInventory />
+                <div className="settings-action-bar">
+                  <button
+                    className="settings-btn-glass"
+                    disabled={isBusy}
+                    onClick={() => void handleReset()}
+                    type="button"
+                  >
+                    重置
+                  </button>
+                  <button
+                    className="settings-btn-primary"
+                    disabled={isBusy || hasBlockingErrors}
+                    type="submit"
+                  >
+                    保存设置
+                  </button>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent className="settings-pill-panel animate-panel-fade-in" value="mcp" key="mcp">
+              <div className="settings-glass-card">
+                <SkillBundleInventory
+                  skillEnabled={draft.angrymiao_skill_enabled}
+                  onSkillEnabledChange={(checked) => updateDraft('angrymiao_skill_enabled', checked)}
+                  disabled={isBusy}
+                />
 
                 <KeyboardShortcutSettings
                   keyboardDriverPath={draft.keyboard_driver_path}
@@ -637,21 +590,18 @@ export function SettingsPanel() {
                 />
                 {renderFieldError('keyboard_shortcuts')}
 
-                <div className="settings-field-row">
-                  <div className="settings-field-row-label">
-                    <label className="settings-field-title">MCP 服务 JSON</label>
-                  </div>
-                  <div className="settings-field-row-input">
-                    <Textarea
-                      aria-invalid={Boolean(validationErrors.mcp_servers_json)}
-                      aria-label="MCP 服务 JSON"
-                      className={inputClassName('mcp_servers_json')}
-                      rows={8}
-                      value={draft.mcp_servers_json}
-                      onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => updateDraft('mcp_servers_json', event.target.value)}
-                    />
-                    {renderFieldError('mcp_servers_json')}
-                  </div>
+                {/* MCP Servers JSON */}
+                <div className="settings-input-card settings-input-card-wide">
+                  <span className="settings-input-title">MCP 服务配置</span>
+                  <Textarea
+                    aria-invalid={Boolean(validationErrors.mcp_servers_json)}
+                    aria-label="MCP 服务配置"
+                    className="settings-textarea-field"
+                    rows={6}
+                    value={draft.mcp_servers_json}
+                    onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => updateDraft('mcp_servers_json', event.target.value)}
+                  />
+                  {renderFieldError('mcp_servers_json')}
                 </div>
 
                 <div className="settings-action-bar">

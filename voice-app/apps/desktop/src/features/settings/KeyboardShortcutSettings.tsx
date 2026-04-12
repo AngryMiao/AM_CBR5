@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { KeyboardShortcut } from '../../lib/tauri'
+import { pickFile } from '../../lib/tauri'
 import { KeyboardShortcutRecorder } from './KeyboardShortcutRecorder'
 import {
   buildKeyCodes,
@@ -9,6 +10,17 @@ import {
   hasStableHidMapping,
   parseTriggerWords,
 } from './keyboardShortcuts'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Plus,
+  RotateCcw,
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+  AlertCircle,
+  FolderOpen,
+} from 'lucide-react'
 
 const UNSTABLE_HID_MESSAGE = '该键当前没有稳定 HID 映射，执行可能失败。'
 
@@ -63,105 +75,123 @@ export function KeyboardShortcutSettings({
   }
 
   return (
-    <section className="shortcut-settings">
-      <div className="settings-field-row">
-        <div className="settings-field-row-label">
-          <label className="settings-field-title">键盘控制</label>
-        </div>
-        <div className="settings-field-row-input">
-          <div className="settings-inline-actions" style={{ justifyContent: 'flex-end' }}>
-            <button type="button" onClick={() => setAddingNew(true)}>
-              添加快捷键
-            </button>
-            <button
-              type="button"
-              onClick={() => onKeyboardShortcutsChange(getDefaultKeyboardShortcuts())}
-            >
-              恢复默认
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="settings-field-row">
-        <div className="settings-field-row-label">
-          <label className="settings-field-title">键盘驱动路径</label>
-        </div>
-        <div className="settings-field-row-input">
-          <input
+    <>
+      {/* Keyboard Driver Path */}
+      <div className="settings-input-card">
+        <span className="settings-input-title">键盘驱动路径</span>
+        <div className="settings-path-input-row">
+          <Input
             aria-label="键盘驱动路径"
+            className="settings-path-input"
             placeholder="可选，自定义 AIKeyBoardDriver.exe 绝对路径"
             value={keyboardDriverPath}
-            onChange={(event) => onKeyboardDriverPathChange(event.target.value)}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => onKeyboardDriverPathChange(event.target.value)}
           />
+          <Button
+            variant="outline"
+            type="button"
+            className="settings-path-btn"
+            onClick={() => {
+              void pickFile('选择键盘驱动程序', [{ name: '可执行文件', extensions: ['exe', 'app'] }]).then((path) => {
+                if (path) {
+                  onKeyboardDriverPathChange(path)
+                }
+              })
+            }}
+          >
+            <FolderOpen className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
-      <div className="shortcut-list">
-        {keyboardShortcuts.map((shortcut) => {
-          const displayKeys = formatRecordedKeys(shortcut.recorded_keys)
-          const showWarning =
-            shortcut.recorded_keys.length > 0 &&
-            !hasStableHidMapping(shortcut.recorded_keys)
+      {/* Keyboard Shortcuts Section */}
+      <div className="settings-shortcuts-section">
+        {/* Section Header */}
+        <div className="settings-shortcuts-header">
+          <span className="settings-shortcuts-title">快捷键映射</span>
+          <div className="settings-shortcuts-actions">
+            <Button
+              variant="outline"
+              type="button"
+              className="settings-shortcuts-btn"
+              onClick={() => setAddingNew(true)}
+            >
+              <Plus className="h-4 w-4" />
+              添加
+            </Button>
+            <Button
+              variant="outline"
+              type="button"
+              className="settings-shortcuts-btn"
+              onClick={() => onKeyboardShortcutsChange(getDefaultKeyboardShortcuts())}
+            >
+              <RotateCcw className="h-4 w-4" />
+              默认
+            </Button>
+          </div>
+        </div>
 
-          return (
-            <article key={shortcut.id} className="shortcut-card">
-              <button
-                className="shortcut-card-summary"
-                type="button"
-                onClick={() =>
-                  setExpandedId(expandedId === shortcut.id ? null : shortcut.id)
-                }
-              >
-                <div className="shortcut-card-main">
-                  <label className="shortcut-enabled">
-                    <input
-                      checked={shortcut.enabled}
-                      type="checkbox"
-                      onChange={(event) => {
-                        event.stopPropagation()
-                        updateShortcut(shortcut.id, { enabled: event.target.checked })
-                      }}
-                      onClick={(event) => event.stopPropagation()}
-                    />
-                    <span>{shortcut.trigger_words.join(' / ')}</span>
-                  </label>
-                  <p>{displayKeys || '未录制快捷键'}</p>
-                  {showWarning ? (
-                    <small className="shortcut-warning">{UNSTABLE_HID_MESSAGE}</small>
-                  ) : null}
-                </div>
-                <span className="shortcut-expand-indicator">
-                  {expandedId === shortcut.id ? '收起' : '展开'}
-                </span>
-              </button>
+        {/* Shortcut List */}
+        <div className="settings-shortcuts-list">
+          {keyboardShortcuts.map((shortcut) => {
+            const displayKeys = formatRecordedKeys(shortcut.recorded_keys)
+            const showWarning =
+              shortcut.recorded_keys.length > 0 &&
+              !hasStableHidMapping(shortcut.recorded_keys)
 
-              {expandedId === shortcut.id ? (
-                <div className="shortcut-card-editor">
-                  <div className="settings-field-row">
-                    <div className="settings-field-row-label">
-                      <label className="settings-field-title" htmlFor={`trigger-words-${shortcut.id}`}>
-                        触发词（逗号分隔）
-                      </label>
-                    </div>
-                    <div className="settings-field-row-input">
+            return (
+              <div key={shortcut.id} className="settings-shortcut-item">
+                <button
+                  className="settings-shortcut-summary"
+                  type="button"
+                  onClick={() =>
+                    setExpandedId(expandedId === shortcut.id ? null : shortcut.id)
+                  }
+                >
+                  <div className="settings-shortcut-main">
+                    <label className="settings-shortcut-enabled">
                       <input
-                        id={`trigger-words-${shortcut.id}`}
+                        checked={shortcut.enabled}
+                        type="checkbox"
+                        onChange={(event) => {
+                          event.stopPropagation()
+                          updateShortcut(shortcut.id, { enabled: event.target.checked })
+                        }}
+                        onClick={(event) => event.stopPropagation()}
+                      />
+                      <span className="settings-shortcut-words">{shortcut.trigger_words.join(' / ')}</span>
+                    </label>
+                    <span className="settings-shortcut-keys">{displayKeys || '未录制'}</span>
+                    {showWarning ? (
+                      <span className="settings-shortcut-warning">
+                        <AlertCircle className="h-3 w-3" />
+                      </span>
+                    ) : null}
+                  </div>
+                  {expandedId === shortcut.id ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </button>
+
+                {expandedId === shortcut.id ? (
+                  <div className="settings-shortcut-editor">
+                    <div className="settings-shortcut-row">
+                      <span className="settings-shortcut-label">触发词</span>
+                      <Input
+                        className="settings-shortcut-input"
                         type="text"
                         value={shortcut.trigger_words.join(', ')}
-                        onChange={(event) =>
+                        onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
                           updateShortcut(shortcut.id, {
                             trigger_words: parseTriggerWords(event.target.value),
                           })
                         }
                       />
                     </div>
-                  </div>
-                  <div className="settings-field-row">
-                    <div className="settings-field-row-label">
-                      <label className="settings-field-title">按键组合</label>
-                    </div>
-                    <div className="settings-field-row-input">
+                    <div className="settings-shortcut-row">
+                      <span className="settings-shortcut-label">按键组合</span>
                       <KeyboardShortcutRecorder
                         value={shortcut.recorded_keys}
                         onChange={(recordedKeys) =>
@@ -172,70 +202,73 @@ export function KeyboardShortcutSettings({
                         }
                       />
                     </div>
-                  </div>
-                  {shortcut.id.startsWith('ks_custom_') ? (
-                    <div className="shortcut-card-actions">
-                      <button type="button" onClick={() => removeShortcut(shortcut.id)}>
+                    {shortcut.id.startsWith('ks_custom_') ? (
+                      <Button
+                        variant="outline"
+                        type="button"
+                        className="settings-shortcut-delete"
+                        onClick={() => removeShortcut(shortcut.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
                         删除
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </article>
-          )
-        })}
-      </div>
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
 
-      {addingNew ? (
-        <div className="shortcut-create">
-          <div className="settings-field-row">
-            <div className="settings-field-row-label">
-              <label className="settings-field-title" htmlFor="new-trigger-words">
-                触发词（逗号分隔）
-              </label>
-            </div>
-            <div className="settings-field-row-input">
-              <input
-                id="new-trigger-words"
+        {/* Add New Shortcut */}
+        {addingNew ? (
+          <div className="settings-shortcut-create">
+            <div className="settings-shortcut-row">
+              <span className="settings-shortcut-label">触发词</span>
+              <Input
+                className="settings-shortcut-input"
                 placeholder="如：截图，截屏"
                 type="text"
                 value={newTriggerWords}
-                onChange={(event) => setNewTriggerWords(event.target.value)}
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) => setNewTriggerWords(event.target.value)}
               />
             </div>
-          </div>
-          <div className="settings-field-row">
-            <div className="settings-field-row-label">
-              <label className="settings-field-title">按键组合</label>
-            </div>
-            <div className="settings-field-row-input">
+            <div className="settings-shortcut-row">
+              <span className="settings-shortcut-label">按键组合</span>
               <KeyboardShortcutRecorder
                 value={newRecordedKeys}
                 onChange={setNewRecordedKeys}
               />
             </div>
+            {newRecordedKeys.length > 0 && !hasStableHidMapping(newRecordedKeys) ? (
+              <div className="settings-shortcut-warning-row">
+                <AlertCircle className="h-3 w-3" />
+                <span>{UNSTABLE_HID_MESSAGE}</span>
+              </div>
+            ) : null}
+            <div className="settings-shortcut-create-actions">
+              <Button
+                type="button"
+                className="settings-shortcut-confirm"
+                disabled={
+                  parseTriggerWords(newTriggerWords).length === 0 ||
+                  newRecordedKeys.length === 0
+                }
+                onClick={addShortcut}
+              >
+                确认添加
+              </Button>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => setAddingNew(false)}
+              >
+                取消
+              </Button>
+            </div>
           </div>
-          {newRecordedKeys.length > 0 && !hasStableHidMapping(newRecordedKeys) ? (
-            <p className="shortcut-warning">{UNSTABLE_HID_MESSAGE}</p>
-          ) : null}
-          <div className="shortcut-card-actions">
-            <button
-              disabled={
-                parseTriggerWords(newTriggerWords).length === 0 ||
-                newRecordedKeys.length === 0
-              }
-              type="button"
-              onClick={addShortcut}
-            >
-              确认添加
-            </button>
-            <button type="button" onClick={() => setAddingNew(false)}>
-              取消
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </section>
+        ) : null}
+      </div>
+    </>
   )
 }

@@ -3,15 +3,33 @@ import {
   installSkillBundle,
   listSkillBundles,
   readSkillBundleText,
+  pickFolder,
   type SkillBundleInventoryItem,
 } from '../../lib/tauri'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
+import {
+  FolderOpen,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  CheckCircle,
+} from 'lucide-react'
 
-type LoadStatus = 'loading' | 'idle' | 'error'
+type SkillBundleInventoryProps = {
+  skillEnabled: boolean
+  onSkillEnabledChange: (value: boolean) => void
+  disabled?: boolean
+}
 
-export function SkillBundleInventory() {
+export function SkillBundleInventory({
+  skillEnabled,
+  onSkillEnabledChange,
+  disabled = false,
+}: SkillBundleInventoryProps) {
   const [bundles, setBundles] = useState<SkillBundleInventoryItem[]>([])
-  const [status, setStatus] = useState<LoadStatus>('loading')
-  const [message, setMessage] = useState<string | null>(null)
   const [expandedBundleId, setExpandedBundleId] = useState<string | null>(null)
   const [previewCache, setPreviewCache] = useState<Record<string, string>>({})
   const [previewError, setPreviewError] = useState<string | null>(null)
@@ -26,19 +44,11 @@ export function SkillBundleInventory() {
   }, [])
 
   async function loadBundles() {
-    setStatus('loading')
-    setMessage(null)
-
     try {
       const nextBundles = await listSkillBundles()
       setBundles(nextBundles)
-      setStatus('idle')
-    } catch (cause) {
-      const nextMessage =
-        cause instanceof Error ? cause.message : '读取 Skill Bundle 列表失败。'
+    } catch {
       setBundles([])
-      setStatus('error')
-      setMessage(nextMessage)
     }
   }
 
@@ -61,7 +71,7 @@ export function SkillBundleInventory() {
       const text = await readSkillBundleText(bundle.id, bundle.prompt_file)
       setPreviewCache((current) => ({ ...current, [bundle.id]: text }))
     } catch (cause) {
-      setPreviewError(cause instanceof Error ? cause.message : '读取 Skill Bundle 文本失败。')
+      setPreviewError(cause instanceof Error ? cause.message : '读取技能包文本失败。')
     } finally {
       setPreviewLoadingId(null)
     }
@@ -70,7 +80,7 @@ export function SkillBundleInventory() {
   async function handleInstallBundle() {
     const trimmedPath = installPath.trim()
     if (!trimmedPath) {
-      setInstallError('请先输入待安装 Skill Bundle 的本地目录路径。')
+      setInstallError('请先输入待安装技能包的本地目录路径。')
       setInstallMessage(null)
       return
     }
@@ -81,160 +91,146 @@ export function SkillBundleInventory() {
       setInstallMessage(null)
       const installed = await installSkillBundle(trimmedPath)
       setInstallPath('')
-      setInstallMessage(`已安装 Skill Bundle：${installed.name}。`)
+      setInstallMessage(`已安装技能包：${installed.name}。`)
       await loadBundles()
     } catch (cause) {
-      setInstallError(cause instanceof Error ? cause.message : '安装 Skill Bundle 失败。')
+      setInstallError(cause instanceof Error ? cause.message : '安装技能包失败。')
     } finally {
       setInstalling(false)
     }
   }
 
   return (
-    <section className="skill-bundle-panel">
-      <div className="settings-field-row">
-        <div className="settings-field-row-label">
-          <label className="settings-field-title">已安装 Skill Bundles</label>
-        </div>
-        <div className="settings-field-row-input">
-          <div className="settings-inline-actions" style={{ justifyContent: 'flex-end' }}>
-            <button type="button" onClick={() => void loadBundles()}>
-              刷新列表
-            </button>
-          </div>
-        </div>
-      </div>
+    <>
+      {/* Skill Bundle Cards */}
+      <div className="skill-bundle-list">
+        {bundles.map((bundle) => (
+          <article key={bundle.id} className="skill-bundle-card">
+            {/* Header with toggle */}
+            <div className="skill-bundle-card-header">
+              <div className="skill-bundle-card-info">
+                <div className="skill-bundle-enable-row">
+                  <Switch
+                    aria-label={`启用 ${bundle.name}`}
+                    checked={skillEnabled}
+                    disabled={disabled}
+                    onCheckedChange={onSkillEnabledChange}
+                  />
+                  <h4 className="skill-bundle-card-name">{bundle.name}</h4>
+                </div>
+                <p className="skill-bundle-card-desc">{bundle.description}</p>
+              </div>
+              <div className="skill-bundle-card-badges">
+                {bundle.is_builtin ? (
+                  <Badge variant="secondary" className="skill-bundle-badge">
+                    内置
+                  </Badge>
+                ) : null}
+                <Badge
+                  variant={bundle.supported_on_current_platform && skillEnabled ? 'default' : 'outline'}
+                  className={`skill-bundle-badge ${bundle.supported_on_current_platform && skillEnabled ? 'skill-bundle-badge-success' : 'skill-bundle-badge-warning'}`}
+                >
+                  {bundle.supported_on_current_platform && skillEnabled ? (
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                  ) : (
+                    <AlertCircle className="h-3 w-3 mr-1" />
+                  )}
+                  {skillEnabled ? '已启用' : '未启用'}
+                </Badge>
+              </div>
+            </div>
 
-      <div className="settings-field-row">
-        <div className="settings-field-row-label">
-          <label className="settings-field-title">安装本地 Skill Bundle</label>
-        </div>
-        <div className="settings-field-row-input">
-          <div className="settings-inline-form">
-            <input
-              aria-label="Skill Bundle 目录路径"
-              placeholder="输入待安装 bundle 的本地目录路径"
-              value={installPath}
-              onChange={(event) => setInstallPath(event.target.value)}
-            />
+            {/* Meta info */}
+            <div className="skill-bundle-card-meta">
+              <div className="skill-bundle-meta-item">
+                <span className="skill-bundle-meta-label">版本</span>
+                <span className="skill-bundle-meta-value">{bundle.version}</span>
+              </div>
+              <div className="skill-bundle-meta-item">
+                <span className="skill-bundle-meta-label">支持平台</span>
+                <span className="skill-bundle-meta-value">{bundle.platforms.join(', ') || '全部'}</span>
+              </div>
+            </div>
+
+            {/* Preview Toggle */}
             <button
-              aria-label="安装 Bundle"
+              className="skill-bundle-preview-toggle"
               type="button"
-              disabled={installing}
-              onClick={() => void handleInstallBundle()}
+              onClick={() => void togglePromptPreview(bundle)}
             >
-              {installing ? '安装中...' : '安装 Bundle'}
+              {expandedBundleId === bundle.id ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+              <span>{expandedBundleId === bundle.id ? '收起技能说明' : '查看技能说明'}</span>
             </button>
-          </div>
-          {installMessage ? (
-            <p className="settings-feedback" role="status">
-              {installMessage}
-            </p>
-          ) : null}
-          {installError ? (
-            <p className="runtime-error" role="alert">
-              {installError}
-            </p>
-          ) : null}
-        </div>
+
+            {/* Preview Content */}
+            {expandedBundleId === bundle.id ? (
+              <div className="skill-bundle-preview">
+                {previewLoadingId === bundle.id ? (
+                  <div className="settings-loading-state">
+                    <div className="settings-loading-spinner" />
+                    <span>正在读取提示词...</span>
+                  </div>
+                ) : null}
+                {previewError ? (
+                  <div className="settings-error-state">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>{previewError}</span>
+                  </div>
+                ) : null}
+                {previewCache[bundle.id] ? (
+                  <pre className="skill-bundle-preview-content">{previewCache[bundle.id]}</pre>
+                ) : null}
+              </div>
+            ) : null}
+          </article>
+        ))}
       </div>
 
-      {status === 'loading' ? <p className="settings-hint">正在读取 Skill Bundle...</p> : null}
-      {status === 'error' && message ? (
-        <p className="runtime-error" role="alert">
-          {message}
-        </p>
-      ) : null}
-      {status === 'idle' && bundles.length === 0 ? (
-        <p className="settings-hint">当前未发现可用的本地 Skill Bundle。</p>
-      ) : null}
-
-      {bundles.length > 0 ? (
-        <div className="skill-bundle-list">
-          {bundles.map((bundle) => (
-            <article key={bundle.id} className="skill-bundle-card">
-              <div className="skill-bundle-card-header">
-                <div>
-                  <h4>{bundle.name}</h4>
-                  <p>{bundle.description}</p>
-                </div>
-                <div className="skill-bundle-badges">
-                  {bundle.is_builtin ? <span>内置</span> : null}
-                  <span>
-                    {bundle.supported_on_current_platform ? '当前平台可用' : '当前平台不支持'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="skill-bundle-meta">
-                <div>
-                  <span>Bundle ID</span>
-                  <strong>{bundle.id}</strong>
-                </div>
-                <div>
-                  <span>版本</span>
-                  <strong>{bundle.version}</strong>
-                </div>
-                <div>
-                  <span>平台</span>
-                  <strong>{bundle.platforms.join(', ') || '全部'}</strong>
-                </div>
-                <div>
-                  <span>提示词</span>
-                  <strong>{bundle.prompt_file}</strong>
-                </div>
-              </div>
-
-              {bundle.prompt_examples_file ? (
-                <p className="settings-hint">
-                  示例文件：{bundle.prompt_examples_file}
-                </p>
-              ) : null}
-
-              <div className="skill-bundle-runtime-list">
-                {bundle.runtimes.map((runtime) => (
-                  <div key={`${bundle.id}-${runtime.id}`} className="skill-bundle-runtime">
-                    <div>
-                      <strong>{runtime.name}</strong>
-                      <span>
-                        {runtime.transport} / {runtime.launcher}
-                      </span>
-                    </div>
-                    <p>
-                      server: {runtime.server_name} ({runtime.server_id})
-                    </p>
-                    {runtime.missing_required_env.length > 0 ? (
-                      <p className="shortcut-warning">
-                        缺少环境变量：{runtime.missing_required_env.join(', ')}
-                      </p>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-
-              <div className="settings-inline-actions">
-                <button type="button" onClick={() => void togglePromptPreview(bundle)}>
-                  {expandedBundleId === bundle.id ? '收起 SKILL.md' : '查看 SKILL.md'}
-                </button>
-              </div>
-
-              {expandedBundleId === bundle.id ? (
-                <div className="skill-bundle-preview">
-                  {previewLoadingId === bundle.id ? (
-                    <p className="settings-hint">正在读取提示词...</p>
-                  ) : null}
-                  {previewError ? (
-                    <p className="runtime-error" role="alert">
-                      {previewError}
-                    </p>
-                  ) : null}
-                  {previewCache[bundle.id] ? <pre>{previewCache[bundle.id]}</pre> : null}
-                </div>
-              ) : null}
-            </article>
-          ))}
+      {/* Install new skill bundle */}
+      <div className="settings-input-card">
+        <span className="settings-input-title">安装新技能包</span>
+        <div className="settings-path-input-row">
+          <Input
+            aria-label="技能包目录路径"
+            className="settings-path-input"
+            placeholder="输入技能包的本地目录路径"
+            value={installPath}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => setInstallPath(event.target.value)}
+          />
+          <Button
+            variant="outline"
+            type="button"
+            className="settings-path-btn"
+            onClick={() => {
+              void pickFolder('选择技能包目录').then((path) => {
+                if (path) {
+                  setInstallPath(path)
+                }
+              })
+            }}
+          >
+            <FolderOpen className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            className="settings-install-btn"
+            disabled={installing || !installPath.trim()}
+            onClick={() => void handleInstallBundle()}
+          >
+            {installing ? '安装中...' : '安装'}
+          </Button>
         </div>
-      ) : null}
-    </section>
+        {installMessage ? (
+          <p className="settings-feedback-success">{installMessage}</p>
+        ) : null}
+        {installError ? (
+          <p className="settings-feedback-error">{installError}</p>
+        ) : null}
+      </div>
+    </>
   )
 }

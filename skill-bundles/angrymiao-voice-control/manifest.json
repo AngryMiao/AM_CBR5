@@ -2,7 +2,7 @@
   "id": "angrymiao-voice-control",
   "version": "1.0.0",
   "name": "Angrymiao Voice Control",
-  "description": "Voice-command skill bundle for desktop system control. Ships a reusable system-control MCP runtime plus prompt instructions and installation scripts.",
+  "description": "内置语音控制技能包，支持通过语音指令控制电脑系统，包括键盘快捷键、文本输入、打开网页等功能。",
   "prompt": {
     "file": "SKILL.md",
     "examplesFile": "examples.md"

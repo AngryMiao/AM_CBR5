@@ -348,7 +348,7 @@ function createDefaultSkillBundles(): SkillBundleInventoryItem[] {
       id: 'angrymiao-voice-control',
       version: '1.0.0',
       name: 'Angrymiao Voice Control',
-      description: 'Voice-command skill bundle for desktop system control.',
+      description: '内置语音控制技能包，支持通过语音指令控制电脑系统，包括键盘快捷键、文本输入、打开网页等功能。',
       bundle_dir: 'C:/voice-app/skill-bundles/angrymiao-voice-control',
       platforms: ['darwin', 'win32'],
       supported_on_current_platform: true,

@@ -184,7 +184,7 @@ export function LogsPanel() {
       ) : null}
 
       {/* Content area */}
-      <div className="logs-content">
+      <div className="logs-content animate-panel-fade-in" key={levelFilter}>
         {filteredLogs.length === 0 ? (
           <div className="logs-empty-state">
             <FileText className="h-12 w-12" />

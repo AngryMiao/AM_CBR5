@@ -31,7 +31,6 @@ const MAIN_PANELS: Array<{
   label: string
   title: string
   description: string
-  footer: string
   icon: React.ReactNode
 }> = [
   {
@@ -39,7 +38,6 @@ const MAIN_PANELS: Array<{
     label: '首页',
     title: '运行控制',
     description: '当前语音任务、系统状态与运行摘要。',
-    footer: 'Quiet Console',
     icon: <Home className="w-4 h-4" />,
   },
   {
@@ -47,7 +45,6 @@ const MAIN_PANELS: Array<{
     label: '设置',
     title: '设置中心',
     description: '管理热键、模型、设备和 MCP 配置。',
-    footer: 'Settings',
     icon: <Settings className="w-4 h-4" />,
   },
   {
@@ -55,7 +52,6 @@ const MAIN_PANELS: Array<{
     label: '历史记录',
     title: '任务历史',
     description: '查看识别结果、重试任务并预览输出。',
-    footer: 'History Stream',
     icon: <History className="w-4 h-4" />,
   },
   {
@@ -63,7 +59,6 @@ const MAIN_PANELS: Array<{
     label: '日志',
     title: '运行日志',
     description: '查看运行日志、筛选错误并导出记录。',
-    footer: 'Runtime Logs',
     icon: <FileText className="w-4 h-4" />,
   },
 ]
@@ -71,7 +66,6 @@ const MAIN_PANELS: Array<{
 export default function App() {
   const windowLabel = getCurrentWindowLabel()
   const [activePanel, setActivePanel] = useState<MainPanelKey>('runtime')
-  const currentPanel = MAIN_PANELS.find((panel) => panel.key === activePanel) ?? MAIN_PANELS[0]
 
   useLayoutEffect(() => {
     document.documentElement.dataset.window = windowLabel
@@ -172,28 +166,23 @@ export default function App() {
               </Button>
             ))}
           </nav>
-
-          <div className="workspace-sidebar-footer">
-            <span className="workspace-sidebar-status">System Ready</span>
-            <small>{currentPanel.footer}</small>
-          </div>
         </aside>
 
         <main className="workspace-main">
           {activePanel === 'settings' ? (
-            <section className="workspace-panel" data-panel={activePanel}>
+            <section className="workspace-panel animate-panel-fade-in" data-panel={activePanel} key="settings">
               <SettingsPanel />
             </section>
           ) : activePanel === 'history' ? (
-            <section className="workspace-panel" data-panel={activePanel}>
+            <section className="workspace-panel animate-panel-fade-in" data-panel={activePanel} key="history">
               <HistoryPanel />
             </section>
           ) : activePanel === 'logs' ? (
-            <section className="workspace-panel" data-panel={activePanel}>
+            <section className="workspace-panel animate-panel-fade-in" data-panel={activePanel} key="logs">
               <LogsPanel />
             </section>
           ) : activePanel === 'runtime' ? (
-            <section className="workspace-panel" data-panel={activePanel}>
+            <section className="workspace-panel animate-panel-fade-in" data-panel={activePanel} key="runtime">
               <RuntimeStatus />
             </section>
           ) : null}

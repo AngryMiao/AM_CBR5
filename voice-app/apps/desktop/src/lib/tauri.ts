@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { open } from '@tauri-apps/plugin-dialog'
 
 export type RuntimePhase =
   | '待命中'
@@ -390,4 +391,38 @@ export async function listenPlatformDiagnostics(
   return listen<PlatformDiagnostics>(platformDiagnosticsUpdatedEvent, (event) => {
     onDiagnostics(event.payload)
   })
+}
+
+/**
+ * Open a folder picker dialog and return the selected path.
+ * Returns null if the user cancelled the dialog.
+ */
+export async function pickFolder(title?: string): Promise<string | null> {
+  const selected = await open({
+    directory: true,
+    multiple: false,
+    title: title ?? '选择文件夹',
+  })
+  if (selected === null) {
+    return null
+  }
+  // `open` returns string | string[] | null when directory=true
+  return typeof selected === 'string' ? selected : null
+}
+
+/**
+ * Open a file picker dialog and return the selected path.
+ * Returns null if the user cancelled the dialog.
+ */
+export async function pickFile(title?: string, filters?: Array<{ name: string; extensions: string[] }>): Promise<string | null> {
+  const selected = await open({
+    directory: false,
+    multiple: false,
+    title: title ?? '选择文件',
+    filters: filters,
+  })
+  if (selected === null) {
+    return null
+  }
+  return typeof selected === 'string' ? selected : null
 }
