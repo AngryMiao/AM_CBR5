@@ -4,6 +4,14 @@ import { z } from 'zod'
 import { keyboardControl, typeText } from './tools/keyboard'
 import { executeSystemCommand } from './tools/system'
 
+const { resolveKeyboardRequest } = require('./tools/shortcut-mapping.cjs') as {
+  resolveKeyboardRequest: (request: {
+    shortcut?: string
+    recordedKeys?: string[]
+    keyCodes?: string[]
+  }) => { recordedKeys: string[]; keyCodes: string[] }
+}
+
 const DRIVER_PATH = process.env.KEYBOARD_DRIVER_PATH || ''
 
 const server = new McpServer({
@@ -38,12 +46,36 @@ server.registerTool(
 server.registerTool(
   'keyboard_control',
   {
-    description: '通过 driver.exe 执行键盘控制操作，如按下快捷键、组合键等。使用 8 位 hex key codes 序列，按下和抬起成对出现。',
-    inputSchema: z.object({
-      keyCodes: z.array(z.string()).describe('按键序列，8位hex码（XXYYYYYY），按下和抬起成对出现'),
-    }),
+    description:
+      '通过 driver.exe 执行键盘控制操作，如按下快捷键、组合键等。优先传 shortcut 或 recordedKeys，必要时兼容 keyCodes。',
+    inputSchema: z
+      .object({
+        shortcut: z
+          .string()
+          .optional()
+          .describe('规范化快捷键表达，例如 F5、Ctrl+S、Alt+Tab'),
+        recordedKeys: z
+          .array(z.string())
+          .optional()
+          .describe('标准按键数组，例如 ["ControlLeft", "KeyS"]'),
+        keyCodes: z
+          .array(z.string())
+          .optional()
+          .describe('按键序列，8位hex码（XXYYYYYY），按下和抬起成对出现'),
+      })
+      .refine(
+        (value) =>
+          Boolean(
+            value.shortcut?.trim() ||
+              value.recordedKeys?.length ||
+              value.keyCodes?.length
+          ),
+        {
+          message: 'keyboard_control 至少需要 shortcut、recordedKeys 或 keyCodes 之一。',
+        }
+      ),
   },
-  async ({ keyCodes }) => {
+  async ({ shortcut, recordedKeys, keyCodes }) => {
     if (!DRIVER_PATH) {
       return {
         content: [
@@ -56,7 +88,22 @@ server.registerTool(
       }
     }
 
-    const result = await keyboardControl(DRIVER_PATH, keyCodes)
+    let resolved: { recordedKeys: string[]; keyCodes: string[] }
+    try {
+      resolved = resolveKeyboardRequest({ shortcut, recordedKeys, keyCodes })
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: error instanceof Error ? error.message : String(error),
+          },
+        ],
+        isError: true,
+      }
+    }
+
+    const result = await keyboardControl(DRIVER_PATH, resolved.keyCodes)
     assertExecutionSuccess(result)
     return {
       content: [

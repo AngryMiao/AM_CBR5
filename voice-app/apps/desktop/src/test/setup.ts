@@ -25,6 +25,11 @@ type RuntimeSnapshot = {
   result_window_mode: string
 }
 
+type AudioWaveformFrame = {
+  bars: number[]
+  active: boolean
+}
+
 type HistoryRecord = {
   id: number
   transcript: string
@@ -80,6 +85,7 @@ type EditableVoiceSettings = {
   angrymiao_skill_enabled: boolean
   keyboard_driver_path: string
   keyboard_shortcuts: KeyboardShortcut[]
+  control_skill_markdown: string
   mcp_servers_json: string
   has_doubao_asr_access_token: boolean
   has_llm_api_key: boolean
@@ -107,6 +113,7 @@ type SaveEditableVoiceSettingsInput = {
   angrymiao_skill_enabled: boolean
   keyboard_driver_path: string
   keyboard_shortcuts: KeyboardShortcut[]
+  control_skill_markdown: string
   mcp_servers_json: string
   doubao_asr_access_token: EditableSecretValueInput
   llm_api_key: EditableSecretValueInput
@@ -223,6 +230,10 @@ let runtimeSnapshot: RuntimeSnapshot = {
   input_mode: 'none',
   result_window_mode: 'auto',
 }
+let audioWaveformFrame: AudioWaveformFrame = {
+  bars: Array.from({ length: 8 }, () => 0),
+  active: false,
+}
 let historyRecords: HistoryRecord[] = []
 let runtimeLogs: RuntimeLogEntry[] = []
 let platformDiagnostics: PlatformDiagnostics = {
@@ -247,6 +258,7 @@ let editableSettings = createDefaultEditableSettings()
 let storedSecrets = createDefaultSecrets()
 let microphoneInputs = createDefaultMicrophoneInputs()
 const listeners = new Map<string, Set<(event: { payload: unknown }) => void>>()
+const audioWaveformChannels = new Set<MockChannel<AudioWaveformFrame>>()
 
 function createMockWindow(label: 'main' | 'overlay' | 'result' = 'main') {
   return {
@@ -276,6 +288,10 @@ beforeEach(() => {
     input_mode: 'none',
     result_window_mode: 'auto',
   }
+  audioWaveformFrame = {
+    bars: Array.from({ length: 8 }, () => 0),
+    active: false,
+  }
   historyRecords = []
   runtimeLogs = [{ level: 'info', message: '语音运行时已就绪。' }]
   platformDiagnostics = {
@@ -300,8 +316,17 @@ beforeEach(() => {
   storedSecrets = createDefaultSecrets()
   microphoneInputs = createDefaultMicrophoneInputs()
   listeners.clear()
+  audioWaveformChannels.clear()
   getCurrentWindow.mockImplementation(() => createMockWindow('main'))
 })
+
+class MockChannel<T> {
+  onmessage?: (message: T) => void
+
+  emit(message: T) {
+    this.onmessage?.(message)
+  }
+}
 
 function createDefaultEditableSettings(): EditableVoiceSettings {
   return {
@@ -322,6 +347,7 @@ function createDefaultEditableSettings(): EditableVoiceSettings {
     angrymiao_skill_enabled: false,
     keyboard_driver_path: '',
     keyboard_shortcuts: getDefaultKeyboardShortcuts(),
+    control_skill_markdown: '',
     mcp_servers_json: '[]',
     has_doubao_asr_access_token: true,
     has_llm_api_key: true,
@@ -495,6 +521,13 @@ function emit(eventName: string, payload: unknown) {
 export function setRuntimeSnapshotForTest(next: RuntimeSnapshot) {
   runtimeSnapshot = next
   emit('runtime-snapshot', runtimeSnapshot)
+}
+
+export function emitAudioWaveformForTest(next: AudioWaveformFrame) {
+  audioWaveformFrame = structuredClone(next)
+  audioWaveformChannels.forEach((channel) => {
+    channel.emit(structuredClone(audioWaveformFrame))
+  })
 }
 
 function pushInfoLog(message: string) {
@@ -781,6 +814,7 @@ function scheduleMacrotask(task: () => void, delay = 0) {
 }
 
 vi.mock('@tauri-apps/api/core', () => ({
+  Channel: MockChannel,
   invoke: vi.fn(async (command: string, payload?: Record<string, unknown>) => {
     if (command === 'get_runtime_snapshot') {
       return runtimeSnapshot
@@ -887,6 +921,23 @@ vi.mock('@tauri-apps/api/core', () => ({
       }
 
       return stopMicrophoneCaptureRuntime()
+    }
+
+    if (command === 'subscribe_audio_waveform') {
+      const channel =
+        payload && 'onEvent' in payload
+          ? (payload as { onEvent?: MockChannel<AudioWaveformFrame> }).onEvent
+          : undefined
+
+      if (!channel) {
+        throw new Error('subscribe_audio_waveform requires onEvent channel')
+      }
+
+      audioWaveformChannels.add(channel)
+      queueMicrotask(() => {
+        channel.emit(structuredClone(audioWaveformFrame))
+      })
+      return null
     }
 
     if (command === 'dismiss_runtime_result') {

@@ -1,9 +1,11 @@
 import { VoiceCapsule, type VoiceCapsulePhase } from './VoiceCapsule'
+import { useAudioWaveform } from './useAudioWaveform'
 import { useRuntimeSnapshot } from './useRuntimeSnapshot'
 import { getRuntimePhaseTone } from '../../lib/runtimePhase'
 
 export function OverlayWindow() {
   const { phase, transcript, error, input_mode } = useRuntimeSnapshot()
+  const waveform = useAudioWaveform()
   const phaseTone = getRuntimePhaseTone(phase)
   const capsulePhase = mapPhaseToCapsulePhase(phaseTone, input_mode)
 
@@ -21,6 +23,8 @@ export function OverlayWindow() {
         phase={effectivePhase}
         transcript={effectiveTranscript}
         showTranscript={showTranscript}
+        waveformActive={waveform.active}
+        waveformBars={waveform.bars}
       />
     </main>
   )

@@ -1,3 +1,4 @@
+use crate::audio_waveform::{AudioWaveformFrame, AudioWaveformStream};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -26,6 +27,7 @@ use settings_core::{
     EditableVoiceSettings, RuntimeVoiceSettings, SaveEditableVoiceSettingsInput, SettingsStore,
     StoredVoiceSettings, VoiceSettings,
 };
+use tauri::ipc::Channel;
 use voice_core::RuntimeMachine;
 
 enum ActiveCapture {
@@ -129,6 +131,7 @@ pub struct McpToolRuntimeDiagnostics {
 
 pub struct AppState {
     runtime: Mutex<RuntimeStore>,
+    waveform: Arc<Mutex<AudioWaveformStream>>,
 }
 
 impl Default for AppState {
@@ -160,6 +163,7 @@ impl AppState {
                 tool_executor,
                 mcp_runtime,
             )),
+            waveform: Arc::new(Mutex::new(AudioWaveformStream::default())),
         }
     }
 
@@ -216,6 +220,21 @@ impl AppState {
     pub fn runtime_snapshot(&self) -> RuntimeSnapshot {
         let runtime = self.runtime.lock().expect("runtime store lock poisoned");
         snapshot_with_mode(runtime.machine.snapshot(), runtime.active_input_mode)
+    }
+
+    pub fn register_audio_waveform_listener(
+        &self,
+        window_label: String,
+        on_event: Channel<AudioWaveformFrame>,
+    ) -> Result<(), String> {
+        let initial_frame = {
+            let mut waveform = self.waveform.lock().expect("waveform lock poisoned");
+            waveform.register_subscriber(window_label, on_event.clone())
+        };
+
+        on_event
+            .send(initial_frame)
+            .map_err(|cause| format!("注册音频波纹订阅失败: {cause}"))
     }
 
     pub fn current_input_mode(&self) -> VoiceInputMode {
@@ -1236,10 +1255,13 @@ impl AppState {
         runtime.logs.push(RuntimeLogEntry::info(
             "测试语音任务已开始，状态进入正在聆听。",
         ));
+        let snapshot = runtime.machine.snapshot();
+        drop(runtime);
+        activate_audio_waveform_stream(&self.waveform);
 
         Ok(TaskStartOutcome {
             operation_id,
-            snapshot: runtime.machine.snapshot(),
+            snapshot,
             events: None,
         })
     }
@@ -1259,8 +1281,11 @@ impl AppState {
         runtime.logs.push(RuntimeLogEntry::info(
             "测试语音任务已结束录音，等待豆包完成识别。",
         ));
+        let snapshot = runtime.machine.snapshot();
+        drop(runtime);
+        deactivate_audio_waveform_stream(&self.waveform);
 
-        Ok(runtime.machine.snapshot())
+        Ok(snapshot)
     }
 
     #[cfg(not(test))]
@@ -1292,12 +1317,14 @@ impl AppState {
             }
         };
         let client = session.client();
+        let waveform = Arc::clone(&self.waveform);
         let (capture, capture_ready) =
             match MicrophoneRecordingSession::start_with_preferred_device_and_chunk_callback(
                 Some(preferred_microphone_device_id.as_str()),
                 target_audio_rate,
                 move |chunk| {
                     let _ = client.append_audio(samples_to_pcm_bytes(chunk));
+                    push_audio_waveform_samples(&waveform, chunk);
                 },
             ) {
                 Ok(value) => value,
@@ -1333,10 +1360,13 @@ impl AppState {
         runtime.logs.push(RuntimeLogEntry::info(
             "已连接豆包流式识别，开始接收实时音频。",
         ));
+        let snapshot = runtime.machine.snapshot();
+        drop(runtime);
+        activate_audio_waveform_stream(&self.waveform);
 
         Ok(TaskStartOutcome {
             operation_id,
-            snapshot: runtime.machine.snapshot(),
+            snapshot,
             events: Some(events),
         })
     }
@@ -1371,7 +1401,10 @@ impl AppState {
                 "已停止麦克风采集，录音时长 {} ms，等待豆包完成识别。",
                 clip.duration_ms()
             )));
-            runtime.machine.snapshot()
+            let snapshot = runtime.machine.snapshot();
+            drop(runtime);
+            deactivate_audio_waveform_stream(&self.waveform);
+            snapshot
         };
 
         Ok(snapshot)
@@ -1405,6 +1438,7 @@ impl AppState {
         };
 
         self.cleanup_task(task);
+        deactivate_audio_waveform_stream(&self.waveform);
         snapshot
     }
 
@@ -1557,6 +1591,7 @@ impl AppState {
         };
 
         self.cleanup_task(task);
+        deactivate_audio_waveform_stream(&self.waveform);
         snapshot
     }
 
@@ -1567,7 +1602,60 @@ impl AppState {
         runtime.active_input_mode = VoiceInputMode::None;
         runtime.machine.reset();
         runtime.logs.push(RuntimeLogEntry::info(message));
-        snapshot_with_mode(runtime.machine.snapshot(), VoiceInputMode::None)
+        let snapshot = snapshot_with_mode(runtime.machine.snapshot(), VoiceInputMode::None);
+        drop(runtime);
+        deactivate_audio_waveform_stream(&self.waveform);
+        snapshot
+    }
+}
+
+fn activate_audio_waveform_stream(waveform: &Arc<Mutex<AudioWaveformStream>>) {
+    let frame = {
+        let mut stream = waveform.lock().expect("waveform lock poisoned");
+        stream.activate()
+    };
+    broadcast_audio_waveform_frame(waveform, frame);
+}
+
+fn deactivate_audio_waveform_stream(waveform: &Arc<Mutex<AudioWaveformStream>>) {
+    let frame = {
+        let mut stream = waveform.lock().expect("waveform lock poisoned");
+        stream.deactivate()
+    };
+    broadcast_audio_waveform_frame(waveform, frame);
+}
+
+#[cfg_attr(test, allow(dead_code))]
+fn push_audio_waveform_samples(waveform: &Arc<Mutex<AudioWaveformStream>>, chunk: &[i16]) {
+    let frame = {
+        let mut stream = waveform.lock().expect("waveform lock poisoned");
+        stream.push_samples(chunk)
+    };
+
+    if let Some(frame) = frame {
+        broadcast_audio_waveform_frame(waveform, frame);
+    }
+}
+
+fn broadcast_audio_waveform_frame(
+    waveform: &Arc<Mutex<AudioWaveformStream>>,
+    frame: AudioWaveformFrame,
+) {
+    let channels = {
+        let stream = waveform.lock().expect("waveform lock poisoned");
+        stream.subscriber_channels()
+    };
+    let mut failed_labels = Vec::new();
+
+    for (window_label, channel) in channels {
+        if channel.send(frame.clone()).is_err() {
+            failed_labels.push(window_label);
+        }
+    }
+
+    if !failed_labels.is_empty() {
+        let mut stream = waveform.lock().expect("waveform lock poisoned");
+        stream.remove_subscribers(&failed_labels);
     }
 }
 

@@ -100,17 +100,21 @@ export async function keyboardControl(
   driverPath: string,
   keyCodes: string[]
 ): Promise<{ success: boolean; message: string; output?: string }> {
+  const normalizedKeyCodes = keyCodes
+    .map((keyCode) => keyCode.trim())
+    .filter(Boolean)
+
   if (!driverPath) {
     return { success: false, message: 'driver.exe 路径未配置' }
   }
 
-  if (!keyCodes.length) {
+  if (!normalizedKeyCodes.length) {
     return { success: false, message: '未提供按键序列' }
   }
 
   return new Promise((resolve) => {
     try {
-      const child = spawn(driverPath, ['-k', ...keyCodes], {
+      const child = spawn(driverPath, ['-k', ...normalizedKeyCodes], {
         timeout: 30000,
         windowsHide: true,
       })

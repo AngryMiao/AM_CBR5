@@ -68,6 +68,7 @@ pub struct StoredVoiceSettings {
     pub keyboard_driver_path: String,
     #[serde(default = "default_keyboard_shortcuts")]
     pub keyboard_shortcuts: Vec<KeyboardShortcut>,
+    pub control_skill_markdown: String,
     pub mcp_servers: Vec<McpServerConfig>,
 }
 
@@ -105,6 +106,7 @@ impl Default for StoredVoiceSettings {
             angrymiao_skill_enabled: true,
             keyboard_driver_path: String::new(),
             keyboard_shortcuts: default_keyboard_shortcuts(),
+            control_skill_markdown: String::new(),
             mcp_servers: Vec::new(),
         }
     }
@@ -146,6 +148,7 @@ pub struct EditableVoiceSettings {
     pub angrymiao_skill_enabled: bool,
     pub keyboard_driver_path: String,
     pub keyboard_shortcuts: Vec<KeyboardShortcut>,
+    pub control_skill_markdown: String,
     pub mcp_servers_json: String,
     pub has_doubao_asr_access_token: bool,
     pub has_llm_api_key: bool,
@@ -170,6 +173,7 @@ impl EditableVoiceSettings {
             angrymiao_skill_enabled: settings.angrymiao_skill_enabled,
             keyboard_driver_path: settings.keyboard_driver_path.clone(),
             keyboard_shortcuts: settings.keyboard_shortcuts.clone(),
+            control_skill_markdown: settings.control_skill_markdown.clone(),
             mcp_servers_json: serialize_mcp_servers_json(&settings.mcp_servers),
             has_doubao_asr_access_token: !settings.doubao_asr_access_token.trim().is_empty(),
             has_llm_api_key: !settings.llm_api_key.trim().is_empty(),
@@ -259,6 +263,7 @@ pub struct SaveEditableVoiceSettingsInput {
     pub angrymiao_skill_enabled: bool,
     pub keyboard_driver_path: String,
     pub keyboard_shortcuts: Vec<KeyboardShortcut>,
+    pub control_skill_markdown: String,
     pub mcp_servers_json: String,
     pub doubao_asr_access_token: EditableSecretValueInput,
     pub llm_api_key: EditableSecretValueInput,
@@ -283,6 +288,7 @@ impl SaveEditableVoiceSettingsInput {
             angrymiao_skill_enabled: settings.angrymiao_skill_enabled,
             keyboard_driver_path: settings.keyboard_driver_path.clone(),
             keyboard_shortcuts: settings.keyboard_shortcuts.clone(),
+            control_skill_markdown: settings.control_skill_markdown.clone(),
             mcp_servers_json: serialize_mcp_servers_json(&settings.mcp_servers),
             doubao_asr_access_token: EditableSecretValueInput::Unchanged,
             llm_api_key: EditableSecretValueInput::Unchanged,
@@ -307,6 +313,7 @@ impl SaveEditableVoiceSettingsInput {
             angrymiao_skill_enabled: snapshot.angrymiao_skill_enabled,
             keyboard_driver_path: snapshot.keyboard_driver_path.clone(),
             keyboard_shortcuts: snapshot.keyboard_shortcuts.clone(),
+            control_skill_markdown: snapshot.control_skill_markdown.clone(),
             mcp_servers_json: snapshot.mcp_servers_json.clone(),
             doubao_asr_access_token: EditableSecretValueInput::Unchanged,
             llm_api_key: EditableSecretValueInput::Unchanged,

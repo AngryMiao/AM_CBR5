@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { Channel, invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { open } from '@tauri-apps/plugin-dialog'
@@ -21,6 +21,11 @@ export type RuntimeSnapshot = {
   detail: string
   input_mode: 'none' | 'agent' | 'transcription' | string
   result_window_mode: 'auto' | 'hidden' | string
+}
+
+export type AudioWaveformFrame = {
+  bars: number[]
+  active: boolean
 }
 
 export type HistoryRecord = {
@@ -83,6 +88,7 @@ export type EditableVoiceSettings = {
   angrymiao_skill_enabled: boolean
   keyboard_driver_path: string
   keyboard_shortcuts: KeyboardShortcut[]
+  control_skill_markdown: string
   mcp_servers_json: string
   has_doubao_asr_access_token: boolean
   has_llm_api_key: boolean
@@ -105,6 +111,7 @@ export type SaveEditableVoiceSettingsInput = {
   angrymiao_skill_enabled: boolean
   keyboard_driver_path: string
   keyboard_shortcuts: KeyboardShortcut[]
+  control_skill_markdown: string
   mcp_servers_json: string
   doubao_asr_access_token: EditableSecretValueInput
   llm_api_key: EditableSecretValueInput
@@ -229,6 +236,25 @@ export async function stopMicrophoneCapture() {
 
 export async function dismissRuntimeResult() {
   return invoke<RuntimeSnapshot>('dismiss_runtime_result')
+}
+
+export async function subscribeAudioWaveform(
+  windowLabel: AppWindowLabel,
+  onFrame: (frame: AudioWaveformFrame) => void,
+) {
+  const onEvent = new Channel<AudioWaveformFrame>()
+  onEvent.onmessage = (message) => {
+    onFrame(message)
+  }
+
+  await invoke('subscribe_audio_waveform', {
+    windowLabel,
+    onEvent,
+  })
+
+  return () => {
+    onEvent.onmessage = undefined
+  }
 }
 
 export async function getHistoryRecords() {

@@ -261,6 +261,24 @@ fn save_updates_keyboard_shortcuts() {
 }
 
 #[test]
+fn save_updates_control_skill_markdown() {
+    let current = StoredVoiceSettings::default();
+    let markdown = "# 我的控制技能\n\n刷新页面时用 F5".to_string();
+
+    let updated = SettingsStore::apply_input(
+        &current,
+        SaveEditableVoiceSettingsInput {
+            control_skill_markdown: markdown.clone(),
+            ..SaveEditableVoiceSettingsInput::from_settings(&current)
+        },
+    )
+    .expect("control skill markdown should save");
+
+    assert_eq!(updated.control_skill_markdown, markdown);
+    assert_eq!(updated.keyboard_shortcuts, current.keyboard_shortcuts);
+}
+
+#[test]
 fn save_can_clear_secret_values_explicitly() {
     let current = StoredVoiceSettings::default();
 

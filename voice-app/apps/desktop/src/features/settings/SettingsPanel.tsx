@@ -11,7 +11,7 @@ import {
   type SaveEditableVoiceSettingsInput,
 } from '../../lib/tauri'
 import { DefaultHotkeyRecorder } from './DefaultHotkeyRecorder'
-import { KeyboardShortcutSettings } from './KeyboardShortcutSettings'
+import { ControlSkillMarkdownSettings } from './ControlSkillMarkdownSettings'
 import { SkillBundleInventory } from './SkillBundleInventory'
 import {
   getRuntimeReadinessWarnings,
@@ -67,6 +67,7 @@ function toSaveInput(
     angrymiao_skill_enabled: draft.angrymiao_skill_enabled,
     keyboard_driver_path: draft.keyboard_driver_path,
     keyboard_shortcuts: draft.keyboard_shortcuts,
+    control_skill_markdown: draft.control_skill_markdown,
     mcp_servers_json: draft.mcp_servers_json,
     doubao_asr_access_token: toSecretInput(doubaoSecret),
     llm_api_key: toSecretInput(llmSecret),
@@ -588,13 +589,22 @@ export function SettingsPanel() {
                   disabled={isBusy}
                 />
 
-                <KeyboardShortcutSettings
-                  keyboardDriverPath={draft.keyboard_driver_path}
-                  keyboardShortcuts={draft.keyboard_shortcuts}
-                  onKeyboardDriverPathChange={(value) => updateDraft('keyboard_driver_path', value)}
-                  onKeyboardShortcutsChange={(value) => updateDraft('keyboard_shortcuts', value)}
+                <div className="settings-input-card">
+                  <span className="settings-input-title">键盘驱动路径</span>
+                  <Input
+                    aria-label="键盘驱动路径"
+                    className="settings-input-field"
+                    value={draft.keyboard_driver_path}
+                    onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
+                      updateDraft('keyboard_driver_path', event.target.value)
+                    }
+                  />
+                </div>
+
+                <ControlSkillMarkdownSettings
+                  value={draft.control_skill_markdown}
+                  onChange={(value) => updateDraft('control_skill_markdown', value)}
                 />
-                {renderFieldError('keyboard_shortcuts')}
 
                 {/* MCP Servers JSON */}
                 <div className="settings-input-card settings-input-card-wide">

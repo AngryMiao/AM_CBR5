@@ -2883,6 +2883,50 @@ html[data-window='result'] #root {
   background: #ffffff;
 }
 
+.control-skill-card {
+  display: grid;
+  gap: 14px;
+}
+
+.control-skill-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.control-skill-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.control-skill-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.control-skill-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(71, 85, 105, 0.86);
+}
+
+.control-skill-editor {
+  min-height: 260px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+.control-skill-note {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.04);
+  color: rgba(15, 23, 42, 0.7);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .settings-secret-row {
   display: flex;
   align-items: center;
@@ -4609,31 +4653,17 @@ html[data-window='result'] #root {
   animation: capsule-enter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* 声纹波形动画 - 真实音频风格 */
-@keyframes voice-wave {
-  0%, 100% {
-    height: 20%;
-    opacity: 0.6;
-  }
-  30% {
-    height: 80%;
-    opacity: 1;
-  }
-  60% {
-    height: 40%;
-    opacity: 0.8;
-  }
-}
-
 .voice-bar {
   width: 3px;
   height: 20px;
   position: relative;
-  display: flex;
-  align-items: center;
-  border-radius: 2px;
+  display: block;
+  align-self: center;
+  border-radius: 999px;
   background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.7) 100%);
-  animation: voice-wave 0.8s ease-in-out infinite;
+  opacity: 0.35;
+  transition: height 70ms linear, opacity 70ms linear;
+  will-change: height, opacity;
 }
 
 /* ===== 状态图标动画 ===== */

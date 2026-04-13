@@ -321,3 +321,16 @@ fn builds_turn_aware_llm_config_with_skill_prompt_assets() {
         .contains("Current Turn Shortcut Directive"));
     assert!(config.system_prompt.contains("KeyA => 11070004"));
 }
+
+#[test]
+fn builds_llm_config_with_control_skill_markdown_block() {
+    let mut settings = StoredVoiceSettings::default();
+    settings.control_skill_markdown = "# 我的控制技能\n\n刷新页面时用 F5".to_string();
+
+    let config =
+        OpenAiCompatibleLlmConfig::from_settings_for_turn(&settings, "帮我刷新页面", None, None);
+
+    assert!(config.system_prompt.contains("User Control Skill Markdown"));
+    assert!(config.system_prompt.contains("刷新页面时用 F5"));
+    assert!(config.system_prompt.contains("shortcut"));
+}

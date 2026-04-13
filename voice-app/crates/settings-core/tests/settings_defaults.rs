@@ -81,6 +81,25 @@ fn editable_settings_only_expose_user_editable_voice_fields() {
 }
 
 #[test]
+fn defaults_include_empty_control_skill_markdown() {
+    let settings = StoredVoiceSettings::default();
+    let serialized = serde_json::to_value(&settings).expect("settings should serialize");
+
+    assert_eq!(settings.control_skill_markdown, "");
+    assert_eq!(serialized["control_skill_markdown"], "");
+}
+
+#[test]
+fn editable_settings_expose_control_skill_markdown() {
+    let settings = StoredVoiceSettings::default();
+    let editable = EditableVoiceSettings::from_settings(&settings);
+    let serialized = serde_json::to_value(&editable).expect("editable settings should serialize");
+
+    assert_eq!(editable.control_skill_markdown, "");
+    assert_eq!(serialized["control_skill_markdown"], "");
+}
+
+#[test]
 fn runtime_settings_keep_transcription_timeout() {
     let settings = StoredVoiceSettings::default();
     let runtime = RuntimeVoiceSettings::from_settings(&settings);

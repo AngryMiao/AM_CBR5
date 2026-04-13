@@ -313,8 +313,8 @@ describe('App shell', () => {
     await openSettingsSection('MCP')
     expect(await section.findByLabelText('启用 AngryMiao 系统控制')).toBeInTheDocument()
     expect(section.getByLabelText('键盘驱动路径')).toBeInTheDocument()
-    expect(section.getByText('键盘控制')).toBeInTheDocument()
-    expect(section.getByRole('button', { name: '添加快捷键' })).toBeInTheDocument()
+    expect(section.getByLabelText('控制 Skill 指令')).toBeInTheDocument()
+    expect(section.queryByRole('button', { name: '添加快捷键' })).toBeNull()
     expect(section.getByText('已安装 Skill Bundles')).toBeInTheDocument()
     expect(section.getByText('Angrymiao Voice Control')).toBeInTheDocument()
     expect(section.getByText('system-control')).toBeInTheDocument()
@@ -323,6 +323,17 @@ describe('App shell', () => {
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith('get_editable_settings')
     })
+  })
+
+  it('renders the control skill markdown editor in the MCP settings tab', async () => {
+    render(<App />)
+    const section = await openMainPanel('设置')
+
+    await openSettingsSection('MCP')
+
+    expect(await section.findByLabelText('控制 Skill 指令')).toBeInTheDocument()
+    expect(section.getByLabelText('键盘驱动路径')).toBeInTheDocument()
+    expect(section.queryByRole('button', { name: '添加快捷键' })).toBeNull()
   })
 
   it('installs a skill bundle from a local directory path and refreshes the list', async () => {
@@ -390,6 +401,7 @@ describe('App shell', () => {
             angrymiao_skill_enabled: false,
             keyboard_driver_path: '',
             keyboard_shortcuts: expect.any(Array),
+            control_skill_markdown: expect.any(String),
             mcp_servers_json: expect.any(String),
             llm_api_key: expect.objectContaining({ action: 'unchanged' }),
             doubao_asr_access_token: expect.objectContaining({
@@ -562,23 +574,14 @@ describe('App shell', () => {
     expect(section.getByRole('button', { name: '保存设置' })).not.toBeDisabled()
   })
 
-  it('adds a custom keyboard shortcut and includes it in the saved settings', async () => {
+  it('edits control skill markdown and includes it in the saved settings', async () => {
     render(<App />)
     const section = await openMainPanel('设置')
     await openSettingsSection('MCP')
 
-    fireEvent.click(await section.findByRole('button', { name: '添加快捷键' }))
-    fireEvent.change(await section.findByLabelText('触发词（逗号分隔）'), {
-      target: { value: '截图' },
+    fireEvent.change(await section.findByLabelText('控制 Skill 指令'), {
+      target: { value: '# 我的控制技能\n\n刷新页面时用 F5' },
     })
-
-    fireEvent.click(section.getByRole('button', { name: '录制' }))
-    expect(section.getByDisplayValue('请按下快捷键...')).toHaveFocus()
-    fireEvent.keyDown(window, { code: 'ControlLeft', key: 'Control' })
-    fireEvent.keyDown(window, { code: 'KeyK', key: 'k' })
-    fireEvent.keyUp(window, { code: 'KeyK', key: 'k' })
-
-    fireEvent.click(section.getByRole('button', { name: '确认添加' }))
     fireEvent.click(section.getByRole('button', { name: '保存设置' }))
 
     await waitFor(() => {
@@ -586,12 +589,7 @@ describe('App shell', () => {
         'save_editable_settings',
         expect.objectContaining({
           input: expect.objectContaining({
-            keyboard_shortcuts: expect.arrayContaining([
-              expect.objectContaining({
-                trigger_words: ['截图'],
-                recorded_keys: ['ControlLeft', 'KeyK'],
-              }),
-            ]),
+            control_skill_markdown: '# 我的控制技能\n\n刷新页面时用 F5',
           }),
         }),
       )

@@ -1,3 +1,4 @@
+mod audio_waveform;
 mod app_state;
 mod commands;
 mod hotkeys;
@@ -73,6 +74,7 @@ pub fn run() {
             commands::list_skill_bundles,
             commands::read_skill_bundle_text,
             commands::install_skill_bundle,
+            commands::subscribe_audio_waveform,
             commands::start_microphone_capture,
             commands::stop_microphone_capture,
             commands::dismiss_runtime_result,

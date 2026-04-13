@@ -11,7 +11,6 @@ export type SettingsFieldKey =
   | 'transcription_silence_timeout_ms'
   | 'llm_base_url'
   | 'llm_model'
-  | 'keyboard_shortcuts'
   | 'mcp_servers_json'
 
 export type SettingsValidationErrors = Partial<Record<SettingsFieldKey, string>>
@@ -50,10 +49,6 @@ export function validateSettingsDraft(
 
   if (!draft.llm_model.trim()) {
     errors.llm_model = 'LLM 模型不能为空。'
-  }
-
-  if (!isValidKeyboardShortcuts(draft.keyboard_shortcuts)) {
-    errors.keyboard_shortcuts = '键盘快捷键映射格式无效。'
   }
 
   if (!isValidMcpServersJson(draft.mcp_servers_json)) {
@@ -164,31 +159,4 @@ function isValidMcpServersJson(value: string) {
   } catch {
     return false
   }
-}
-
-function isValidKeyboardShortcuts(
-  shortcuts: EditableVoiceSettings['keyboard_shortcuts'],
-) {
-  const ids = new Set<string>()
-
-  return shortcuts.every((shortcut) => {
-    if (!shortcut.id.trim() || ids.has(shortcut.id.trim())) {
-      return false
-    }
-    ids.add(shortcut.id.trim())
-
-    const triggerWords = shortcut.trigger_words.filter((value) => value.trim())
-    if (triggerWords.length === 0) {
-      return false
-    }
-
-    if (
-      shortcut.recorded_keys.length === 0 &&
-      shortcut.key_codes.length === 0
-    ) {
-      return false
-    }
-
-    return shortcut.recorded_keys.length <= 6
-  })
 }

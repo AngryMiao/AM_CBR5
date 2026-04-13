@@ -12,6 +12,8 @@ interface VoiceCapsuleProps {
   phase: VoiceCapsulePhase
   transcript?: string
   showTranscript?: boolean
+  waveformActive?: boolean
+  waveformBars?: number[]
   className?: string
 }
 
@@ -29,6 +31,8 @@ export const VoiceCapsule: FC<VoiceCapsuleProps> = ({
   phase,
   transcript = '',
   showTranscript = false,
+  waveformActive = false,
+  waveformBars,
   className = '',
 }) => {
   const config = PHASE_CONFIG[phase]
@@ -54,7 +58,7 @@ export const VoiceCapsule: FC<VoiceCapsuleProps> = ({
       <StatusIcon phase={phase} />
 
       {/* 波形动画 - 仅在聆听和转写时显示 */}
-      <Waveform active={config.showWaveform} />
+      <Waveform active={config.showWaveform && waveformActive} bars={waveformBars} />
 
       {/* 状态文字 */}
       <span className="text-sm font-medium text-white/90 tracking-tight whitespace-nowrap">

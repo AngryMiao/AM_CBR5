@@ -9,8 +9,10 @@ use logging_core::RuntimeLogEntry;
 use platform_core::PlatformDiagnostics;
 use serde::Serialize;
 use settings_core::{EditableVoiceSettings, SaveEditableVoiceSettingsInput, VoiceSettings};
+use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::audio_waveform::AudioWaveformFrame;
 use crate::app_state::{
     AppState, LlmRunOutcome, RuntimeDiagnostics, SessionFollowUp, TaskStartOutcome,
 };
@@ -178,6 +180,15 @@ pub fn install_skill_bundle(
         std::path::Path::new(&bundle_source_dir),
         &state.stored_settings(),
     )
+}
+
+#[tauri::command]
+pub fn subscribe_audio_waveform(
+    state: State<'_, AppState>,
+    window_label: String,
+    on_event: Channel<AudioWaveformFrame>,
+) -> Result<(), String> {
+    state.register_audio_waveform_listener(window_label, on_event)
 }
 
 #[tauri::command]

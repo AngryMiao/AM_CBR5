@@ -87,6 +87,7 @@ impl SettingsStore {
         next_settings.angrymiao_skill_enabled = input.angrymiao_skill_enabled;
         next_settings.keyboard_driver_path = input.keyboard_driver_path.trim().to_string();
         next_settings.keyboard_shortcuts = sanitize_keyboard_shortcuts(input.keyboard_shortcuts);
+        next_settings.control_skill_markdown = input.control_skill_markdown;
         next_settings.mcp_servers = mcp_servers;
         next_settings.normalize_code_owned_doubao_defaults();
 
