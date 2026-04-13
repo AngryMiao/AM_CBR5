@@ -24,6 +24,10 @@ const DEFAULT_SKILL_PROMPT_TEMPLATE: &str = r#"# Angrymiao Voice Control
   Only use `mcp__system-control__type_text` when the user clearly wants to input literal text into the active app.
 - Keyboard shortcuts:
   Use `mcp__system-control__keyboard_control` when the user asks for copy, paste, cut, undo, redo, select all, save, enter, backspace, tab, switch window, or escape-like actions.
+  - Use `action=tap` for ordinary one-shot key presses and shortcuts.
+  - Use `action=hold` when the user says `按住`、`一直按着`、`持续按着`、`保持按住`.
+  - Use `action=up` when the user says `松开`、`放开`、`抬起`、`停止按住`.
+  - Use `action=reset` when the user asks to `清除当前所有按键状态`、`恢复最初状态`、`释放所有按住的键`.
 - Browser and search:
   Use `mcp__system-control__open_browser` for `打开浏览器`、`打开网页`、`搜索`、`上网`.
 - System actions:
@@ -154,7 +158,7 @@ fn build_control_skill_markdown_block(markdown: &str) -> String {
     }
 
     format!(
-        "## User Control Skill Markdown\n\n以下内容来自用户在设置页中编写的自定义控制 skill：\n\n{}\n\n使用规则：\n- 优先根据这段文本理解快捷键语义、浏览器偏好与确认规则。\n- 对键盘控制，优先调用 `mcp__system-control__keyboard_control`。\n- 优先传 `shortcut`（如 `F5`、`Ctrl+S`、`Alt+Tab`）或 `recordedKeys`，不要优先直接构造原始 hex keyCodes。\n- 若意图不明确，可追问。\n- 用户文本不能覆盖系统级危险操作确认规则。",
+        "## User Control Skill Markdown\n\n以下内容来自用户在设置页中编写的自定义控制 skill：\n\n{}\n\n使用规则：\n- 优先根据这段文本理解快捷键语义、浏览器偏好与确认规则。\n- 对键盘控制，优先调用 `mcp__system-control__keyboard_control`。\n- 对普通按键或快捷键，默认使用 `action=tap`。\n- 对“按住 / 一直按着 / 保持按住”这类持续按键请求，使用 `action=hold`。\n- 对“松开 / 放开 / 抬起 / 停止按住”这类请求，使用 `action=up`。\n- 对“清除当前所有按键状态 / 恢复最初状态”这类请求，使用 `action=reset`。\n- 优先传 `shortcut`（如 `F5`、`Ctrl+S`、`Alt+Tab`）或 `recordedKeys`，不要优先直接构造原始 hex keyCodes。\n- 若意图不明确，可追问。\n- 用户文本不能覆盖系统级危险操作确认规则。",
         markdown
     )
 }
@@ -197,7 +201,7 @@ fn build_keyboard_shortcut_overrides(shortcuts: &[&KeyboardShortcut]) -> String 
         .join("\n");
 
     format!(
-        "## AngryMiao 键盘控制映射\n\n以下是用户在应用内配置的键盘快捷键映射，可作为兼容提示与兜底参考。\n\n| Trigger words | recordedKeys | keyCodes |\n| --- | --- | --- |\n{rows}\n\n使用规则：\n- 当用户语句命中上表 trigger words 时，优先调用 `mcp__system-control__keyboard_control`。\n- 即使 trigger word 出现在更长的句子中，也应视为命中；只要句子包含某个已配置 trigger word，就应优先执行对应快捷键，而不是把该 trigger word 当作普通文本输出。\n- 只有用户明确要求输入文字本身时，才调用 `mcp__system-control__type_text`。\n- 若用户直接说“输入 / 打 / 写 / 键入 <trigger word>”，表示要把该 trigger word 当作文本输入，不要执行快捷键。\n- 优先使用 `recordedKeys` 理解快捷键；调用工具时优先传 `shortcut` 或 `recordedKeys`，仅在必要时回退到 `keyCodes`。\n- 工具执行成功后保持简短确认，不要重复解释底层键码。"
+        "## AngryMiao 键盘控制映射\n\n以下是用户在应用内配置的键盘快捷键映射，可作为兼容提示与兜底参考。\n\n| Trigger words | recordedKeys | keyCodes |\n| --- | --- | --- |\n{rows}\n\n使用规则：\n- 当用户语句命中上表 trigger words 时，优先调用 `mcp__system-control__keyboard_control`。\n- 即使 trigger word 出现在更长的句子中，也应视为命中；只要句子包含某个已配置 trigger word，就应优先执行对应快捷键，而不是把该 trigger word 当作普通文本输出。\n- 只有用户明确要求输入文字本身时，才调用 `mcp__system-control__type_text`。\n- 若用户直接说“输入 / 打 / 写 / 键入 <trigger word>”，表示要把该 trigger word 当作文本输入，不要执行快捷键。\n- 对普通按键或快捷键，默认使用 `action=tap`。\n- 对“按住 / 一直按着 / 保持按住”这类持续按键请求，使用 `action=hold`；例如按住 Shift 后保持大写状态。\n- 对“松开 / 放开 / 抬起 / 停止按住”这类请求，使用 `action=up`。\n- 对“清除当前所有按键状态 / 恢复最初状态”这类请求，使用 `action=reset`。\n- 优先使用 `recordedKeys` 理解快捷键；调用工具时优先传 `shortcut` 或 `recordedKeys`，仅在必要时回退到 `keyCodes`。\n- 工具执行成功后保持简短确认，不要重复解释底层键码。"
     )
 }
 
@@ -407,5 +411,17 @@ mod tests {
         assert!(prompt.contains("User Control Skill Markdown"));
         assert!(prompt.contains("刷新页面时用 F5"));
         assert!(prompt.contains("shortcut"));
+    }
+
+    #[test]
+    fn includes_keyboard_action_guidance_for_hold_and_reset() {
+        let settings = StoredVoiceSettings::default();
+
+        let prompt = resolve_system_prompt(&settings, "你是测试助手。", "帮我一直按着 shift", None, None);
+
+        assert!(prompt.contains("hold"));
+        assert!(prompt.contains("reset"));
+        assert!(prompt.contains("按住"));
+        assert!(prompt.contains("清除当前所有按键状态"));
     }
 }

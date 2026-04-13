@@ -74,25 +74,23 @@ describe('App shell', () => {
     expect(screen.getByRole('button', { name: '关闭窗口' })).toBeInTheDocument()
   })
 
-  it('forwards titlebar dragging and window control actions to the current tauri window', () => {
+  it('uses a native tauri drag region and forwards window control actions to the current tauri window', () => {
     const windowMock = {
       label: 'main',
       hide: vi.fn(),
       close: vi.fn(),
       minimize: vi.fn(),
       toggleMaximize: vi.fn(),
-      startDragging: vi.fn(),
     } as never
     vi.mocked(getCurrentWindow).mockImplementation(() => windowMock)
 
     render(<App />)
 
-    fireEvent.mouseDown(screen.getByLabelText('窗口拖拽区'), { button: 0 })
+    expect(screen.getByLabelText('窗口拖拽区')).toHaveAttribute('data-tauri-drag-region')
     fireEvent.click(screen.getByRole('button', { name: '最小化窗口' }))
     fireEvent.click(screen.getByRole('button', { name: '切换窗口最大化' }))
     fireEvent.click(screen.getByRole('button', { name: '关闭窗口' }))
 
-    expect(windowMock.startDragging).toHaveBeenCalledTimes(1)
     expect(windowMock.minimize).toHaveBeenCalledTimes(1)
     expect(windowMock.toggleMaximize).toHaveBeenCalledTimes(1)
     expect(windowMock.close).toHaveBeenCalledTimes(1)
@@ -380,6 +378,32 @@ describe('App shell', () => {
         }),
       )
     })
+  })
+
+  it('shows settings save toast like history action tip and dismisses it after 3 seconds', async () => {
+    render(<App />)
+    const section = await openMainPanel('设置')
+    const saveButton = await section.findByRole('button', { name: '保存设置' })
+
+    vi.useFakeTimers()
+    try {
+      await act(async () => {
+        fireEvent.click(saveButton)
+        await Promise.resolve()
+      })
+
+      expect(section.getByText('设置已保存。')).toBeInTheDocument()
+      expect(section.queryByRole('button', { name: '关闭提示' })).toBeNull()
+
+      await act(async () => {
+        vi.advanceTimersByTime(3000)
+        await Promise.resolve()
+      })
+
+      expect(section.queryByText('设置已保存。')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('saves edited settings without clearing unchanged secrets', async () => {
@@ -675,7 +699,7 @@ describe('App shell', () => {
     expect(section.getByText('本地工具执行已完成。')).toBeInTheDocument()
   })
 
-  it('filters, previews, and retries history records', async () => {
+  it('shows retry success toast in history and dismisses it after 3 seconds', async () => {
     render(<App />)
 
     await act(async () => {
@@ -696,14 +720,81 @@ describe('App shell', () => {
       )
     })
 
-    fireEvent.click(section.getByRole('button', { name: '预览' }))
-    expect(await section.findByText('已预览任务 #1。')).toBeInTheDocument()
+    vi.useFakeTimers()
+    try {
+      await act(async () => {
+        fireEvent.click(section.getByRole('button', { name: /已完成 最终识别结果/ }))
+        await Promise.resolve()
+      })
 
-    fireEvent.click(section.getByRole('button', { name: '重试' }))
-    expect(await section.findByText('已开始重试任务 #1。')).toBeInTheDocument()
-    await waitFor(() => {
-      expect(section.getAllByRole('button', { name: '预览' }).length).toBeGreaterThan(1)
+      await act(async () => {
+        fireEvent.click(section.getByRole('button', { name: '重试' }))
+        await Promise.resolve()
+      })
+
+      expect(section.getByText('已开始重试任务。')).toBeInTheDocument()
+
+      await act(async () => {
+        vi.advanceTimersByTime(3000)
+        await Promise.resolve()
+      })
+
+      expect(section.queryByText('已开始重试任务。')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shows retry error toast in history and dismisses it after 3 seconds', async () => {
+    render(<App />)
+
+    await act(async () => {
+      await startMicrophoneCapture()
+      await stopMicrophoneCapture()
+      await new Promise((resolve) => setTimeout(resolve, 20))
     })
+    const section = await openMainPanel('历史记录')
+    const invokeMock = vi.mocked(invoke)
+    const originalImplementation = invokeMock.getMockImplementation()
+
+    invokeMock.mockImplementation(async (command, payload) => {
+      if (command === 'retry_history_record') {
+        throw new Error('重试历史记录失败。')
+      }
+
+      if (!originalImplementation) {
+        return null
+      }
+
+      return originalImplementation(command, payload)
+    })
+
+    vi.useFakeTimers()
+    try {
+      await act(async () => {
+        fireEvent.click(section.getByRole('button', { name: /已完成 最终识别结果/ }))
+        await Promise.resolve()
+      })
+
+      await act(async () => {
+        fireEvent.click(section.getByRole('button', { name: '重试' }))
+        await Promise.resolve()
+      })
+
+      expect(section.getByText('重试历史记录失败。')).toBeInTheDocument()
+
+      await act(async () => {
+        vi.advanceTimersByTime(3000)
+        await Promise.resolve()
+      })
+
+      expect(section.queryByText('重试历史记录失败。')).toBeNull()
+    } finally {
+      if (originalImplementation) {
+        invokeMock.mockImplementation(originalImplementation)
+      }
+      vi.useRealTimers()
+    }
   })
 
   it('filters, exports, and clears runtime logs', async () => {

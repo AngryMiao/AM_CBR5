@@ -5,9 +5,11 @@ describe('tauri desktop capability', () => {
     expect(capability.permissions).toEqual(
       expect.arrayContaining([
         'core:window:allow-close',
+        'core:window:allow-is-maximized',
+        'core:window:allow-maximize',
         'core:window:allow-minimize',
         'core:window:allow-toggle-maximize',
-        'core:window:allow-start-dragging',
+        'core:window:allow-unmaximize',
       ]),
     )
   })

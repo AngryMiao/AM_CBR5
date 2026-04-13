@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle, AlertCircle, X } from 'lucide-react'
 
 type ToastType = 'success' | 'error' | 'info'
 
@@ -11,38 +10,21 @@ type ToastProps = {
 }
 
 export function Toast({ message, type, duration = 3000, onClose }: ToastProps) {
-  const [visible, setVisible] = useState(true)
-
   useEffect(() => {
     const timer = setTimeout(() => {
-      setVisible(false)
-      setTimeout(onClose, 300) // Wait for fade out animation
+      onClose()
     }, duration)
 
     return () => clearTimeout(timer)
   }, [duration, onClose])
 
-  const handleClose = () => {
-    setVisible(false)
-    setTimeout(onClose, 300)
-  }
+  const role = type === 'error' ? 'alert' : 'status'
+  const liveRegion = type === 'error' ? 'assertive' : 'polite'
 
   return (
-    <div className={`toast-container ${visible ? 'toast-visible' : 'toast-hidden'}`}>
+    <div className="toast-container" aria-live={liveRegion}>
       <div className={`toast-content toast-${type}`}>
-        {type === 'success' ? (
-          <CheckCircle className="toast-icon" />
-        ) : type === 'error' ? (
-          <AlertCircle className="toast-icon" />
-        ) : null}
-        <span className="toast-message">{message}</span>
-        <button
-          className="toast-close"
-          onClick={handleClose}
-          aria-label="关闭提示"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <span className="toast-message" role={role}>{message}</span>
       </div>
     </div>
   )

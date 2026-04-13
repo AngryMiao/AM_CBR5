@@ -6,10 +6,15 @@ import { executeSystemCommand } from './tools/system'
 
 const { resolveKeyboardRequest } = require('./tools/shortcut-mapping.cjs') as {
   resolveKeyboardRequest: (request: {
+    action?: 'tap' | 'down' | 'up' | 'hold' | 'reset'
     shortcut?: string
     recordedKeys?: string[]
     keyCodes?: string[]
-  }) => { recordedKeys: string[]; keyCodes: string[] }
+  }) => {
+    action: 'tap' | 'down' | 'up' | 'hold' | 'reset'
+    recordedKeys: string[]
+    keyCodes: string[]
+  }
 }
 
 const DRIVER_PATH = process.env.KEYBOARD_DRIVER_PATH || ''
@@ -50,6 +55,10 @@ server.registerTool(
       '通过 driver.exe 执行键盘控制操作，如按下快捷键、组合键等。优先传 shortcut 或 recordedKeys，必要时兼容 keyCodes。',
     inputSchema: z
       .object({
+        action: z
+          .enum(['tap', 'down', 'up', 'hold', 'reset'])
+          .optional()
+          .describe('键盘动作：tap=按下后抬起，down=仅按下，up=释放，hold=持续按住，reset=清除当前所有托管按键状态'),
         shortcut: z
           .string()
           .optional()
@@ -65,17 +74,19 @@ server.registerTool(
       })
       .refine(
         (value) =>
+          value.action === 'reset' ||
           Boolean(
             value.shortcut?.trim() ||
               value.recordedKeys?.length ||
               value.keyCodes?.length
           ),
         {
-          message: 'keyboard_control 至少需要 shortcut、recordedKeys 或 keyCodes 之一。',
+          message:
+            'keyboard_control 至少需要 shortcut、recordedKeys 或 keyCodes 之一；reset 动作除外。',
         }
       ),
   },
-  async ({ shortcut, recordedKeys, keyCodes }) => {
+  async ({ action, shortcut, recordedKeys, keyCodes }) => {
     if (!DRIVER_PATH) {
       return {
         content: [
@@ -88,9 +99,13 @@ server.registerTool(
       }
     }
 
-    let resolved: { recordedKeys: string[]; keyCodes: string[] }
+    let resolved: {
+      action: 'tap' | 'down' | 'up' | 'hold' | 'reset'
+      recordedKeys: string[]
+      keyCodes: string[]
+    }
     try {
-      resolved = resolveKeyboardRequest({ shortcut, recordedKeys, keyCodes })
+      resolved = resolveKeyboardRequest({ action, shortcut, recordedKeys, keyCodes })
     } catch (error) {
       return {
         content: [
@@ -103,7 +118,7 @@ server.registerTool(
       }
     }
 
-    const result = await keyboardControl(DRIVER_PATH, resolved.keyCodes)
+    const result = await keyboardControl(DRIVER_PATH, resolved)
     assertExecutionSuccess(result)
     return {
       content: [

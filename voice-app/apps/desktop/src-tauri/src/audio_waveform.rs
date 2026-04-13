@@ -152,8 +152,7 @@ impl AudioWaveformStream {
             return 0;
         }
 
-        let average =
-            self.pending_level_sum as f32 / self.pending_level_count as f32;
+        let average = self.pending_level_sum as f32 / self.pending_level_count as f32;
         let blended = (average * AUDIO_WAVEFORM_AVERAGE_WEIGHT)
             + (f32::from(self.pending_level_peak) * AUDIO_WAVEFORM_PEAK_WEIGHT);
 
@@ -225,7 +224,10 @@ mod tests {
         accumulator.push_samples(&[0, 10_000, -10_000, 8_000]);
         accumulator.clear();
 
-        assert_eq!(accumulator.frame(false).bars, vec![0; AUDIO_WAVEFORM_BAR_COUNT]);
+        assert_eq!(
+            accumulator.frame(false).bars,
+            vec![0; AUDIO_WAVEFORM_BAR_COUNT]
+        );
     }
 
     #[test]
@@ -268,10 +270,7 @@ mod tests {
             .push_samples(&[0, 6_000, -6_000, 4_000])
             .expect("first chunk should emit an initial frame");
 
-        assert_eq!(
-            first.bars.iter().filter(|value| **value > 0).count(),
-            1
-        );
+        assert_eq!(first.bars.iter().filter(|value| **value > 0).count(), 1);
 
         let second = stream.push_samples(&[0, 12_000, -12_000, 9_000]);
         assert!(second.is_none());
@@ -283,10 +282,7 @@ mod tests {
             .push_samples(&[0, 14_000, -14_000, 10_000])
             .expect("elapsed interval should emit a batched frame");
 
-        assert_eq!(
-            third.bars.iter().filter(|value| **value > 0).count(),
-            2
-        );
+        assert_eq!(third.bars.iter().filter(|value| **value > 0).count(), 2);
         assert!(third.bars[7] > third.bars[6]);
     }
 }

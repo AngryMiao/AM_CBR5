@@ -374,16 +374,22 @@ export async function minimizeCurrentWindow() {
 export async function toggleCurrentWindowMaximize() {
   const currentWindow = getCurrentWindow()
 
+  if (
+    typeof currentWindow.isMaximized === 'function'
+    && typeof currentWindow.maximize === 'function'
+    && typeof currentWindow.unmaximize === 'function'
+  ) {
+    if (await currentWindow.isMaximized()) {
+      await currentWindow.unmaximize()
+      return
+    }
+
+    await currentWindow.maximize()
+    return
+  }
+
   if (typeof currentWindow.toggleMaximize === 'function') {
     await currentWindow.toggleMaximize()
-  }
-}
-
-export async function startCurrentWindowDragging() {
-  const currentWindow = getCurrentWindow()
-
-  if (typeof currentWindow.startDragging === 'function') {
-    await currentWindow.startDragging()
   }
 }
 

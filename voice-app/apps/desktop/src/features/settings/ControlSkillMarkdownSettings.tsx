@@ -9,8 +9,21 @@ type ControlSkillMarkdownSettingsProps = {
 const DEFAULT_CONTROL_SKILL_EXAMPLE = `# 我的控制技能
 
 刷新页面时用 F5
+复制时用 Ctrl+C
+粘贴时用 Ctrl+V
+剪切时用 Ctrl+X
+撤销时用 Ctrl+Z
+重做时用 Ctrl+Y
+全选时用 Ctrl+A
 保存时用 Ctrl+S
+回车时用 Enter
+删除时用 Backspace
+Tab 时用 Tab
 切换窗口时用 Alt+Tab
+取消时用 Escape
+
+按住 Shift 时持续按住 Shift，直到我说松开 Shift。
+清除当前所有按键状态时，释放所有正在按住的键并恢复初始状态。
 
 如果涉及危险操作，先征求确认。
 打开网页时优先使用 Edge。`

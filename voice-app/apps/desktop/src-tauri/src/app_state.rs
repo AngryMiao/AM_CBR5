@@ -9,8 +9,8 @@ use asr_core::{
     DoubaoAsrConfig, DoubaoSessionEvent, DoubaoStreamingSession, MicrophoneRecordingSession,
 };
 use automation_core::{
-    GlobalHotkey, HotkeyModeAction, HotkeyModeController, RuntimeHotkeyPhase,
-    SystemToolExecutor, ToolExecutionRuntimePhase, ToolExecutor, VoiceInputMode,
+    GlobalHotkey, HotkeyModeAction, HotkeyModeController, RuntimeHotkeyPhase, SystemToolExecutor,
+    ToolExecutionRuntimePhase, ToolExecutor, VoiceInputMode,
 };
 use history_core::{
     load_history_records, query_history_records, save_history_records, HistoryQuery, HistoryRecord,
@@ -69,6 +69,7 @@ pub(crate) struct TaskStartOutcome {
     pub operation_id: u64,
     pub snapshot: RuntimeSnapshot,
     pub events: Option<mpsc::Receiver<DoubaoSessionEvent>>,
+    pub follow_up: Option<SessionFollowUp>,
 }
 
 pub(crate) enum HotkeyReleaseOutcome {
@@ -510,6 +511,7 @@ impl AppState {
             operation_id,
             snapshot,
             events: None,
+            follow_up: Some(SessionFollowUp::RunLlm(transcript)),
         })
     }
 
@@ -561,9 +563,9 @@ impl AppState {
         let phase = self.runtime_snapshot().phase;
 
         match phase.as_str() {
-            "待命中" | "已完成" | "识别失败" => {
-                self.start_voice_task_for_mode(VoiceInputMode::Agent).map(Some)
-            }
+            "待命中" | "已完成" | "识别失败" => self
+                .start_voice_task_for_mode(VoiceInputMode::Agent)
+                .map(Some),
             _ => Ok(None),
         }
     }
@@ -581,9 +583,9 @@ impl AppState {
         };
 
         match decision {
-            HotkeyModeAction::StartAgentListening => {
-                self.start_voice_task_for_mode(VoiceInputMode::Agent).map(Some)
-            }
+            HotkeyModeAction::StartAgentListening => self
+                .start_voice_task_for_mode(VoiceInputMode::Agent)
+                .map(Some),
             HotkeyModeAction::StartTranscriptionListening => self
                 .start_voice_task_for_mode(VoiceInputMode::Transcription)
                 .map(Some),
@@ -616,9 +618,9 @@ impl AppState {
         };
 
         match decision {
-            HotkeyModeAction::StartAgentListening => {
-                self.start_voice_task_for_mode(VoiceInputMode::Agent).map(Some)
-            }
+            HotkeyModeAction::StartAgentListening => self
+                .start_voice_task_for_mode(VoiceInputMode::Agent)
+                .map(Some),
             HotkeyModeAction::StartTranscriptionListening => self
                 .start_voice_task_for_mode(VoiceInputMode::Transcription)
                 .map(Some),
@@ -653,11 +655,11 @@ impl AppState {
                 .start_voice_task_for_mode(VoiceInputMode::Transcription)
                 .map(HotkeyReleaseOutcome::TaskStarted)
                 .map(Some),
-            HotkeyModeAction::FinishAgentListening | HotkeyModeAction::StopTranscriptionAndSubmit => {
-                self.finish_voice_task()
-                    .map(HotkeyReleaseOutcome::Snapshot)
-                    .map(Some)
-            }
+            HotkeyModeAction::FinishAgentListening
+            | HotkeyModeAction::StopTranscriptionAndSubmit => self
+                .finish_voice_task()
+                .map(HotkeyReleaseOutcome::Snapshot)
+                .map(Some),
             HotkeyModeAction::CancelAgentListening => {
                 let snapshot = self.cancel_current_operation("已取消当前语音任务。");
                 Ok(Some(HotkeyReleaseOutcome::Snapshot(snapshot)))
@@ -699,6 +701,7 @@ impl AppState {
                     operation_id: 0,
                     snapshot: self.fail_voice_task(message),
                     events: None,
+                    follow_up: None,
                 },
                 input_mode,
             ));
@@ -712,6 +715,7 @@ impl AppState {
                         operation_id: 0,
                         snapshot: self.fail_voice_task(message),
                         events: None,
+                        follow_up: None,
                     },
                     input_mode,
                 ));
@@ -728,6 +732,7 @@ impl AppState {
                         operation_id: 0,
                         snapshot: self.fail_voice_task(message),
                         events: None,
+                        follow_up: None,
                     },
                     input_mode,
                 ));
@@ -842,10 +847,7 @@ impl AppState {
             .snapshot
     }
 
-    pub fn arm_transcription_silence_timeout(
-        &self,
-        operation_id: u64,
-    ) -> Option<(u64, u64)> {
+    pub fn arm_transcription_silence_timeout(&self, operation_id: u64) -> Option<(u64, u64)> {
         let mut runtime = self.runtime.lock().expect("runtime store lock poisoned");
         if runtime.active_operation_id != Some(operation_id)
             || runtime.active_input_mode != VoiceInputMode::Transcription
@@ -859,8 +861,7 @@ impl AppState {
             return None;
         }
 
-        runtime.transcription_silence_token =
-            runtime.transcription_silence_token.saturating_add(1);
+        runtime.transcription_silence_token = runtime.transcription_silence_token.saturating_add(1);
         Some((runtime.transcription_silence_token, timeout_ms))
     }
 
@@ -1000,16 +1001,46 @@ impl AppState {
         let mut results = Vec::with_capacity(requests.len());
 
         for request in &requests {
+            self.push_info_log(format!(
+                "开始执行 {}，参数：{}。",
+                summarize_tool_request_label(request),
+                summarize_tool_request_arguments(request)
+            ));
             match request {
                 LlmToolRequest::Local(local_request) => {
                     if let Err(message) = executor.execute(local_request) {
+                        self.push_error_log(format!(
+                            "{} 执行失败，参数：{}。错误：{message}",
+                            summarize_tool_request_label(request),
+                            summarize_tool_request_arguments(request)
+                        ));
                         return self.fail_tool_execution(operation_id, message);
                     }
-                    results.push(local_request.success_message().to_string());
+                    let success_message = local_request.success_message().to_string();
+                    self.push_info_log(format!(
+                        "{} 执行成功：{}",
+                        summarize_tool_request_label(request),
+                        success_message
+                    ));
+                    results.push(success_message);
                 }
                 LlmToolRequest::Mcp(call) => match self.execute_mcp_tool_request(call) {
-                    Ok(result) => results.push(result.display_text),
-                    Err(message) => return self.fail_tool_execution(operation_id, message),
+                    Ok(result) => {
+                        self.push_info_log(format!(
+                            "{} 执行成功：{}",
+                            summarize_tool_request_label(request),
+                            result.display_text
+                        ));
+                        results.push(result.display_text);
+                    }
+                    Err(message) => {
+                        self.push_error_log(format!(
+                            "{} 执行失败，参数：{}。错误：{message}",
+                            summarize_tool_request_label(request),
+                            summarize_tool_request_arguments(request)
+                        ));
+                        return self.fail_tool_execution(operation_id, message);
+                    }
                 },
             }
         }
@@ -1047,6 +1078,10 @@ impl AppState {
         runtime.logs.push(RuntimeLogEntry::info(format!(
             "LLM 已返回 {} 个工具动作，正在进入本地执行。",
             requests.len()
+        )));
+        runtime.logs.push(RuntimeLogEntry::info(format!(
+            "LLM 工具计划：{}",
+            summarize_tool_request_plan(requests)
         )));
 
         Some(runtime.machine.snapshot())
@@ -1241,6 +1276,7 @@ impl AppState {
                 operation_id: 0,
                 snapshot: self.fail_voice_task(message),
                 events: None,
+                follow_up: None,
             });
         }
 
@@ -1263,6 +1299,7 @@ impl AppState {
             operation_id,
             snapshot,
             events: None,
+            follow_up: None,
         })
     }
 
@@ -1297,6 +1334,7 @@ impl AppState {
                     operation_id: 0,
                     snapshot: self.fail_voice_task(message),
                     events: None,
+                    follow_up: None,
                 });
             }
         };
@@ -1313,6 +1351,7 @@ impl AppState {
                     operation_id: 0,
                     snapshot: self.fail_voice_task(cause.to_string()),
                     events: None,
+                    follow_up: None,
                 });
             }
         };
@@ -1334,6 +1373,7 @@ impl AppState {
                         operation_id: 0,
                         snapshot: self.fail_voice_task(format!("启动麦克风失败: {cause}")),
                         events: None,
+                        follow_up: None,
                     });
                 }
             };
@@ -1368,6 +1408,7 @@ impl AppState {
             operation_id,
             snapshot,
             events: Some(events),
+            follow_up: None,
         })
     }
 
@@ -1419,7 +1460,8 @@ impl AppState {
             let record = runtime
                 .machine
                 .complete_error_with("", "识别失败", message.clone());
-            let snapshot = snapshot_with_mode(runtime.machine.snapshot(), runtime.active_input_mode);
+            let snapshot =
+                snapshot_with_mode(runtime.machine.snapshot(), runtime.active_input_mode);
 
             if runtime.stored_settings.history_enabled {
                 runtime.history.push(record);
@@ -1860,6 +1902,14 @@ fn describe_tool_execution_detail(requests: &[LlmToolRequest]) -> String {
     }
 }
 
+fn summarize_tool_request_plan(requests: &[LlmToolRequest]) -> String {
+    requests
+        .iter()
+        .map(summarize_tool_request_brief)
+        .collect::<Vec<_>>()
+        .join("；")
+}
+
 fn summarize_tool_requests(requests: &[LlmToolRequest], results: &[String]) -> String {
     if requests.len() == 1 {
         return results
@@ -1885,6 +1935,165 @@ fn tool_request_progress_detail(request: &LlmToolRequest) -> String {
         LlmToolRequest::Mcp(call) => {
             format!("正在执行 MCP 工具 {}。", call.tool_name)
         }
+    }
+}
+
+fn summarize_tool_request_brief(request: &LlmToolRequest) -> String {
+    match request {
+        LlmToolRequest::Local(local_request) => match local_request {
+            automation_core::ToolExecutionRequest::TypeText { text } => {
+                format!("Local type_text(text=\"{}\")", summarize_text_for_log(text))
+            }
+            automation_core::ToolExecutionRequest::OpenUrl { url } => {
+                format!("Local open_url(url={})", summarize_url_for_log(url))
+            }
+        },
+        LlmToolRequest::Mcp(call) => format!(
+            "MCP {}({})",
+            call.tool_name,
+            summarize_mcp_arguments(&call.arguments)
+        ),
+    }
+}
+
+fn summarize_tool_request_label(request: &LlmToolRequest) -> String {
+    match request {
+        LlmToolRequest::Local(local_request) => match local_request {
+            automation_core::ToolExecutionRequest::TypeText { .. } => {
+                "本地工具 type_text".to_string()
+            }
+            automation_core::ToolExecutionRequest::OpenUrl { .. } => {
+                "本地工具 open_url".to_string()
+            }
+        },
+        LlmToolRequest::Mcp(call) => format!("MCP 工具 {}", call.tool_name),
+    }
+}
+
+fn summarize_tool_request_arguments(request: &LlmToolRequest) -> String {
+    match request {
+        LlmToolRequest::Local(local_request) => match local_request {
+            automation_core::ToolExecutionRequest::TypeText { text } => {
+                format!("text=\"{}\"", summarize_text_for_log(text))
+            }
+            automation_core::ToolExecutionRequest::OpenUrl { url } => {
+                format!("url={}", summarize_url_for_log(url))
+            }
+        },
+        LlmToolRequest::Mcp(call) => summarize_mcp_arguments(&call.arguments),
+    }
+}
+
+fn summarize_mcp_arguments(arguments: &serde_json::Value) -> String {
+    let Some(object) = arguments.as_object() else {
+        return summarize_json_value(arguments);
+    };
+
+    let mut keys = object.keys().cloned().collect::<Vec<_>>();
+    keys.sort();
+    let parts = keys
+        .into_iter()
+        .filter_map(|key| {
+            object
+                .get(&key)
+                .map(|value| summarize_named_argument(&key, value))
+        })
+        .collect::<Vec<_>>();
+
+    if parts.is_empty() {
+        "无参数".to_string()
+    } else {
+        parts.join(", ")
+    }
+}
+
+fn summarize_named_argument(name: &str, value: &serde_json::Value) -> String {
+    match (name, value) {
+        ("text", serde_json::Value::String(text)) => {
+            format!("text=\"{}\"", summarize_text_for_log(text))
+        }
+        ("url", serde_json::Value::String(url)) => {
+            format!("url={}", summarize_url_for_log(url))
+        }
+        ("shortcut", serde_json::Value::String(shortcut)) => {
+            format!("shortcut={}", summarize_short_string(shortcut, 40))
+        }
+        ("browser", serde_json::Value::String(browser)) => {
+            format!("browser={}", summarize_short_string(browser, 20))
+        }
+        ("appName", serde_json::Value::String(app_name)) => {
+            format!("appName=\"{}\"", summarize_short_string(app_name, 40))
+        }
+        ("recordedKeys", serde_json::Value::Array(values)) => {
+            format!("recordedKeys={}", summarize_string_array(values, 6))
+        }
+        ("keyCodes", serde_json::Value::Array(values)) => {
+            format!("keyCodes={}", summarize_key_codes(values))
+        }
+        ("confirmed", serde_json::Value::Bool(value)) => format!("confirmed={value}"),
+        _ => format!("{name}={}", summarize_json_value(value)),
+    }
+}
+
+fn summarize_key_codes(values: &[serde_json::Value]) -> String {
+    if values.is_empty() {
+        return "[]".to_string();
+    }
+
+    let preview = values
+        .iter()
+        .take(3)
+        .map(summarize_json_value)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let suffix = if values.len() > 3 { ", ..." } else { "" };
+
+    format!("len={}, preview=[{}{}]", values.len(), preview, suffix)
+}
+
+fn summarize_string_array(values: &[serde_json::Value], max_items: usize) -> String {
+    let preview = values
+        .iter()
+        .take(max_items)
+        .map(summarize_json_value)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let suffix = if values.len() > max_items {
+        ", ..."
+    } else {
+        ""
+    };
+
+    format!("[{}{}]", preview, suffix)
+}
+
+fn summarize_json_value(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(text) => summarize_short_string(text, 60),
+        serde_json::Value::Number(number) => number.to_string(),
+        serde_json::Value::Bool(value) => value.to_string(),
+        serde_json::Value::Null => "null".to_string(),
+        _ => summarize_short_string(&value.to_string(), 60),
+    }
+}
+
+fn summarize_url_for_log(url: &str) -> String {
+    summarize_short_string(url, 120)
+}
+
+fn summarize_text_for_log(text: &str) -> String {
+    summarize_short_string(text, 80)
+}
+
+fn summarize_short_string(value: &str, max_len: usize) -> String {
+    let compact = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut chars = compact.chars();
+    let truncated = chars.by_ref().take(max_len).collect::<String>();
+
+    if chars.next().is_some() {
+        format!("{truncated}...")
+    } else {
+        truncated
     }
 }
 
@@ -2083,7 +2292,7 @@ mod tests {
     use serde_json::json;
     use settings_core::{EditableSecretValueInput, SaveEditableVoiceSettingsInput};
 
-    use super::{AppState, HotkeyReleaseOutcome};
+    use super::{AppState, HotkeyReleaseOutcome, SessionFollowUp};
 
     fn expect_release_snapshot(
         outcome: Option<HotkeyReleaseOutcome>,
@@ -2160,7 +2369,8 @@ mod tests {
         let snapshot = state
             .handle_hotkey_released(1_220)
             .expect("hotkey release should not fail");
-        let snapshot = expect_release_snapshot(snapshot, "listening runtime should react to hotkey release");
+        let snapshot =
+            expect_release_snapshot(snapshot, "listening runtime should react to hotkey release");
         assert_eq!(snapshot.phase, "正在识别");
     }
 
@@ -2207,7 +2417,10 @@ mod tests {
                 assert_eq!(outcome.snapshot.input_mode, "transcription");
             }
             Some(HotkeyReleaseOutcome::Snapshot(snapshot)) => {
-                panic!("expected transcription task start, got snapshot phase {}", snapshot.phase);
+                panic!(
+                    "expected transcription task start, got snapshot phase {}",
+                    snapshot.phase
+                );
             }
             None => panic!("second tap release should start transcription"),
         }
@@ -2233,7 +2446,10 @@ mod tests {
         let released = state
             .handle_hotkey_released(1_190)
             .expect("second tap release should not fail");
-        assert!(matches!(released, Some(HotkeyReleaseOutcome::TaskStarted(_))));
+        assert!(matches!(
+            released,
+            Some(HotkeyReleaseOutcome::TaskStarted(_))
+        ));
 
         let duplicate_release = state
             .handle_hotkey_released(1_210)
@@ -2261,7 +2477,10 @@ mod tests {
         let released = state
             .handle_hotkey_released(1_190)
             .expect("second tap release should not fail");
-        assert!(matches!(released, Some(HotkeyReleaseOutcome::TaskStarted(_))));
+        assert!(matches!(
+            released,
+            Some(HotkeyReleaseOutcome::TaskStarted(_))
+        ));
 
         let delayed_release = state
             .handle_hotkey_released(1_500)
@@ -2298,7 +2517,8 @@ mod tests {
         let released = state
             .handle_hotkey_released(1_420)
             .expect("stop tap release should not fail");
-        let snapshot = expect_release_snapshot(released, "transcription tap should stop and submit");
+        let snapshot =
+            expect_release_snapshot(released, "transcription tap should stop and submit");
 
         assert_eq!(snapshot.phase, "正在识别");
         assert_eq!(snapshot.input_mode, "transcription");
@@ -2326,7 +2546,8 @@ mod tests {
         let snapshot = state
             .handle_hotkey_released(5_100)
             .expect("result hotkey release should not fail");
-        let snapshot = expect_release_snapshot(snapshot, "short tap should dismiss the visible result");
+        let snapshot =
+            expect_release_snapshot(snapshot, "short tap should dismiss the visible result");
 
         assert_eq!(snapshot.phase, "待命中");
         assert_eq!(state.history_records().len(), 1);
@@ -2609,6 +2830,38 @@ mod tests {
     }
 
     #[test]
+    fn llm_tool_execution_success_logs_local_tool_details() {
+        let state = AppState::for_test();
+        state.begin_hotkey_task().expect("task should start");
+        state
+            .finish_hotkey_task()
+            .expect("task should finish listening");
+        state.apply_session_event_for_test(DoubaoSessionEvent::Completed {
+            text: "请打开 Rust 官网".to_string(),
+        });
+
+        let _ = state.complete_llm_tool_requests_for_test(vec![LlmToolRequest::Local(
+            automation_core::ToolExecutionRequest::open_url("https://www.rust-lang.org"),
+        )]);
+
+        let logs = state.runtime_logs();
+        assert!(logs.iter().any(|entry| {
+            entry.message.contains("LLM 工具计划")
+                && entry.message.contains("Local open_url")
+                && entry.message.contains("https://www.rust-lang.org")
+        }));
+        assert!(logs.iter().any(|entry| {
+            entry.message.contains("开始执行")
+                && entry.message.contains("本地工具 open_url")
+                && entry.message.contains("https://www.rust-lang.org")
+        }));
+        assert!(logs.iter().any(|entry| {
+            entry.message.contains("本地工具 open_url 执行成功")
+                && entry.message.contains("已打开链接。")
+        }));
+    }
+
+    #[test]
     fn llm_tool_execution_failure_enters_error_and_preserves_transcript() {
         let state = AppState::with_failing_tool_executor_for_test("输入控制不可用。");
         state.begin_hotkey_task().expect("task should start");
@@ -2627,6 +2880,33 @@ mod tests {
         assert_eq!(snapshot.transcript, "输入你好");
         assert_eq!(snapshot.result, "工具执行失败");
         assert_eq!(snapshot.detail, "输入控制不可用。");
+    }
+
+    #[test]
+    fn llm_tool_execution_failure_logs_tool_details() {
+        let state = AppState::with_failing_tool_executor_for_test("输入控制不可用。");
+        state.begin_hotkey_task().expect("task should start");
+        state
+            .finish_hotkey_task()
+            .expect("task should finish listening");
+        state.apply_session_event_for_test(DoubaoSessionEvent::Completed {
+            text: "输入你好".to_string(),
+        });
+
+        let _ = state.complete_llm_tool_requests_for_test(vec![LlmToolRequest::Local(
+            automation_core::ToolExecutionRequest::type_text("你好"),
+        )]);
+
+        let logs = state.runtime_logs();
+        assert!(logs.iter().any(|entry| {
+            entry.message.contains("开始执行")
+                && entry.message.contains("本地工具 type_text")
+                && entry.message.contains("text=\"你好\"")
+        }));
+        assert!(logs.iter().any(|entry| {
+            entry.message.contains("本地工具 type_text 执行失败")
+                && entry.message.contains("输入控制不可用。")
+        }));
     }
 
     #[test]
@@ -2651,6 +2931,39 @@ mod tests {
         assert_eq!(snapshot.transcript, "请通过 MCP 输出你好");
         assert_eq!(snapshot.result, "MCP 已输出文本。");
         assert_eq!(snapshot.detail, "本地工具执行已完成。");
+    }
+
+    #[test]
+    fn llm_mcp_tool_execution_success_logs_tool_name_and_arguments() {
+        let state = AppState::with_mcp_for_test();
+        state.begin_hotkey_task().expect("task should start");
+        state
+            .finish_hotkey_task()
+            .expect("task should finish listening");
+        state.apply_session_event_for_test(DoubaoSessionEvent::Completed {
+            text: "帮我按 F5".to_string(),
+        });
+
+        let _ = state.complete_llm_tool_requests_for_test(vec![LlmToolRequest::Mcp(McpToolCall {
+            server_id: "system-control".to_string(),
+            tool_name: "keyboard_control".to_string(),
+            arguments: json!({ "shortcut": "F5" }),
+        })]);
+
+        let logs = state.runtime_logs();
+        assert!(logs.iter().any(|entry| {
+            entry.message.contains("LLM 工具计划")
+                && entry.message.contains("MCP keyboard_control")
+                && entry.message.contains("shortcut=F5")
+        }));
+        assert!(logs.iter().any(|entry| {
+            entry.message.contains("开始执行 MCP 工具 keyboard_control")
+                && entry.message.contains("shortcut=F5")
+        }));
+        assert!(logs.iter().any(|entry| {
+            entry.message.contains("MCP 工具 keyboard_control 执行成功")
+                && entry.message.contains("MCP 已输出文本。")
+        }));
     }
 
     #[test]
@@ -2969,6 +3282,46 @@ mod tests {
 
         state.clear_runtime_logs();
         assert!(state.runtime_logs().is_empty());
+    }
+
+    #[test]
+    fn retry_history_record_exposes_run_llm_follow_up_for_command_dispatch() {
+        let state = AppState::for_test();
+        let history_path = temp_history_path("history-retry-follow-up");
+        state
+            .configure_history_store(history_path)
+            .expect("history store should configure");
+
+        state.begin_hotkey_task().expect("task should start");
+        state
+            .finish_hotkey_task()
+            .expect("task should finish listening");
+        state.apply_session_event_for_test(DoubaoSessionEvent::Completed {
+            text: "帮我总结今天会议".to_string(),
+        });
+        state.complete_llm_generation_for_test("会议总结完成".to_string());
+
+        let record_id = state
+            .history_records()
+            .last()
+            .expect("history should contain completed task")
+            .id;
+        let retry = state
+            .retry_history_record(record_id)
+            .expect("retry should start generating");
+
+        assert_eq!(retry.snapshot.phase, "正在生成");
+        match retry.follow_up {
+            Some(SessionFollowUp::RunLlm(transcript)) => {
+                assert_eq!(transcript, "帮我总结今天会议");
+            }
+            Some(SessionFollowUp::CommitTranscription(_)) => {
+                panic!("retry should continue into llm generation");
+            }
+            None => {
+                panic!("retry should expose llm follow-up");
+            }
+        }
     }
 
     fn temp_history_path(case_name: &str) -> PathBuf {

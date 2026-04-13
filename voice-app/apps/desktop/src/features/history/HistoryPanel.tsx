@@ -20,13 +20,32 @@ import {
   History,
 } from 'lucide-react'
 
+type HistoryToast = {
+  kind: 'success' | 'error'
+  message: string
+}
+
 export function HistoryPanel() {
   const [history, setHistory] = useState<HistoryRecord[]>([])
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [feedback, setFeedback] = useState<string | null>(null)
+  const [pageError, setPageError] = useState<string | null>(null)
+  const [toast, setToast] = useState<HistoryToast | null>(null)
   const orderedHistory = [...history].sort((left, right) => right.id - left.id)
+
+  useEffect(() => {
+    if (!toast) {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      setToast(null)
+    }, 3000)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [toast])
 
   useEffect(() => {
     let disposed = false
@@ -36,10 +55,11 @@ export function HistoryPanel() {
         const nextHistory = await queryHistoryRecords(keyword || undefined, statusFilter || undefined)
         if (!disposed) {
           setHistory(nextHistory)
+          setPageError(null)
         }
       } catch (cause: unknown) {
         if (!disposed) {
-          setError(cause instanceof Error ? cause.message : '加载历史记录失败。')
+          setPageError(cause instanceof Error ? cause.message : '加载历史记录失败。')
         }
       }
     }
@@ -58,21 +78,29 @@ export function HistoryPanel() {
 
   async function handlePreview(recordId: number) {
     try {
-      setError(null)
+      setPageError(null)
       await previewHistoryRecord(recordId)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '预览历史记录失败。')
+      setToast({
+        kind: 'error',
+        message: cause instanceof Error ? cause.message : '预览历史记录失败。',
+      })
     }
   }
 
   async function handleRetry(recordId: number) {
     try {
-      setError(null)
-      setFeedback(null)
+      setPageError(null)
       await retryHistoryRecord(recordId)
-      setFeedback(`已开始重试任务。`)
+      setToast({
+        kind: 'success',
+        message: '已开始重试任务。',
+      })
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '重试历史记录失败。')
+      setToast({
+        kind: 'error',
+        message: cause instanceof Error ? cause.message : '重试历史记录失败。',
+      })
     }
   }
 
@@ -107,6 +135,17 @@ export function HistoryPanel() {
 
   return (
     <section className="history-page">
+      {toast ? (
+        <div className="history-toast-layer" aria-live={toast.kind === 'error' ? 'assertive' : 'polite'}>
+          <div
+            className={`history-feedback history-feedback-floating history-feedback-${toast.kind}`}
+            role={toast.kind === 'error' ? 'alert' : 'status'}
+          >
+            {toast.message}
+          </div>
+        </div>
+      ) : null}
+
       {/* Sticky header with title and filters */}
       <header className="history-page-header">
         <div className="history-header-content">
@@ -160,16 +199,9 @@ export function HistoryPanel() {
         </div>
       </header>
 
-      {/* Feedback messages */}
-      {feedback ? (
-        <div className="history-feedback history-feedback-success" role="status">
-          {feedback}
-        </div>
-      ) : null}
-
-      {error ? (
+      {pageError ? (
         <div className="history-feedback history-feedback-error" role="alert">
-          {error}
+          {pageError}
         </div>
       ) : null}
 

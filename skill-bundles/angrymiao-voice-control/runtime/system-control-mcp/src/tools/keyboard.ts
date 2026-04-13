@@ -1,5 +1,45 @@
 import { execSync, spawn, spawnSync } from 'child_process'
 import { isMacOS, isWindows } from '../utils/platform'
+const { ensureKeyboardDriverWorkingDirectory } = require('./driver-runtime.cjs') as {
+  ensureKeyboardDriverWorkingDirectory: () => string
+}
+const {
+  clearKeyboardHeldKeys,
+  loadKeyboardHeldKeys,
+  saveKeyboardHeldKeys,
+} = require('./driver-runtime.cjs') as {
+  clearKeyboardHeldKeys: () => void
+  loadKeyboardHeldKeys: () => string[]
+  saveKeyboardHeldKeys: (keys: string[]) => void
+}
+const { planManagedKeyboardAction } = require('./managed-keys.cjs') as {
+  planManagedKeyboardAction: (request: {
+    action: KeyboardControlAction
+    recordedKeys: string[]
+    heldKeys: string[]
+  }) => {
+    effectiveAction: KeyboardControlAction
+    effectiveRecordedKeys: string[]
+    nextHeldKeys: string[]
+    noop: boolean
+  }
+}
+const { resolveKeyboardRequest } = require('./shortcut-mapping.cjs') as {
+  resolveKeyboardRequest: (request: {
+    action?: KeyboardControlAction
+    shortcut?: string
+    recordedKeys?: string[]
+    keyCodes?: string[]
+  }) => { action: KeyboardControlAction; recordedKeys: string[]; keyCodes: string[] }
+}
+
+type KeyboardControlAction = 'tap' | 'down' | 'up' | 'hold' | 'reset'
+
+type KeyboardControlRequest = {
+  action: KeyboardControlAction
+  recordedKeys: string[]
+  keyCodes: string[]
+}
 
 function runWindowsPowerShell(script: string) {
   const encodedCommand = Buffer.from(script, 'utf16le').toString('base64')
@@ -98,11 +138,36 @@ export async function typeText(text: string): Promise<{ success: boolean; messag
 
 export async function keyboardControl(
   driverPath: string,
-  keyCodes: string[]
+  request: KeyboardControlRequest
 ): Promise<{ success: boolean; message: string; output?: string }> {
-  const normalizedKeyCodes = keyCodes
+  const action = request.action || 'tap'
+  const normalizedRecordedKeys = request.recordedKeys
+    .map((key) => key.trim())
+    .filter(Boolean)
+  let normalizedKeyCodes = request.keyCodes
     .map((keyCode) => keyCode.trim())
     .filter(Boolean)
+  let nextHeldKeys = loadKeyboardHeldKeys()
+
+  if (action === 'hold' || action === 'up' || action === 'reset') {
+    const plan = planManagedKeyboardAction({
+      action,
+      recordedKeys: normalizedRecordedKeys,
+      heldKeys: nextHeldKeys,
+    })
+    nextHeldKeys = plan.nextHeldKeys
+
+    if (plan.noop) {
+      persistKeyboardHeldKeys(nextHeldKeys)
+      return { success: true, message: noopKeyboardActionMessage(action) }
+    }
+
+    const resolved = resolveKeyboardRequest({
+      action: plan.effectiveAction,
+      recordedKeys: plan.effectiveRecordedKeys,
+    })
+    normalizedKeyCodes = resolved.keyCodes
+  }
 
   if (!driverPath) {
     return { success: false, message: 'driver.exe 路径未配置' }
@@ -114,7 +179,9 @@ export async function keyboardControl(
 
   return new Promise((resolve) => {
     try {
+      const workingDirectory = ensureKeyboardDriverWorkingDirectory()
       const child = spawn(driverPath, ['-k', ...normalizedKeyCodes], {
+        cwd: workingDirectory,
         timeout: 30000,
         windowsHide: true,
       })
@@ -132,9 +199,12 @@ export async function keyboardControl(
 
       child.on('close', (code: number | null) => {
         if (code === 0) {
+          if (action === 'hold' || action === 'up' || action === 'reset') {
+            persistKeyboardHeldKeys(nextHeldKeys)
+          }
           resolve({
             success: true,
-            message: '键盘控制执行成功',
+            message: keyboardActionSuccessMessage(action, normalizedRecordedKeys, nextHeldKeys),
             output: stdout.trim(),
           })
         } else {
@@ -158,4 +228,47 @@ export async function keyboardControl(
       })
     }
   })
+}
+
+function persistKeyboardHeldKeys(keys: string[]) {
+  if (keys.length === 0) {
+    clearKeyboardHeldKeys()
+    return
+  }
+
+  saveKeyboardHeldKeys(keys)
+}
+
+function keyboardActionSuccessMessage(
+  action: KeyboardControlAction,
+  recordedKeys: string[],
+  nextHeldKeys: string[]
+) {
+  const label = recordedKeys.join('+') || nextHeldKeys.join('+')
+
+  switch (action) {
+    case 'hold':
+      return label
+        ? `已开始持续按住: ${label}`
+        : '已开始持续按住指定按键'
+    case 'down':
+      return label ? `已按下按键: ${label}` : '已按下指定按键'
+    case 'up':
+      return label ? `已释放按键: ${label}` : '已释放指定按键'
+    case 'reset':
+      return '已清除当前所有托管按键状态。'
+    default:
+      return label ? `已点击按键: ${label}` : '键盘控制执行成功'
+  }
+}
+
+function noopKeyboardActionMessage(action: KeyboardControlAction) {
+  switch (action) {
+    case 'hold':
+      return '指定按键已经处于持续按住状态。'
+    case 'reset':
+      return '当前没有托管按键需要清除。'
+    default:
+      return '当前无需更新按键状态。'
+  }
 }

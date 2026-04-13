@@ -9,7 +9,6 @@ import {
   closeCurrentWindow,
   getCurrentWindowLabel,
   minimizeCurrentWindow,
-  startCurrentWindowDragging,
   toggleCurrentWindowMaximize,
 } from './lib/tauri'
 import { Button } from '@/components/ui/button'
@@ -91,14 +90,7 @@ export default function App() {
         <div
           aria-label="窗口拖拽区"
           className="desktop-titlebar-drag"
-          onMouseDown={(event) => {
-            if (event.button !== 0) return
-            void startCurrentWindowDragging()
-          }}
-          onDoubleClick={(event) => {
-            event.preventDefault()
-            void toggleCurrentWindowMaximize()
-          }}
+          data-tauri-drag-region
         />
 
         <div className="desktop-window-controls">

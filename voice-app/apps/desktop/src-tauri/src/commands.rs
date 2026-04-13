@@ -12,10 +12,10 @@ use settings_core::{EditableVoiceSettings, SaveEditableVoiceSettingsInput, Voice
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::audio_waveform::AudioWaveformFrame;
 use crate::app_state::{
     AppState, LlmRunOutcome, RuntimeDiagnostics, SessionFollowUp, TaskStartOutcome,
 };
+use crate::audio_waveform::AudioWaveformFrame;
 use crate::skill_bundles::SkillBundleInventoryItem;
 use crate::{hotkeys, platform_runtime, windowing};
 
@@ -223,12 +223,22 @@ pub(crate) fn handle_task_start_outcome(
     state: &AppState,
     outcome: TaskStartOutcome,
 ) -> Result<RuntimeSnapshot, String> {
-    let snapshot = sync_and_emit_runtime(app, state, outcome.snapshot)?;
+    let TaskStartOutcome {
+        operation_id,
+        snapshot: initial_snapshot,
+        events,
+        follow_up,
+    } = outcome;
+    let snapshot = sync_and_emit_runtime(app, state, initial_snapshot)?;
 
-    maybe_schedule_transcription_silence_timeout(app, state, outcome.operation_id, &snapshot);
+    maybe_schedule_transcription_silence_timeout(app, state, operation_id, &snapshot);
 
-    if let Some(events) = outcome.events {
-        spawn_session_event_listener(app.clone(), outcome.operation_id, events);
+    if let Some(events) = events {
+        spawn_session_event_listener(app.clone(), operation_id, events);
+    }
+
+    if let Some(follow_up) = follow_up {
+        handle_session_follow_up(app, state, operation_id, follow_up);
     }
 
     Ok(snapshot)
@@ -257,16 +267,8 @@ pub(crate) fn spawn_session_event_listener(
             );
 
             match follow_up {
-                Some(SessionFollowUp::RunLlm(transcript)) => {
-                    spawn_llm_generation(app.clone(), outcome.operation_id, transcript);
-                    break;
-                }
-                Some(SessionFollowUp::CommitTranscription(transcript)) => {
-                    if let Some(snapshot) =
-                        state.commit_transcription_insert(outcome.operation_id, transcript)
-                    {
-                        let _ = sync_and_emit_runtime(&app, &state, snapshot);
-                    }
+                Some(follow_up) => {
+                    handle_session_follow_up(&app, &state, outcome.operation_id, follow_up);
                     break;
                 }
                 None => {
@@ -277,6 +279,24 @@ pub(crate) fn spawn_session_event_listener(
             }
         }
     });
+}
+
+fn handle_session_follow_up(
+    app: &AppHandle,
+    state: &AppState,
+    operation_id: u64,
+    follow_up: SessionFollowUp,
+) {
+    match follow_up {
+        SessionFollowUp::RunLlm(transcript) => {
+            spawn_llm_generation(app.clone(), operation_id, transcript);
+        }
+        SessionFollowUp::CommitTranscription(transcript) => {
+            if let Some(snapshot) = state.commit_transcription_insert(operation_id, transcript) {
+                let _ = sync_and_emit_runtime(app, state, snapshot);
+            }
+        }
+    }
 }
 
 fn maybe_schedule_transcription_silence_timeout(

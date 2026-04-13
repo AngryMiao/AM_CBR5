@@ -46,6 +46,7 @@ struct WindowBounds {
 pub fn configure_main_window(app: &mut App) -> tauri::Result<()> {
     if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
         window.set_title("Voice App")?;
+        apply_runtime_window_chrome(window)?;
     }
 
     ensure_overlay_window(app)?;
@@ -317,9 +318,7 @@ fn result_bounds_for_work_area(work_area: WorkArea) -> WindowBounds {
 fn sync_overlay_auto_hide(app: AppHandle, snapshot: &RuntimeSnapshot, overlay_visible: bool) {
     let token = OVERLAY_HIDE_TOKEN.fetch_add(1, Ordering::SeqCst) + 1;
 
-    if snapshot.input_mode == "transcription"
-        || !overlay_visible
-        || snapshot.phase != "正在识别"
+    if snapshot.input_mode == "transcription" || !overlay_visible || snapshot.phase != "正在识别"
     {
         return;
     }

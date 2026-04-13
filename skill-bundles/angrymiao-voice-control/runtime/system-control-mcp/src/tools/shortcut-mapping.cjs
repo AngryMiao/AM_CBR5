@@ -67,6 +67,7 @@ const SPECIAL_KEY_ALIASES = {
 }
 
 const modifierRank = new Map(MODIFIER_ORDER.map((code, index) => [code, index]))
+const KEYBOARD_ACTIONS = new Set(['tap', 'down', 'up', 'hold', 'reset'])
 
 function keyDown(hid) {
   return `11${hid}`
@@ -191,29 +192,52 @@ function normalizeShortcut(shortcut) {
     .split('+')
     .map((token) => normalizeShortcutToken(token, normalizedShortcut))
 
-  const orderedKeys = orderRecordedKeys(recordedKeys)
-  const nonModifierKeys = orderedKeys.filter((key) => !modifierRank.has(key))
-  if (nonModifierKeys.length === 0) {
-    ensureShortcutError(normalizedShortcut)
-  }
-
-  return orderedKeys
+  return orderRecordedKeys(recordedKeys)
 }
 
-function buildKeyCodesFromRecordedKeys(recordedKeys) {
+function buildKeyCodesFromRecordedKeys(recordedKeys, action = 'tap') {
   const orderedKeys = orderRecordedKeys(
     recordedKeys
       .map((key) => String(key || '').trim())
       .filter(Boolean)
   )
+  const normalizedAction = normalizeKeyboardAction(action)
   const modifierKeys = orderedKeys.filter((key) => modifierRank.has(key))
   const normalKeys = orderedKeys.filter((key) => !modifierRank.has(key))
 
-  if (!normalKeys.length) {
-    throw new Error('无法根据 recordedKeys 构造 keyCodes：至少需要一个非修饰键。')
+  if (normalizedAction === 'reset') {
+    return []
+  }
+
+  if (!orderedKeys.length) {
+    throw new Error('无法根据 recordedKeys 构造 keyCodes：至少需要一个按键。')
   }
 
   const keyCodes = []
+
+  if (normalizedAction === 'down' || normalizedAction === 'hold') {
+    for (const key of orderedKeys) {
+      const hid = hidForRecordedKey(key)
+      if (!hid) {
+        throw new Error(`无法根据 recordedKeys 构造 keyCodes：未识别按键 ${key}。`)
+      }
+      keyCodes.push(keyDown(hid))
+    }
+    return keyCodes
+  }
+
+  if (normalizedAction === 'up') {
+    for (let index = orderedKeys.length - 1; index >= 0; index -= 1) {
+      const hid = hidForRecordedKey(orderedKeys[index])
+      if (!hid) {
+        throw new Error(
+          `无法根据 recordedKeys 构造 keyCodes：未识别按键 ${orderedKeys[index]}。`
+        )
+      }
+      keyCodes.push(keyUp(hid))
+    }
+    return keyCodes
+  }
 
   for (const modifier of modifierKeys) {
     const hid = hidForRecordedKey(modifier)
@@ -221,6 +245,19 @@ function buildKeyCodesFromRecordedKeys(recordedKeys) {
       throw new Error(`无法根据 recordedKeys 构造 keyCodes：未识别按键 ${modifier}。`)
     }
     keyCodes.push(keyDown(hid))
+  }
+
+  if (!normalKeys.length) {
+    for (let index = orderedKeys.length - 1; index >= 0; index -= 1) {
+      const hid = hidForRecordedKey(orderedKeys[index])
+      if (!hid) {
+        throw new Error(
+          `无法根据 recordedKeys 构造 keyCodes：未识别按键 ${orderedKeys[index]}。`
+        )
+      }
+      keyCodes.push(keyUp(hid))
+    }
+    return keyCodes
   }
 
   for (const key of normalKeys) {
@@ -243,37 +280,59 @@ function buildKeyCodesFromRecordedKeys(recordedKeys) {
   return keyCodes
 }
 
-function resolveKeyboardRequest({ shortcut, recordedKeys, keyCodes }) {
+function normalizeKeyboardAction(action) {
+  const normalizedAction = String(action || 'tap').trim().toLowerCase() || 'tap'
+  if (!KEYBOARD_ACTIONS.has(normalizedAction)) {
+    throw new Error(
+      `不支持的 keyboard_control 动作 "${action}"。请使用 tap / down / up / hold / reset。`
+    )
+  }
+  return normalizedAction
+}
+
+function resolveKeyboardRequest({ action, shortcut, recordedKeys, keyCodes }) {
+  const normalizedAction = normalizeKeyboardAction(action)
+  if (normalizedAction === 'reset') {
+    return {
+      action: normalizedAction,
+      recordedKeys: [],
+      keyCodes: [],
+    }
+  }
+
   const normalizedKeyCodes = Array.isArray(keyCodes)
     ? keyCodes.map((code) => String(code || '').trim()).filter(Boolean)
     : []
+  const normalizedRecordedKeys = Array.isArray(recordedKeys)
+    ? recordedKeys.map((key) => String(key || '').trim()).filter(Boolean)
+    : []
+
   if (normalizedKeyCodes.length > 0) {
+    if (normalizedAction === 'hold' && normalizedRecordedKeys.length === 0) {
+      throw new Error('hold 操作需要 shortcut 或 recordedKeys，以便跟踪按键状态。')
+    }
     return {
-      recordedKeys: Array.isArray(recordedKeys)
-        ? orderRecordedKeys(
-            recordedKeys.map((key) => String(key || '').trim()).filter(Boolean)
-          )
-        : [],
+      action: normalizedAction,
+      recordedKeys: orderRecordedKeys(normalizedRecordedKeys),
       keyCodes: normalizedKeyCodes,
     }
   }
 
-  const normalizedRecordedKeys = Array.isArray(recordedKeys)
-    ? recordedKeys.map((key) => String(key || '').trim()).filter(Boolean)
-    : []
   if (normalizedRecordedKeys.length > 0) {
     const orderedKeys = orderRecordedKeys(normalizedRecordedKeys)
     return {
+      action: normalizedAction,
       recordedKeys: orderedKeys,
-      keyCodes: buildKeyCodesFromRecordedKeys(orderedKeys),
+      keyCodes: buildKeyCodesFromRecordedKeys(orderedKeys, normalizedAction),
     }
   }
 
   if (typeof shortcut === 'string' && shortcut.trim()) {
     const orderedKeys = normalizeShortcut(shortcut)
     return {
+      action: normalizedAction,
       recordedKeys: orderedKeys,
-      keyCodes: buildKeyCodesFromRecordedKeys(orderedKeys),
+      keyCodes: buildKeyCodesFromRecordedKeys(orderedKeys, normalizedAction),
     }
   }
 
@@ -281,6 +340,7 @@ function resolveKeyboardRequest({ shortcut, recordedKeys, keyCodes }) {
 }
 
 module.exports = {
+  normalizeKeyboardAction,
   normalizeShortcut,
   buildKeyCodesFromRecordedKeys,
   resolveKeyboardRequest,

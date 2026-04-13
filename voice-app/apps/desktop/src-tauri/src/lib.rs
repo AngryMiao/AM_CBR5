@@ -1,5 +1,5 @@
-mod audio_waveform;
 mod app_state;
+mod audio_waveform;
 mod commands;
 mod hotkeys;
 mod platform_runtime;

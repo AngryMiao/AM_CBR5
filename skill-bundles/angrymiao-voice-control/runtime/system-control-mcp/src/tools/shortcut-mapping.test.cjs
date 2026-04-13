@@ -4,6 +4,7 @@ const { resolveKeyboardRequest } = require('./shortcut-mapping.cjs')
 
 test('resolves F5 into recordedKeys and keyCodes', () => {
   assert.deepEqual(resolveKeyboardRequest({ shortcut: 'F5' }), {
+    action: 'tap',
     recordedKeys: ['F5'],
     keyCodes: ['1107003E', '1007003E'],
   })
@@ -11,8 +12,33 @@ test('resolves F5 into recordedKeys and keyCodes', () => {
 
 test('resolves Ctrl+S into recordedKeys and keyCodes', () => {
   assert.deepEqual(resolveKeyboardRequest({ shortcut: 'Ctrl+S' }), {
+    action: 'tap',
     recordedKeys: ['ControlLeft', 'KeyS'],
     keyCodes: ['110700E0', '11070016', '10070016', '100700E0'],
+  })
+})
+
+test('resolves hold action for pure modifier shortcuts', () => {
+  assert.deepEqual(resolveKeyboardRequest({ shortcut: 'Shift', action: 'hold' }), {
+    action: 'hold',
+    recordedKeys: ['ShiftLeft'],
+    keyCodes: ['110700E1'],
+  })
+})
+
+test('resolves up action into release-only keyCodes', () => {
+  assert.deepEqual(resolveKeyboardRequest({ shortcut: 'Ctrl+S', action: 'up' }), {
+    action: 'up',
+    recordedKeys: ['ControlLeft', 'KeyS'],
+    keyCodes: ['10070016', '100700E0'],
+  })
+})
+
+test('resolves reset action without explicit keys', () => {
+  assert.deepEqual(resolveKeyboardRequest({ action: 'reset' }), {
+    action: 'reset',
+    recordedKeys: [],
+    keyCodes: [],
   })
 })
 
