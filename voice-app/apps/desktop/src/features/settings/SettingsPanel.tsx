@@ -268,6 +268,7 @@ export function SettingsPanel() {
       ) : (
         <Tabs
           className="settings-tabs-shell"
+          data-scroll-container="false"
           onValueChange={(value) => setActiveTab(value as SettingsTabValue)}
           value={activeTab}
         >
@@ -281,27 +282,32 @@ export function SettingsPanel() {
             </TabsList>
           </div>
 
-          {/* Scrollable form content */}
-          <form
-            className="settings-form-shell"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void handleSave()
-            }}
+          <div
+            className="settings-content animate-panel-fade-in"
+            data-scroll-container="true"
+            data-testid="settings-content"
           >
-            <ToastContainer toast={toast} hideToast={hideToast} />
+            <form
+              className="settings-form-shell"
+              data-scroll-container="false"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void handleSave()
+              }}
+            >
+              <ToastContainer toast={toast} hideToast={hideToast} />
 
-            {runtimeReadinessWarnings.length > 0 ? (
-              <div className="console-warning" role="status" style={{ marginBottom: '12px' }}>
-                当前语音任务还不能运行，请补齐：{runtimeReadinessWarnings.join('、')}。
-              </div>
-            ) : null}
+              {runtimeReadinessWarnings.length > 0 ? (
+                <div className="console-warning" role="status" style={{ marginBottom: '12px' }}>
+                  当前语音任务还不能运行，请补齐：{runtimeReadinessWarnings.join('、')}。
+                </div>
+              ) : null}
 
-            <TabsContent className="settings-pill-panel animate-panel-fade-in" value="general" key="general">
-              <div className="settings-glass-card">
-                {/* Save History */}
-                <div className="settings-toggle-card">
-                  <span className="settings-toggle-title">保存历史记录</span>
+              <TabsContent className="settings-pill-panel" value="general" key="general">
+                <div className="settings-glass-card">
+                  {/* Save History */}
+                  <div className="settings-toggle-card">
+                    <span className="settings-toggle-title">保存历史记录</span>
                   <Switch
                     aria-label="保存历史记录"
                     checked={draft.history_enabled}
@@ -397,8 +403,8 @@ export function SettingsPanel() {
               </div>
             </TabsContent>
 
-            <TabsContent className="settings-pill-panel animate-panel-fade-in" value="asr" key="asr">
-              <div className="settings-glass-card">
+              <TabsContent className="settings-pill-panel" value="asr" key="asr">
+                <div className="settings-glass-card">
                 {/* App ID */}
                 <div className="settings-input-card">
                   <span className="settings-input-title">豆包 App ID</span>
@@ -483,8 +489,8 @@ export function SettingsPanel() {
               </div>
             </TabsContent>
 
-            <TabsContent className="settings-pill-panel animate-panel-fade-in" value="model" key="model">
-              <div className="settings-glass-card">
+              <TabsContent className="settings-pill-panel" value="model" key="model">
+                <div className="settings-glass-card">
                 {/* LLM Base URL */}
                 <div className="settings-input-card">
                   <span className="settings-input-title">LLM 服务地址</span>
@@ -574,8 +580,8 @@ export function SettingsPanel() {
               </div>
             </TabsContent>
 
-            <TabsContent className="settings-pill-panel animate-panel-fade-in" value="mcp" key="mcp">
-              <div className="settings-glass-card">
+              <TabsContent className="settings-pill-panel" value="mcp" key="mcp">
+                <div className="settings-glass-card">
                 <SkillBundleInventory
                   skillEnabled={draft.angrymiao_skill_enabled}
                   onSkillEnabledChange={(checked) => updateDraft('angrymiao_skill_enabled', checked)}
@@ -622,8 +628,9 @@ export function SettingsPanel() {
                   </button>
                 </div>
               </div>
-            </TabsContent>
-          </form>
+              </TabsContent>
+            </form>
+          </div>
         </Tabs>
       )}
     </section>

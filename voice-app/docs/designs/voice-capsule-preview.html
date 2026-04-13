@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice Capsule Design Preview - iOS 风格</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+      gap: 40px;
+    }
+
+    .preview-header {
+      text-align: center;
+      color: white;
+    }
+
+    .preview-header h1 {
+      font-size: 32px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+
+    .preview-header p {
+      font-size: 16px;
+      opacity: 0.8;
+    }
+
+    .section {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 30px;
+      width: 100%;
+      max-width: 800px;
+    }
+
+    .section-title {
+      color: white;
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      letter-spacing: -0.01em;
+    }
+
+    .capsule-container {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: #272729;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 980px;
+      padding: 12px 20px;
+      box-shadow: rgba(0, 0, 0, 0.22) 3px 5px 30px 0px;
+    }
+
+    .status-icon {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .status-icon svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .lucide-icon {
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+    }
+
+    /* 状态动画 */
+    .status-listening svg { stroke: #34C759; animation: mic-pulse 1.5s ease-out infinite; }
+    .status-transcription svg { stroke: #34C759; animation: text-pulse 1.5s ease-out infinite; }
+    .status-error svg { stroke: #FF3B30; animation: error-shake 0.5s ease-in-out; }
+
+    @keyframes mic-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.8; }
+    }
+
+    @keyframes text-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    @keyframes error-shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-3px); }
+      75% { transform: translateX(3px); }
+    }
+
+    /* ===== Lucide Cog 齿轮旋转 ===== */
+    .cog-spinner {
+      width: 20px;
+      height: 20px;
+      animation: cog-spin 1.5s linear infinite;
+    }
+
+    .cog-spinner svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    @keyframes cog-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* ===== 声纹波形 - 真实音频风格 ===== */
+    .voice-waveform {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      height: 20px;
+    }
+
+    .voice-bar {
+      width: 3px;
+      height: 100%;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .voice-bar-inner {
+      width: 100%;
+      border-radius: 2px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.7) 100%);
+      animation: voice-wave 0.8s ease-in-out infinite;
+      min-height: 2px;
+    }
+
+    /* 不同高度和延迟的声纹 */
+    .voice-bar:nth-child(1) .voice-bar-inner { animation-delay: 0ms; }
+    .voice-bar:nth-child(2) .voice-bar-inner { animation-delay: 60ms; }
+    .voice-bar:nth-child(3) .voice-bar-inner { animation-delay: 120ms; }
+    .voice-bar:nth-child(4) .voice-bar-inner { animation-delay: 180ms; }
+    .voice-bar:nth-child(5) .voice-bar-inner { animation-delay: 240ms; }
+    .voice-bar:nth-child(6) .voice-bar-inner { animation-delay: 300ms; }
+    .voice-bar:nth-child(7) .voice-bar-inner { animation-delay: 360ms; }
+    .voice-bar:nth-child(8) .voice-bar-inner { animation-delay: 420ms; }
+    .voice-bar:nth-child(9) .voice-bar-inner { animation-delay: 480ms; }
+    .voice-bar:nth-child(10) .voice-bar-inner { animation-delay: 540ms; }
+    .voice-bar:nth-child(11) .voice-bar-inner { animation-delay: 600ms; }
+    .voice-bar:nth-child(12) .voice-bar-inner { animation-delay: 660ms; }
+
+    /* 中心条动画幅度更大 */
+    .voice-bar:nth-child(5) .voice-bar-inner,
+    .voice-bar:nth-child(6) .voice-bar-inner,
+    .voice-bar:nth-child(7) .voice-bar-inner {
+      animation-duration: 0.6s;
+    }
+
+    /* 边缘条动画幅度小 */
+    .voice-bar:nth-child(1) .voice-bar-inner,
+    .voice-bar:nth-child(2) .voice-bar-inner,
+    .voice-bar:nth-child(11) .voice-bar-inner,
+    .voice-bar:nth-child(12) .voice-bar-inner {
+      animation-duration: 1s;
+    }
+
+    @keyframes voice-wave {
+      0%, 100% {
+        height: 20%;
+        opacity: 0.6;
+      }
+      30% {
+        height: 80%;
+        opacity: 1;
+      }
+      60% {
+        height: 40%;
+        opacity: 0.8;
+      }
+    }
+
+    .status-text {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+    }
+
+    .transcript-preview {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 13px;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding-left: 8px;
+      border-left: 1px solid rgba(255, 255, 255, 0.2);
+      margin-left: 4px;
+    }
+
+    .states-grid {
+      display: grid;
+      gap: 24px;
+    }
+
+    .state-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .state-label {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 14px;
+      min-width: 150px;
+    }
+
+    .state-desc {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .icon-legend {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 30px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+    }
+
+    .legend-icon {
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .legend-icon svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .legend-text {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .legend-desc {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .legend-content {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      background: rgba(0, 113, 227, 0.3);
+      border-radius: 4px;
+      font-size: 11px;
+      color: #2997ff;
+      margin-left: 8px;
+    }
+
+    .badge-new {
+      background: rgba(52, 199, 89, 0.3);
+      color: #34C759;
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-header">
+    <h1>Voice Capsule Design Preview</h1>
+    <p>iOS 风格 - 齿轮加载 + 声纹波形</p>
+  </div>
+
+  <!-- 核心状态展示 -->
+  <div class="section">
+    <h2 class="section-title">核心状态 <span class="badge badge-new">新版</span></h2>
+    <div class="states-grid">
+
+      <!-- 1. 聆听中 - AI对话 -->
+      <div class="state-item">
+        <div class="state-label">
+          聆听中
+          <div class="state-desc">AI对话模式</div>
+        </div>
+        <div class="capsule-container">
+          <div class="status-icon status-listening">
+            <svg class="lucide-icon" viewBox="0 0 24 24">
+              <path d="M12 19v3"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <rect x="9" y="2" width="6" height="11" rx="3"/>
+            </svg>
+          </div>
+          <!-- 声纹波形 -->
+          <div class="voice-waveform">
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+          </div>
+          <span class="status-text">正在聆听</span>
+        </div>
+      </div>
+
+      <!-- 2. 转写中 - 纯文字 -->
+      <div class="state-item">
+        <div class="state-label">
+          转写中
+          <div class="state-desc">纯文字输入</div>
+        </div>
+        <div class="capsule-container">
+          <div class="status-icon status-transcription">
+            <svg class="lucide-icon" viewBox="0 0 24 24">
+              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <line x1="10" y1="9" x2="8" y2="9"/>
+            </svg>
+          </div>
+          <!-- 声纹波形 -->
+          <div class="voice-waveform">
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+            <span class="voice-bar"><span class="voice-bar-inner"></span></span>
+          </div>
+          <span class="status-text">正在转写</span>
+          <span class="transcript-preview">今天天气真不错，适合出去走走...</span>
+        </div>
+      </div>
+
+      <!-- 3. 执行中 - Lucide Cog齿轮旋转 -->
+      <div class="state-item">
+        <div class="state-label">
+          执行中
+          <div class="state-desc">Lucide Cog 旋转动画</div>
+        </div>
+        <div class="capsule-container">
+          <!-- Lucide Cog 齿轮旋转 -->
+          <div class="cog-spinner">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#0071E3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M12 20a8 8 0 0 0 0-16 8 8 0 0 0 0 16"/>
+              <path d="M12 2v2"/>
+              <path d="M12 22v-2"/>
+              <path d="m4.93 4.93 1.41 1.41"/>
+              <path d="m17.66 17.66 1.41 1.41"/>
+              <path d="m2 12 2 0"/>
+              <path d="m20 12 2 0"/>
+              <path d="m6.34 17.66-1.41 1.41"/>
+              <path d="m19.07 4.93-1.41 1.41"/>
+            </svg>
+          </div>
+          <span class="status-text">正在执行</span>
+        </div>
+      </div>
+
+      <!-- 4. 错误 - 无波形 -->
+      <div class="state-item">
+        <div class="state-label">
+          错误
+          <div class="state-desc">识别或处理失败</div>
+        </div>
+        <div class="capsule-container">
+          <div class="status-icon status-error">
+            <svg class="lucide-icon" viewBox="0 0 24 24">
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </div>
+          <span class="status-text">识别失败</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 图标说明 -->
+    <div class="icon-legend">
+      <div class="legend-item">
+        <div class="legend-icon" style="stroke: #34C759;">
+          <svg class="lucide-icon" viewBox="0 0 24 24">
+            <path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="11" rx="3"/>
+          </svg>
+        </div>
+        <div class="legend-content">
+          <span class="legend-text">Mic - 聆听中</span>
+          <span class="legend-desc">AI对话模式 + 12条声纹波形</span>
+        </div>
+      </div>
+
+      <div class="legend-item">
+        <div class="legend-icon" style="stroke: #34C759;">
+          <svg class="lucide-icon" viewBox="0 0 24 24">
+            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+          </svg>
+        </div>
+        <div class="legend-content">
+          <span class="legend-text">FileText - 转写中</span>
+          <span class="legend-desc">纯文字输入 + 声纹波形 + 预览文字</span>
+        </div>
+      </div>
+
+      <div class="legend-item">
+        <div class="legend-icon" style="stroke: #0071E3;">
+          <!-- Lucide Cog 图标 -->
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 20a8 8 0 0 0 0-16 8 8 0 0 0 0 16"/>
+            <path d="M12 2v2"/>
+            <path d="M12 22v-2"/>
+            <path d="m4.93 4.93 1.41 1.41"/>
+            <path d="m17.66 17.66 1.41 1.41"/>
+            <path d="m2 12 2 0"/>
+            <path d="m20 12 2 0"/>
+            <path d="m6.34 17.66-1.41 1.41"/>
+            <path d="m19.07 4.93-1.41 1.41"/>
+          </svg>
+        </div>
+        <div class="legend-content">
+          <span class="legend-text">Cog - 执行中</span>
+          <span class="legend-desc">Lucide Cog 齿轮旋转动画（无波形）</span>
+        </div>
+      </div>
+
+      <div class="legend-item">
+        <div class="legend-icon" style="stroke: #FF3B30;">
+          <svg class="lucide-icon" viewBox="0 0 24 24">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div class="legend-content">
+          <span class="legend-text">AlertTriangle - 错误</span>
+          <span class="legend-desc">识别或处理失败（无波形）</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 设计说明 -->
+    <div style="margin-top: 24px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
+      <p style="color: rgba(255,255,255,0.7); font-size: 13px; line-height: 1.6;">
+        <strong style="color: white;">新版设计要点：</strong><br>
+        • <strong>聆听/转写</strong> = 用户输入阶段，显示 12 条声纹波形动画<br>
+        • <strong>执行中</strong> = Lucide Cog 齿轮旋转动画（无波形）<br>
+        • <strong>错误</strong> = 警告图标 + 抖动动画（无波形）<br>
+        • 声纹波形：中心条幅度大，边缘条幅度小，模拟真实音频特征
+      </p>
+    </div>
+  </div>
+
+</body>
+</html>

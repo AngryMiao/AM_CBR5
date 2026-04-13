@@ -1,103 +1,68 @@
+import { VoiceCapsule, type VoiceCapsulePhase } from './VoiceCapsule'
 import { useRuntimeSnapshot } from './useRuntimeSnapshot'
 import { getRuntimePhaseTone } from '../../lib/runtimePhase'
-
-const WAVE_BARS = [0, 1, 2, 3, 4]
-const MAX_TRANSCRIPTION_PREVIEW_CHARS = 24
 
 export function OverlayWindow() {
   const { phase, transcript, error, input_mode } = useRuntimeSnapshot()
   const phaseTone = getRuntimePhaseTone(phase)
-  const phaseMeta = getOverlayPhaseMeta(phaseTone)
-  const icon = getOverlayIcon(phaseTone, input_mode)
+  const capsulePhase = mapPhaseToCapsulePhase(phaseTone, input_mode)
+
+  // 转录模式才显示预览文字
   const isTranscription = input_mode === 'transcription'
-  const previewText = formatTranscriptionPreview(transcript)
-  const showTranscript = isTranscription && previewText.length > 0
-  const announcement = [phaseMeta.phase, previewText || error].filter(Boolean).join('，')
+  const showTranscript = isTranscription && transcript.length > 0
+
+  // 如果有错误，使用错误状态
+  const effectivePhase = error ? 'error' : capsulePhase
+  const effectiveTranscript = error ? error : transcript
 
   return (
-    <main className="overlay-shell">
-      <section
-        aria-label={announcement}
-        aria-live="polite"
-        className={[
-          `typeless-overlay-card typeless-overlay-card-${phaseTone}`,
-          isTranscription ? 'typeless-overlay-card-transcription' : '',
-          showTranscript ? 'typeless-overlay-card-with-text' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        role="status"
-        title={announcement}
-      >
-        <div
-          className={[
-            'typeless-overlay-recorder',
-            showTranscript ? 'typeless-overlay-recorder-with-text' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          aria-hidden="true"
-        >
-          <span className="typeless-overlay-handle typeless-overlay-handle-left">
-            {icon}
-          </span>
-
-          {showTranscript ? (
-            <span className="typeless-overlay-text-shell">
-              <span className="typeless-overlay-text">{previewText}</span>
-            </span>
-          ) : (
-            <div className="typeless-overlay-wave-shell">
-              <span className="typeless-overlay-wave">
-                {WAVE_BARS.map((bar) => (
-                  <span key={bar} className="typeless-overlay-wave-bar" />
-                ))}
-              </span>
-            </div>
-          )}
-        </div>
-      </section>
+    <main className="flex items-end justify-center min-h-screen p-6">
+      <VoiceCapsule
+        phase={effectivePhase}
+        transcript={effectiveTranscript}
+        showTranscript={showTranscript}
+      />
     </main>
   )
 }
 
-function getOverlayPhaseMeta(phaseTone: ReturnType<typeof getRuntimePhaseTone>) {
+/**
+ * 将运行时 phase 映射到简化的 VoiceCapsule phase
+ *
+ * 简化逻辑：
+ * - listening -> listening (AI对话)
+ * - transcription -> transcription (纯转写)
+ * - processing/thinking/executing/inserting/done -> executing (统一为"执行中")
+ * - error -> error
+ * - idle -> 默认隐藏或显示为 listening
+ */
+function mapPhaseToCapsulePhase(
+  phaseTone: ReturnType<typeof getRuntimePhaseTone>,
+  inputMode: string
+): VoiceCapsulePhase {
+  // 转录模式
+  if (inputMode === 'transcription') {
+    if (phaseTone === 'listening') return 'transcription'
+  }
+
+  // 正常映射
   switch (phaseTone) {
     case 'listening':
-      return { icon: '●', phase: '正在聆听' }
+      return 'listening'
+
+    // 所有"进行中"状态合并为 executing
     case 'processing':
-      return { icon: '⋯', phase: '正在识别' }
     case 'thinking':
-      return { icon: '✦', phase: '正在生成' }
     case 'executing':
-      return { icon: '⌘', phase: '正在执行' }
     case 'inserting':
-      return { icon: '⌨', phase: '正在输出' }
     case 'done':
-      return { icon: '✓', phase: '已完成' }
+      return 'executing'
+
     case 'error':
-      return { icon: '!', phase: '识别失败' }
+      return 'error'
+
     case 'idle':
-      return { icon: '●', phase: '待命中' }
     default:
-      return { icon: '●', phase: '加载中' }
+      return 'listening'
   }
-}
-
-function getOverlayIcon(
-  phaseTone: ReturnType<typeof getRuntimePhaseTone>,
-  inputMode: string,
-) {
-  if (inputMode === 'transcription') {
-    return '✎'
-  }
-
-  return getOverlayPhaseMeta(phaseTone).icon
-}
-
-function formatTranscriptionPreview(text: string) {
-  const normalized = text.trim()
-  if (!normalized) return ''
-  if (normalized.length <= MAX_TRANSCRIPTION_PREVIEW_CHARS) return normalized
-  return `…${normalized.slice(-MAX_TRANSCRIPTION_PREVIEW_CHARS)}`
 }

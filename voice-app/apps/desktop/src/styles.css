@@ -2288,7 +2288,7 @@ html[data-window='result'] #root {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: hidden;
   overflow-x: hidden;
   height: 100%;
 }
@@ -2302,6 +2302,14 @@ html[data-window='result'] #root {
   background: #f5f5f7;
   padding: 16px 0;
   /* No border line below tabs */
+}
+
+.settings-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 30px 30px;
 }
 
 .settings-pill-tabs {
@@ -2344,14 +2352,10 @@ html[data-window='result'] #root {
 
 /* Form shell - static content area, scrolling handled by parent */
 .settings-form-shell {
-  flex: 1;
-  min-height: 0;
   max-width: 980px;
   margin: 0 auto;
   width: 100%;
   min-width: 320px;
-  padding: 0 24px;
-  overflow: visible;
 }
 
 /* Panel content inside form shell */
@@ -2361,15 +2365,18 @@ html[data-window='result'] #root {
 
 /* Responsive adjustments */
 @media (max-width: 1024px) {
+  .settings-content {
+    padding: 0 24px 24px;
+  }
+
   .settings-form-shell {
     max-width: 100%;
-    padding: 0 16px;
   }
 }
 
 @media (max-width: 640px) {
-  .settings-form-shell {
-    padding: 0 12px;
+  .settings-content {
+    padding: 0 16px 16px;
   }
 
   .settings-pill-tab {
@@ -4579,5 +4586,201 @@ html[data-window='result'] #root {
   .runtime-detail-grid,
   .runtime-diagnostic-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================
+   Voice Capsule Component Styles
+   ============================================ */
+
+/* 容器进入动画 */
+@keyframes capsule-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-capsule-enter {
+  animation: capsule-enter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 声纹波形动画 - 真实音频风格 */
+@keyframes voice-wave {
+  0%, 100% {
+    height: 20%;
+    opacity: 0.6;
+  }
+  30% {
+    height: 80%;
+    opacity: 1;
+  }
+  60% {
+    height: 40%;
+    opacity: 0.8;
+  }
+}
+
+.voice-bar {
+  width: 3px;
+  height: 20px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.7) 100%);
+  animation: voice-wave 0.8s ease-in-out infinite;
+}
+
+/* ===== 状态图标动画 ===== */
+
+/* 麦克风脉冲 - 聆听中 */
+@keyframes mic-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+.animate-mic-pulse {
+  animation: mic-pulse 1.5s ease-out infinite;
+}
+
+/* 文字脉冲 - 转录模式 */
+@keyframes text-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.animate-text-pulse {
+  animation: text-pulse 1.5s ease-out infinite;
+}
+
+/* 声波 - 识别中 */
+@keyframes sound-wave {
+  0%, 100% {
+    transform: scaleX(1);
+  }
+  50% {
+    transform: scaleX(1.2);
+  }
+}
+
+.animate-sound-wave {
+  animation: sound-wave 1s ease-in-out infinite;
+}
+
+/* AI闪烁 - 生成中 */
+@keyframes ai-blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-ai-blink {
+  animation: ai-blink 1.5s ease-in-out infinite;
+}
+
+/* 工具激活 - 执行中 */
+@keyframes tool-active {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(2px);
+  }
+}
+
+.animate-tool-active {
+  animation: tool-active 0.8s ease-in-out infinite;
+}
+
+/* 打字闪烁 - 输入中 */
+@keyframes typing {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.animate-typing {
+  animation: typing 0.6s ease-in-out infinite;
+}
+
+/* 成功弹跳 - 已完成 */
+@keyframes success-pop {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-success-pop {
+  animation: success-pop 0.5s ease-out;
+}
+
+/* 错误抖动 - 识别失败 */
+@keyframes error-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+
+.animate-error-shake {
+  animation: error-shake 0.5s ease-in-out;
+}
+
+/* 齿轮旋转动画 - 执行中 */
+@keyframes cog-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-cog-spin {
+  animation: cog-spin 1.5s linear infinite;
+}
+
+/* 减少动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .animate-capsule-enter,
+  .animate-wave-bar,
+  .animate-mic-pulse,
+  .animate-text-pulse,
+  .animate-cog-spin,
+  .animate-error-shake,
+  .voice-bar {
+    animation: none !important;
   }
 }
