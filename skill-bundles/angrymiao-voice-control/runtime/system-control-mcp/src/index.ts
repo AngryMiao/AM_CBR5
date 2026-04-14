@@ -1,8 +1,10 @@
+import * as path from 'path'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { keyboardControl, typeText } from './tools/keyboard'
 import { executeSystemCommand } from './tools/system'
+import { isMacOS } from './utils/platform'
 
 const { resolveKeyboardRequest } = require('./tools/shortcut-mapping.cjs') as {
   resolveKeyboardRequest: (request: {
@@ -17,7 +19,21 @@ const { resolveKeyboardRequest } = require('./tools/shortcut-mapping.cjs') as {
   }
 }
 
-const DRIVER_PATH = process.env.KEYBOARD_DRIVER_PATH || ''
+function resolveDriverPath(): string {
+  const envPath = process.env.KEYBOARD_DRIVER_PATH || ''
+  if (!envPath) return ''
+
+  // On macOS, if the configured path points to the Windows .exe,
+  // resolve to the Mac driver binary in the same directory.
+  if (isMacOS() && envPath.endsWith('.exe')) {
+    const dir = path.dirname(envPath)
+    return path.join(dir, 'AM35AIDriver.app', 'Contents', 'MacOS', 'AM35AIDriver')
+  }
+
+  return envPath
+}
+
+const DRIVER_PATH = resolveDriverPath()
 
 const server = new McpServer({
   name: 'system-control',
