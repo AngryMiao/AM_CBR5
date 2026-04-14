@@ -86,7 +86,7 @@
 
 ### 5. 当前 runtime 只接受 `keyCodes`
 
-`skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/index.ts`
+`voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/index.ts`
 
 - `keyboard_control` 入参只有 `keyCodes: string[]`
 - tool 描述强调“按下和抬起成对出现”
@@ -274,7 +274,7 @@ UI 展示使用轻量 label 映射，例如：
 
 新增：
 
-- `skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md`
+- `voice-app/skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md`
 
 文档内容包含三部分：
 
@@ -393,7 +393,7 @@ UI 展示使用轻量 label 映射，例如：
 - 新增录制组件文件
 - 新增录制键参考模块
 - `src/renderer/packages/agent-skills/angrymiao-voice-control.ts`
-- `skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md`
+- `voice-app/skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md`
 
 不应在本轮改动：
 

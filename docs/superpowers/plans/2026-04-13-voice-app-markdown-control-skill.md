@@ -27,11 +27,11 @@
 | `voice-app/apps/desktop/src/__tests__/app-shell.test.tsx` | 将“添加自定义快捷键”测试改成“保存 control skill markdown”，并校验 payload |
 | `voice-app/crates/llm-core/src/system_prompt.rs` | 注入 `control_skill_markdown`，提示模型优先传 `shortcut` 而不是直接构造 hex `keyCodes` |
 | `voice-app/crates/llm-core/tests/openai_compatible.rs` | 锁定最终 prompt 中的新 control skill 文本块 |
-| `skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.cjs` | 解析 `F5` / `Ctrl+S` / `Alt+Tab` 等规范化按键表达，并生成 `recordedKeys` / `keyCodes` |
-| `skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.test.cjs` | 用 Node 内置测试框架覆盖翻码 helper |
-| `skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/index.ts` | 扩展 `keyboard_control` 入参协议，接受 `shortcut` / `recordedKeys` / `keyCodes` |
-| `skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/keyboard.ts` | 在真正调用 driver 前统一解析出最终 `keyCodes` |
-| `skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/dist/index.js` | 通过构建脚本同步产出的运行时 bundle，避免改了 `src/` 不生效 |
+| `voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.cjs` | 解析 `F5` / `Ctrl+S` / `Alt+Tab` 等规范化按键表达，并生成 `recordedKeys` / `keyCodes` |
+| `voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.test.cjs` | 用 Node 内置测试框架覆盖翻码 helper |
+| `voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/index.ts` | 扩展 `keyboard_control` 入参协议，接受 `shortcut` / `recordedKeys` / `keyCodes` |
+| `voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/keyboard.ts` | 在真正调用 driver 前统一解析出最终 `keyCodes` |
+| `voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/dist/index.js` | 通过构建脚本同步产出的运行时 bundle，避免改了 `src/` 不生效 |
 
 > 说明：本计划不删除 `KeyboardShortcutSettings.tsx` 与 `keyboardShortcuts.ts`，先把它们降级为未挂载的兼容代码，避免把本轮范围扩成“UI 替换 + 历史快捷键迁移 + 代码清理”三件事。
 
@@ -529,11 +529,11 @@ git commit -m "feat(llm): 注入控制技能文本提示"
 ### Task 4: 扩展 `keyboard_control` 协议，并把快捷键翻码下沉到 runtime
 
 **Files:**
-- Create: `skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.cjs`
-- Create: `skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.test.cjs`
-- Modify: `skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/index.ts`
-- Modify: `skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/keyboard.ts`
-- Modify (generated): `skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/dist/index.js`
+- Create: `voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.cjs`
+- Create: `voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.test.cjs`
+- Modify: `voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/index.ts`
+- Modify: `voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/keyboard.ts`
+- Modify (generated): `voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/dist/index.js`
 
 - [ ] **Step 1: 先写失败的 Node 单测，锁定 `F5` / `Ctrl+S` / 非法输入`**
 
@@ -571,7 +571,7 @@ test('rejects unknown shortcut tokens', () => {
 Run:
 
 ```bash
-node --test skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.test.cjs
+node --test voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.test.cjs
 ```
 
 Expected: FAIL，`shortcut-mapping.cjs` 不存在。
@@ -652,8 +652,8 @@ const result = await keyboardControl(DRIVER_PATH, resolved.keyCodes)
 Run:
 
 ```bash
-node --test skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.test.cjs
-node skill-bundles/angrymiao-voice-control/scripts/build-runtime.cjs
+node --test voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.test.cjs
+node voice-app/skill-bundles/angrymiao-voice-control/scripts/build-runtime.cjs
 ```
 
 Expected:
@@ -666,7 +666,7 @@ Expected:
 Run:
 
 ```bash
-Select-String -Path skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/dist/index.js -Pattern "shortcut|recordedKeys"
+Select-String -Path voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/dist/index.js -Pattern "shortcut|recordedKeys"
 ```
 
 Expected: 命中 `shortcut` / `recordedKeys` 相关字符串。
@@ -675,11 +675,11 @@ Expected: 命中 `shortcut` / `recordedKeys` 相关字符串。
 
 ```bash
 git add \
-  skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.cjs \
-  skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.test.cjs \
-  skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/index.ts \
-  skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/keyboard.ts \
-  skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/dist/index.js
+  voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.cjs \
+  voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.test.cjs \
+  voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/index.ts \
+  voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/keyboard.ts \
+  voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/dist/index.js
 git commit -m "feat(runtime): 支持快捷键文本翻码执行"
 ```
 
@@ -708,8 +708,8 @@ Expected: PASS
 - [ ] **Step 3: 跑 runtime helper 测试并重建 dist**
 
 ```bash
-node --test skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.test.cjs
-node skill-bundles/angrymiao-voice-control/scripts/build-runtime.cjs
+node --test voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/shortcut-mapping.test.cjs
+node voice-app/skill-bundles/angrymiao-voice-control/scripts/build-runtime.cjs
 ```
 
 Expected: PASS
@@ -755,4 +755,3 @@ pnpm --dir voice-app/apps/desktop exec tauri dev
 **Placeholder 检查:** ✓ 无 TBD/TODO  
 **生成产物检查:** ✓ `dist/index.js` 已在 Task 4 中明确同步  
 **风险点检查:** ✓ 旧 `keyboard_shortcuts` 保留但不再作为 UI 主入口
-

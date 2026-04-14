@@ -493,7 +493,7 @@ voice-app/
 
 1. `src/main/mcp/ipc-stdio-transport.ts`
 2. `src/main/skill-bundles.ts`
-3. `skill-bundles/angrymiao-voice-control`
+3. `voice-app/skill-bundles/angrymiao-voice-control`
 
 新归属：
 

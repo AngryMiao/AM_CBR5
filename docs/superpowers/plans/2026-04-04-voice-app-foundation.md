@@ -839,7 +839,7 @@ Must enumerate at least:
 - src/renderer/hooks/useVoiceController.ts
 - src/renderer/packages/voice/asr/*
 - src/main/mcp/ipc-stdio-transport.ts
-- skill-bundles/angrymiao-voice-control
+- voice-app/skill-bundles/angrymiao-voice-control
 ```
 
 - [ ] **Step 2: Fill `electron-capability-map.md` with explicit old/new mappings**

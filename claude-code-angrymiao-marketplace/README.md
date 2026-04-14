@@ -11,7 +11,7 @@ Claude Code reads the plugin directly from the repository root:
 
 ## What This Is
 
-The original Chatbox bundle under `skill-bundles/angrymiao-voice-control` is Chatbox-specific. Claude Code does not read that manifest format directly.
+The original Chatbox bundle under `voice-app/skill-bundles/angrymiao-voice-control` is Chatbox-specific. Claude Code does not read that manifest format directly.
 
 This directory repackages the same system-control runtime and prompt instructions in Claude Code's native plugin layout so the folder can be published as an independent plugin source repository.
 

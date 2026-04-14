@@ -65,7 +65,7 @@ type: project
 
 ### 3. 现有 `keyboard_control` 工具只接受 `keyCodes`
 
-`skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/index.ts`
+`voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/index.ts`
 
 - `keyboard_control` 的入参目前只有 `keyCodes: string[]`
 - tool 描述要求传入 8 位 hex 编码，按下和抬起成对出现
@@ -74,7 +74,7 @@ type: project
 
 ### 4. 驱动执行逻辑已经稳定，不应在本轮推翻
 
-`skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/keyboard.ts`
+`voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/keyboard.ts`
 
 - `keyboardControl()` 最终执行 `driver.exe -k ...keyCodes`
 - 当前 runtime 已经稳定承担 USB 键盘输出职责
@@ -537,8 +537,8 @@ shortcut
 - `voice-app/apps/desktop/src/lib/tauri.ts`
 - `voice-app/crates/settings-core/...`（设置模型与存储）
 - `voice-app/crates/llm-core/src/system_prompt.rs`
-- `skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/index.ts`
-- `skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/keyboard.ts`
+- `voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/index.ts`
+- `voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/keyboard.ts`
 - 可能新增共享快捷键规范化/翻码模块
 
 ## 明确不在本轮实现的内容
@@ -547,4 +547,3 @@ shortcut
 2. 不做复杂 Markdown 可视化预览器
 3. 不承诺支持任意自然语言快捷键表达的稳定翻译
 4. 不在第一版中重构整套 MCP runtime 架构
-

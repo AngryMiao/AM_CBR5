@@ -30,13 +30,13 @@
   - 让 prompt 注入 `recordedKeys`、兼容保留 `keyCodes`、拼接 HID reference 文档
 - Modify: `src/renderer/packages/agent-skills/angrymiao-voice-control.test.ts`
   - 覆盖 prompt 中的 `recordedKeys` 列与 HID reference 注入
-- Create: `skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md`
+- Create: `voice-app/skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md`
   - 给 LLM 提供真实键名到 HID 的轻量参考文档
 
 ## Constraints
 
 - `src/shared/defaults/keyboard-shortcuts.ts` 只读保留，不修改、不删除。
-- 不修改 `skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/index.ts` 和 `keyboard_control` 入参协议。
+- 不修改 `voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/index.ts` 和 `keyboard_control` 入参协议。
 - 录制保存的真值是 `recordedKeys`，不是 `keyCodes`。
 - 允许保存没有稳定 HID 映射的键，但 UI 必须明确显示“该键当前没有稳定 HID 映射，执行可能失败”。
 - 录制上限为 6 个键。
@@ -488,8 +488,8 @@ git commit -m "feat(voice): 改造键盘快捷键录制设置"
 **Files:**
 - Modify: `src/renderer/packages/agent-skills/angrymiao-voice-control.ts`
 - Modify: `src/renderer/packages/agent-skills/angrymiao-voice-control.test.ts`
-- Create: `skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md`
-- Reference: `skill-bundles/angrymiao-voice-control/SKILL.md`
+- Create: `voice-app/skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md`
+- Reference: `voice-app/skill-bundles/angrymiao-voice-control/SKILL.md`
 
 - [ ] **Step 1: Write the failing prompt injection tests**
 
@@ -548,7 +548,7 @@ FAIL because the prompt only includes keyCodes and has no HID reference section
 
 - [ ] **Step 3: Add the bundle reference doc and prompt assembly**
 
-创建 `skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md`，最少包含：
+创建 `voice-app/skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md`，最少包含：
 
 ```md
 # Keyboard HID Reference
@@ -635,7 +635,7 @@ PASS with recordedKeys column and HID reference section present
 - [ ] **Step 5: Commit the skill prompt slice**
 
 ```bash
-git add src/renderer/packages/agent-skills/angrymiao-voice-control.ts src/renderer/packages/agent-skills/angrymiao-voice-control.test.ts skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md
+git add src/renderer/packages/agent-skills/angrymiao-voice-control.ts src/renderer/packages/agent-skills/angrymiao-voice-control.test.ts voice-app/skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md
 git commit -m "feat(voice): 注入录制键名与HID参考"
 ```
 
@@ -695,7 +695,7 @@ Expected:
 - [ ] **Step 5: Final commit**
 
 ```bash
-git add src/shared/types/voice.ts src/shared/voice-key-reference.ts src/shared/voice-key-reference.test.ts src/renderer/components/voice/KeyboardShortcutRecorder.tsx src/renderer/components/voice/KeyboardShortcutRecorder.test.tsx src/renderer/components/voice/KeyboardControlSettings.tsx src/renderer/components/voice/KeyboardControlSettings.test.tsx src/renderer/packages/agent-skills/angrymiao-voice-control.ts src/renderer/packages/agent-skills/angrymiao-voice-control.test.ts skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md
+git add src/shared/types/voice.ts src/shared/voice-key-reference.ts src/shared/voice-key-reference.test.ts src/renderer/components/voice/KeyboardShortcutRecorder.tsx src/renderer/components/voice/KeyboardShortcutRecorder.test.tsx src/renderer/components/voice/KeyboardControlSettings.tsx src/renderer/components/voice/KeyboardControlSettings.test.tsx src/renderer/packages/agent-skills/angrymiao-voice-control.ts src/renderer/packages/agent-skills/angrymiao-voice-control.test.ts voice-app/skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md
 git commit -m "feat(voice): 改造键盘快捷键录制链路"
 ```
 
