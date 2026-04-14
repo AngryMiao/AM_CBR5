@@ -2,21 +2,32 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
-function resolveKeyboardDriverWorkingDirectory(baseDir = os.tmpdir()) {
+function resolveDefaultRuntimeBaseDir() {
+  if (process.platform === 'win32') {
+    const appDataRoot = process.env.APPDATA || process.env.LOCALAPPDATA
+    if (appDataRoot) {
+      return appDataRoot
+    }
+  }
+
+  return os.tmpdir()
+}
+
+function resolveKeyboardDriverWorkingDirectory(baseDir = resolveDefaultRuntimeBaseDir()) {
   return path.join(baseDir, 'angrymiao-voice-control', 'driver-runtime')
 }
 
-function ensureKeyboardDriverWorkingDirectory(baseDir = os.tmpdir()) {
+function ensureKeyboardDriverWorkingDirectory(baseDir = resolveDefaultRuntimeBaseDir()) {
   const workingDirectory = resolveKeyboardDriverWorkingDirectory(baseDir)
   fs.mkdirSync(workingDirectory, { recursive: true })
   return workingDirectory
 }
 
-function resolveKeyboardHeldKeysPath(baseDir = os.tmpdir()) {
+function resolveKeyboardHeldKeysPath(baseDir = resolveDefaultRuntimeBaseDir()) {
   return path.join(resolveKeyboardDriverWorkingDirectory(baseDir), 'held-keys.json')
 }
 
-function loadKeyboardHeldKeys(baseDir = os.tmpdir()) {
+function loadKeyboardHeldKeys(baseDir = resolveDefaultRuntimeBaseDir()) {
   const statePath = resolveKeyboardHeldKeysPath(baseDir)
   if (!fs.existsSync(statePath)) {
     return []
@@ -32,7 +43,7 @@ function loadKeyboardHeldKeys(baseDir = os.tmpdir()) {
   }
 }
 
-function saveKeyboardHeldKeys(keys, baseDir = os.tmpdir()) {
+function saveKeyboardHeldKeys(keys, baseDir = resolveDefaultRuntimeBaseDir()) {
   const workingDirectory = ensureKeyboardDriverWorkingDirectory(baseDir)
   const statePath = resolveKeyboardHeldKeysPath(baseDir)
   const normalizedKeys = Array.isArray(keys)
@@ -43,7 +54,7 @@ function saveKeyboardHeldKeys(keys, baseDir = os.tmpdir()) {
   fs.writeFileSync(statePath, JSON.stringify(normalizedKeys, null, 2), 'utf-8')
 }
 
-function clearKeyboardHeldKeys(baseDir = os.tmpdir()) {
+function clearKeyboardHeldKeys(baseDir = resolveDefaultRuntimeBaseDir()) {
   const statePath = resolveKeyboardHeldKeysPath(baseDir)
   if (fs.existsSync(statePath)) {
     fs.rmSync(statePath, { force: true })

@@ -15,12 +15,24 @@ const {
 test('resolves keyboard driver working directory under temp root', () => {
   const workingDirectory = resolveKeyboardDriverWorkingDirectory()
 
-  assert.ok(
-    workingDirectory.startsWith(path.join(os.tmpdir(), path.sep)) ||
-      workingDirectory === os.tmpdir() ||
-      workingDirectory.startsWith(os.tmpdir()),
-    `expected ${workingDirectory} to be inside ${os.tmpdir()}`
-  )
+  if (process.platform === 'win32') {
+    const appDataRoot = process.env.APPDATA || process.env.LOCALAPPDATA
+    assert.ok(appDataRoot, 'expected APPDATA or LOCALAPPDATA to exist on Windows')
+    assert.ok(
+      workingDirectory.startsWith(path.join(appDataRoot, path.sep)) ||
+        workingDirectory === appDataRoot ||
+        workingDirectory.startsWith(appDataRoot),
+      `expected ${workingDirectory} to be inside ${appDataRoot}`
+    )
+  } else {
+    assert.ok(
+      workingDirectory.startsWith(path.join(os.tmpdir(), path.sep)) ||
+        workingDirectory === os.tmpdir() ||
+        workingDirectory.startsWith(os.tmpdir()),
+      `expected ${workingDirectory} to be inside ${os.tmpdir()}`
+    )
+  }
+
   assert.doesNotMatch(workingDirectory, /src-tauri[\\/]+logs/i)
   assert.doesNotMatch(workingDirectory, /skill-bundles[\\/]+angrymiao-voice-control/i)
 })
