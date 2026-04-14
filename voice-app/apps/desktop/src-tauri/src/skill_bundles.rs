@@ -7,6 +7,7 @@ use settings_core::StoredVoiceSettings;
 
 const ANGRYMIAO_BUNDLE_ID: &str = "angrymiao-voice-control";
 const ANGRYMIAO_RUNTIME_ID: &str = "system-control";
+pub const BUNDLED_SKILL_BUNDLE_RESOURCE_DIR: &str = "skill-bundles";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -115,7 +116,8 @@ pub struct AngrymiaoRuntimeDiagnostics {
 }
 
 pub fn default_skill_bundle_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../skill-bundles")
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../skill-bundles");
+    std::fs::canonicalize(&path).unwrap_or(path)
 }
 
 pub fn list_installed_skill_bundles(
@@ -691,10 +693,22 @@ fn resolve_path_inside(base_dir: &Path, relative_path: &str) -> Result<PathBuf, 
 #[cfg(test)]
 mod tests {
     use super::{
-        inspect_angrymiao_runtime, install_skill_bundle_from_dir, list_installed_skill_bundles,
-        read_skill_bundle_text_file, resolve_angrymiao_prompt_assets,
+        default_skill_bundle_root, inspect_angrymiao_runtime, install_skill_bundle_from_dir,
+        list_installed_skill_bundles, read_skill_bundle_text_file,
+        resolve_angrymiao_prompt_assets,
     };
     use settings_core::StoredVoiceSettings;
+
+    #[test]
+    fn default_skill_bundle_root_points_inside_voice_app_workspace() {
+        let root = default_skill_bundle_root();
+        let normalized = root.to_string_lossy().replace('\\', "/");
+
+        assert!(
+            normalized.ends_with("/voice-app/skill-bundles"),
+            "expected skill bundle root inside voice-app workspace, got {normalized}"
+        );
+    }
 
     #[test]
     fn resolves_angrymiao_prompt_assets_from_bundle_files() {

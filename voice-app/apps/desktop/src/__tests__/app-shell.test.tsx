@@ -74,7 +74,7 @@ describe('App shell', () => {
     expect(screen.getByRole('button', { name: '关闭窗口' })).toBeInTheDocument()
   })
 
-  it('uses a native tauri drag region and forwards window control actions to the current tauri window', () => {
+  it('forwards window control actions to the current tauri window', () => {
     const windowMock = {
       label: 'main',
       hide: vi.fn(),
@@ -86,7 +86,6 @@ describe('App shell', () => {
 
     render(<App />)
 
-    expect(screen.getByLabelText('窗口拖拽区')).toHaveAttribute('data-tauri-drag-region')
     fireEvent.click(screen.getByRole('button', { name: '最小化窗口' }))
     fireEvent.click(screen.getByRole('button', { name: '切换窗口最大化' }))
     fireEvent.click(screen.getByRole('button', { name: '关闭窗口' }))

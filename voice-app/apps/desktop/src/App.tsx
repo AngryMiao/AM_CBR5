@@ -5,6 +5,7 @@ import { OverlayWindow } from './features/runtime/OverlayWindow'
 import { ResultWindow } from './features/runtime/ResultWindow'
 import { RuntimeStatus } from './features/runtime/RuntimeStatus'
 import { SettingsPanel } from './features/settings/SettingsPanel'
+import { useManualTitlebarDrag } from './features/window/useManualTitlebarDrag'
 import {
   closeCurrentWindow,
   getCurrentWindowLabel,
@@ -65,6 +66,7 @@ const MAIN_PANELS: Array<{
 export default function App() {
   const windowLabel = getCurrentWindowLabel()
   const [activePanel, setActivePanel] = useState<MainPanelKey>('runtime')
+  const titlebarDragHandlers = useManualTitlebarDrag()
 
   useLayoutEffect(() => {
     document.documentElement.dataset.window = windowLabel
@@ -90,7 +92,7 @@ export default function App() {
         <div
           aria-label="窗口拖拽区"
           className="desktop-titlebar-drag"
-          data-tauri-drag-region
+          {...titlebarDragHandlers}
         />
 
         <div className="desktop-window-controls">

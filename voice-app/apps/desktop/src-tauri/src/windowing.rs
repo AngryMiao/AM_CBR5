@@ -341,13 +341,23 @@ fn main_window_visible(app: &AppHandle) -> bool {
         .unwrap_or(false)
 }
 
+fn should_enable_window_shadow(label: &str) -> bool {
+    label == MAIN_WINDOW_LABEL
+}
+
 fn apply_runtime_window_chrome(window: tauri::WebviewWindow) -> tauri::Result<()> {
-    let _ = window.set_shadow(false);
+    let _ = window.set_shadow(should_enable_window_shadow(window.label()));
     let _ = window.hide_menu();
     let _ = window.remove_menu();
 
     #[cfg(target_os = "windows")]
-    suppress_windows_runtime_window_border(&window);
+    {
+        suppress_windows_runtime_window_border(&window);
+        // Set transparent background for main window to allow CSS background
+        if window.label() == MAIN_WINDOW_LABEL {
+            let _ = window.set_background_color(Some(Color(0, 0, 0, 0)));
+        }
+    }
 
     Ok(())
 }
@@ -397,9 +407,17 @@ mod tests {
     use ipc_contract::RuntimeSnapshot;
 
     use super::{
-        overlay_bounds_for_work_area, result_bounds_for_work_area, should_hide_window_on_close,
-        window_visibility_for_phase, window_visibility_for_snapshot, WorkArea, OVERLAY_WIDTH,
+        overlay_bounds_for_work_area, result_bounds_for_work_area, should_enable_window_shadow,
+        should_hide_window_on_close, window_visibility_for_phase, window_visibility_for_snapshot,
+        WorkArea, OVERLAY_WIDTH,
     };
+
+    #[test]
+    fn enables_shadow_for_main_window_only() {
+        assert!(should_enable_window_shadow("main"));
+        assert!(!should_enable_window_shadow("overlay"));
+        assert!(!should_enable_window_shadow("result"));
+    }
 
     #[test]
     fn shows_overlay_for_listening_phase() {

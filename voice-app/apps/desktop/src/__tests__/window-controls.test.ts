@@ -1,5 +1,8 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { toggleCurrentWindowMaximize } from '../lib/tauri'
+import {
+  startCurrentWindowDragging,
+  toggleCurrentWindowMaximize,
+} from '../lib/tauri'
 
 describe('window controls', () => {
   it('maximizes the current window explicitly when it is not maximized', async () => {
@@ -36,5 +39,17 @@ describe('window controls', () => {
     expect(windowMock.unmaximize).toHaveBeenCalledTimes(1)
     expect(windowMock.maximize).not.toHaveBeenCalled()
     expect(windowMock.toggleMaximize).not.toHaveBeenCalled()
+  })
+
+  it('starts dragging the current window when the drag API is available', async () => {
+    const windowMock = {
+      label: 'main',
+      startDragging: vi.fn().mockResolvedValue(undefined),
+    } as never
+    vi.mocked(getCurrentWindow).mockImplementation(() => windowMock)
+
+    await startCurrentWindowDragging()
+
+    expect(windowMock.startDragging).toHaveBeenCalledTimes(1)
   })
 })

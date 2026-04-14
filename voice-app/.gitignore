@@ -3,4 +3,5 @@ dist/
 .vite/
 coverage/
 target/
+target-tray-tests/
 *.log

@@ -18,7 +18,8 @@
         "height": 820,
         "minWidth": 1200,
         "minHeight": 780,
-        "decorations": false
+        "decorations": false,
+        "transparent": true
       }
     ]
   },
@@ -30,6 +31,9 @@
     }
   },
   "bundle": {
-    "active": false
+    "active": false,
+    "resources": {
+      "../../../skill-bundles/": "skill-bundles/"
+    }
   }
 }

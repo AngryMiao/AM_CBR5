@@ -9,14 +9,16 @@ mod windowing;
 
 use std::path::PathBuf;
 
-use tauri::Manager;
+use tauri::{path::BaseDirectory, Manager};
 
 pub use hotkeys::{
     fallback_hotkey_validation_error, resolve_hotkey_backend_diagnostics,
     resolve_hotkey_backend_mode, route_native_hook_event, HookEventRoutingDecision,
     HotkeyBackendDiagnostics, HotkeyBackendMode,
 };
-pub use tray::{route_tray_menu_action, MenuAction};
+pub use tray::{
+    route_tray_icon_action, route_tray_menu_action, MenuAction, TrayIconAction,
+};
 
 pub fn run() {
     #[cfg(target_os = "windows")]
@@ -39,9 +41,18 @@ pub fn run() {
             let app_data_dir = app.path().app_data_dir()?;
             let history_store = history_store_path(&app_data_dir);
             let settings_store = settings_store_path(&app_data_dir);
+            let skill_bundle_root = app
+                .path()
+                .resolve(
+                    skill_bundles::BUNDLED_SKILL_BUNDLE_RESOURCE_DIR,
+                    BaseDirectory::Resource,
+                )
+                .ok()
+                .filter(|path| path.exists())
+                .unwrap_or_else(skill_bundles::default_skill_bundle_root);
             let state = app.state::<app_state::AppState>();
             state.configure_app_data_dir(app_data_dir);
-            state.configure_skill_bundle_root(skill_bundles::default_skill_bundle_root());
+            state.configure_skill_bundle_root(skill_bundle_root);
             state
                 .configure_history_store(history_store)
                 .map_err(std::io::Error::other)?;

@@ -371,6 +371,14 @@ export async function minimizeCurrentWindow() {
   }
 }
 
+export async function startCurrentWindowDragging() {
+  const currentWindow = getCurrentWindow()
+
+  if (typeof currentWindow.startDragging === 'function') {
+    await currentWindow.startDragging()
+  }
+}
+
 export async function toggleCurrentWindowMaximize() {
   const currentWindow = getCurrentWindow()
 

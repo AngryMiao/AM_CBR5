@@ -8,6 +8,7 @@ describe('tauri desktop capability', () => {
         'core:window:allow-is-maximized',
         'core:window:allow-maximize',
         'core:window:allow-minimize',
+        'core:window:allow-start-dragging',
         'core:window:allow-toggle-maximize',
         'core:window:allow-unmaximize',
       ]),

@@ -266,6 +266,7 @@ function createMockWindow(label: 'main' | 'overlay' | 'result' = 'main') {
     hide: vi.fn(),
     close: vi.fn(),
     minimize: vi.fn(),
+    startDragging: vi.fn(),
     toggleMaximize: vi.fn(),
   }
 }

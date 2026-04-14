@@ -8,6 +8,9 @@
     "test": "pnpm --dir apps/desktop test"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.10.1"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@tauri-apps/cli": "^2.10.1",
+    "open": "^10.2.0",
+    "zod": "^4.3.6"
   }
 }

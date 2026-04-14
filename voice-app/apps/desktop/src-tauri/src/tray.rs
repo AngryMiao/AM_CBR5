@@ -1,6 +1,6 @@
 use tauri::{
     menu::{MenuBuilder, MenuEvent},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
     App, AppHandle,
 };
 
@@ -37,12 +37,7 @@ pub fn route_tray_menu_action(id: &str) -> Option<MenuAction> {
 
 pub fn route_tray_icon_action(event: &TrayIconEvent) -> Option<TrayIconAction> {
     match event {
-        TrayIconEvent::Click {
-            button: MouseButton::Left,
-            button_state: MouseButtonState::Up,
-            ..
-        }
-        | TrayIconEvent::DoubleClick {
+        TrayIconEvent::DoubleClick {
             button: MouseButton::Left,
             ..
         } => Some(TrayIconAction::ToggleMain),
