@@ -81,6 +81,27 @@ cd <你的仓库路径>\voice-app
 pnpm install
 ```
 
+## Windows 打包
+
+Windows 推荐在 `Developer PowerShell for VS 2022` 中执行：
+
+```powershell
+cd <你的仓库路径>\voice-app
+pnpm --dir apps/desktop exec tauri build --bundles nsis --ci --no-sign
+```
+
+说明：
+
+- `pnpm build` 只会执行前端的 `vite build`
+- 真正生成 Windows 安装包要用上面的 `tauri build`
+- 即使 `src-tauri/tauri.conf.json` 里 `bundle.active` 为 `false`，显式传入 `--bundles nsis` 仍会产出 NSIS 安装包
+
+默认产物路径：
+
+```text
+voice-app/target/release/bundle/nsis/Voice App_0.1.0_x64-setup.exe
+```
+
 ## 启动原生桌面 App
 
 Windows 推荐在 `Developer PowerShell for VS 2022` 中执行：
