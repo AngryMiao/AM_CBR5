@@ -1,0 +1,89 @@
+## Encoding Rules
+
+- `11 + HID` means key down
+- `10 + HID` means key up
+- For combinations, press modifier keys first, then the normal key, then release the normal key, then release modifiers in reverse order
+
+## Keyboard HID Reference
+
+| KeyboardEvent.code | HID |
+| --- | --- |
+| ControlLeft | 0700E0 |
+| MetaLeft | 0700E3 |
+| ShiftLeft | 0700E1 |
+| AltLeft | 0700E2 |
+| KeyA | 070004 |
+| KeyB | 070005 |
+| KeyC | 070006 |
+| KeyD | 070007 |
+| KeyE | 070008 |
+| KeyF | 070009 |
+| KeyG | 07000A |
+| KeyH | 07000B |
+| KeyI | 07000C |
+| KeyJ | 07000D |
+| KeyK | 07000E |
+| KeyL | 07000F |
+| KeyM | 070010 |
+| KeyN | 070011 |
+| KeyO | 070012 |
+| KeyP | 070013 |
+| KeyQ | 070014 |
+| KeyR | 070015 |
+| KeyS | 070016 |
+| KeyT | 070017 |
+| KeyU | 070018 |
+| KeyV | 070019 |
+| KeyW | 07001A |
+| KeyX | 07001B |
+| KeyY | 07001C |
+| KeyZ | 07001D |
+| Digit1 | 07001E |
+| Digit2 | 07001F |
+| Digit3 | 070020 |
+| Digit4 | 070021 |
+| Digit5 | 070022 |
+| Digit6 | 070023 |
+| Digit7 | 070024 |
+| Digit8 | 070025 |
+| Digit9 | 070026 |
+| Digit0 | 070027 |
+| Enter | 070028 |
+| Escape | 070029 |
+| Backspace | 07002A |
+| Tab | 07002B |
+| Space | 07002C |
+| PrintScreen | 070046 |
+| Insert | 070049 |
+| Home | 07004A |
+| PageUp | 07004B |
+| Delete | 07004C |
+| End | 07004D |
+| PageDown | 07004E |
+| ArrowUp | 070052 |
+| ArrowDown | 070051 |
+| ArrowLeft | 070050 |
+| ArrowRight | 07004F |
+| Minus | 07002D |
+| Equal | 07002E |
+| BracketLeft | 07002F |
+| BracketRight | 070030 |
+| Backslash | 070031 |
+| Semicolon | 070033 |
+| Quote | 070034 |
+| Backquote | 070035 |
+| Comma | 070036 |
+| Period | 070037 |
+| Slash | 070038 |
+| F1 | 07003A |
+| F2 | 07003B |
+| F3 | 07003C |
+| F4 | 07003D |
+| F5 | 07003E |
+| F6 | 07003F |
+| F7 | 070040 |
+| F8 | 070041 |
+| F9 | 070042 |
+| F10 | 070043 |
+| F11 | 070044 |
+| F12 | 070045 |
