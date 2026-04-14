@@ -8,7 +8,7 @@ import { SkillBundleManifestSchema, type SkillBundleManifest, type SkillBundleRu
 function getSkillBundlesBaseDir() {
   return app.isPackaged
     ? path.join(process.resourcesPath, 'skill-bundles')
-    : path.join(__dirname, '../../skill-bundles')
+    : path.join(__dirname, '../../voice-app/skill-bundles')
 }
 
 function resolvePathInside(baseDir: string, relativePath: string) {

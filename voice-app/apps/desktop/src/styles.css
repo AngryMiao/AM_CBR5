@@ -179,10 +179,14 @@ input:focus, textarea:focus, select:focus {
   background: #f5f5f7;
   color: #1d1d1f;
   overflow: hidden;
-  /* Apple design shadow - soft, diffused elevation */
-  border-radius: 12px;
-  /* Use box-shadow to create depth without hard borders */
-  box-shadow: rgba(0, 0, 0, 0.22) 3px 5px 30px 0px;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  /* Apple-style soft shadow - enhanced for window distinction
+     Based on DESIGN.md Card Shadow: rgba(0, 0, 0, 0.22) 3px 5px 30px 0px
+     Slightly increased offset and spread for better visual separation */
+  box-shadow: rgba(0, 0, 0, 0.28) 4px 8px 40px 0px;
 }
 
 .desktop-titlebar {

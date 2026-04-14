@@ -77,7 +77,7 @@ directories:
 
 extraResources:
   - ./assets/**
-  - from: ./skill-bundles
+  - from: ./voice-app/skill-bundles
     to: skill-bundles
     filter:
       - "**/*"

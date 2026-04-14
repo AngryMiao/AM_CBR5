@@ -15,7 +15,7 @@
     "build:preload": "node ./scripts/run-local-bin.cjs electron-vite build",
     "build:renderer": "node ./scripts/run-local-bin.cjs electron-vite build",
     "build:web": "cross-env CHATBOX_BUILD_PLATFORM=web node ./scripts/run-local-bin.cjs electron-vite build && pnpm run delete-sourcemaps",
-    "build:skill-bundles": "node ./skill-bundles/angrymiao-voice-control/scripts/build-runtime.cjs",
+    "build:skill-bundles": "node ./voice-app/skill-bundles/angrymiao-voice-control/scripts/build-runtime.cjs",
     "delete-sourcemaps": "ts-node ./.erb/scripts/delete-source-maps-runner.js",
     "postinstall": "node .erb/scripts/postinstall.cjs",
     "package": "node ./scripts/clean-package-output.cjs && node ./scripts/prepare-release-app-deps.cjs && pnpm run build && node ./scripts/ensure-app-builder-bin.cjs && node ./scripts/run-local-bin.cjs electron-builder build --publish never",

@@ -141,7 +141,7 @@ describe('buildAngrymiaoAgentSkillPrompt', () => {
   it('keeps the full HID table inside the skill bundle doc instead of generating it from shared app code', () => {
     const hidReferencePath = path.resolve(
       __dirname,
-      '../../../../skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md'
+      '../../../../voice-app/skill-bundles/angrymiao-voice-control/docs/keyboard-hid-reference.md'
     )
     const markdown = readFileSync(hidReferencePath, 'utf8')
 
@@ -155,7 +155,7 @@ describe('buildAngrymiaoAgentSkillPrompt', () => {
   })
 
   it('documents that user-configured trigger words override generic text-input heuristics', () => {
-    const skillPath = path.resolve(__dirname, '../../../../skill-bundles/angrymiao-voice-control/SKILL.md')
+    const skillPath = path.resolve(__dirname, '../../../../voice-app/skill-bundles/angrymiao-voice-control/SKILL.md')
     const markdown = readFileSync(skillPath, 'utf8')
 
     expect(markdown).toContain(
@@ -172,7 +172,7 @@ describe('buildAngrymiaoAgentSkillPrompt', () => {
 
   it('adds current-turn priority rules to avoid historical context polluting the current command', () => {
     const prompt = buildAngrymiaoAgentSkillPrompt('win32')
-    const skillPath = path.resolve(__dirname, '../../../../skill-bundles/angrymiao-voice-control/SKILL.md')
+    const skillPath = path.resolve(__dirname, '../../../../voice-app/skill-bundles/angrymiao-voice-control/SKILL.md')
     const markdown = readFileSync(skillPath, 'utf8')
 
     expect(prompt).toContain('Current-turn priority')

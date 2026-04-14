@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Voice App 需要访问麦克风，以便在长按热键后采集语音并发送到语音识别服务。</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Voice App 需要向 System Events 发送自动化事件，以便执行键盘输入、快捷键和部分系统控制操作。</string>
+</dict>
+</plist>

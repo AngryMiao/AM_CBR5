@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "pnpm --dir apps/desktop dev",
     "build": "pnpm --dir apps/desktop build",
+    "build:mac": "pnpm --dir apps/desktop exec tauri build --bundles app,dmg --target universal-apple-darwin --ci --no-sign",
     "test": "pnpm --dir apps/desktop test"
   },
   "devDependencies": {

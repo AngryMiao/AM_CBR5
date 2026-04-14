@@ -74,6 +74,31 @@ Windows 下编译这个桌面壳需要 `Rust + MSVC + Windows SDK + WebView2`。
 xcode-select --install
 ```
 
+### macOS 打包
+
+请在 Mac 机器上执行：
+
+```bash
+cd <你的仓库路径>/voice-app
+pnpm run build:mac
+```
+
+当前仓库已补齐这几项 mac 打包配置：
+
+- `apps/desktop/src-tauri/Info.plist`
+  - 声明 `NSMicrophoneUsageDescription`
+  - 声明 `NSAppleEventsUsageDescription`
+- `apps/desktop/src-tauri/Entitlements.plist`
+  - 为后续签名场景预留音频输入和 Apple Events 能力声明
+- `apps/desktop/src-tauri/tauri.macos.conf.json`
+  - 在 macOS 上启用 `app` / `dmg` bundle，并挂载 entitlements
+
+说明：
+
+- 首次真正开始录音时，macOS 仍会弹出麦克风权限授权框
+- 如果后续使用内置 system-control runtime 执行键盘注入或系统控制，macOS 还会要求你在“隐私与安全性”里授予“辅助功能”与“自动化 -> System Events”
+- 这套配置解决的是 bundle 侧缺少隐私用途声明的问题，不替代用户在系统设置里的授权
+
 ## 安装依赖
 
 ```powershell

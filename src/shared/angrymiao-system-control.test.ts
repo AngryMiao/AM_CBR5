@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveBrowserLaunchTarget as resolveMarketplaceBrowserLaunchTarget } from '../../claude-code-angrymiao-marketplace/runtime/system-control-mcp/src/tools/system'
-import { resolveBrowserLaunchTarget as resolveBundleBrowserLaunchTarget } from '../../skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/system'
+import { resolveBrowserLaunchTarget as resolveBundleBrowserLaunchTarget } from '../../voice-app/skill-bundles/angrymiao-voice-control/runtime/system-control-mcp/src/tools/system'
 
 describe('Angrymiao system-control browser mapping', () => {
   it('maps Edge to msedge on Windows in both runtimes', () => {

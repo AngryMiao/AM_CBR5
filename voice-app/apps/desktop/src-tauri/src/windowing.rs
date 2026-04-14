@@ -342,6 +342,8 @@ fn main_window_visible(app: &AppHandle) -> bool {
 }
 
 fn should_enable_window_shadow(label: &str) -> bool {
+    // Main window needs system shadow to distinguish from other white backgrounds
+    // Overlay and result windows remain shadowless for overlay/floating effect
     label == MAIN_WINDOW_LABEL
 }
 
