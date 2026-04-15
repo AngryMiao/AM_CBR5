@@ -1,4 +1,5 @@
 use std::net::TcpListener;
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
@@ -46,6 +47,9 @@ fn build_server_frame(flags: u8, payload: serde_json::Value, sequence: Option<i3
 
 fn spawn_test_server() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+    listener
+        .set_nonblocking(true)
+        .expect("listener should become nonblocking");
     let address = format!(
         "ws://{}",
         listener.local_addr().expect("address should exist")
@@ -54,8 +58,9 @@ fn spawn_test_server() -> String {
     thread::spawn(move || {
         let runtime = Runtime::new().expect("runtime should build");
         runtime.block_on(async move {
-            let (stream, _) = listener.accept().expect("client should connect");
-            let stream = tokio::net::TcpStream::from_std(stream).expect("tokio stream should wrap");
+            let listener =
+                tokio::net::TcpListener::from_std(listener).expect("tokio listener should wrap");
+            let (stream, _) = listener.accept().await.expect("client should connect");
             let mut websocket = accept_async(stream)
                 .await
                 .expect("websocket handshake should succeed");
@@ -122,6 +127,47 @@ fn spawn_test_server() -> String {
     address
 }
 
+fn spawn_server_that_reports_frames_after_commit() -> (String, mpsc::Receiver<bool>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+    listener
+        .set_nonblocking(true)
+        .expect("listener should become nonblocking");
+    let address = format!(
+        "ws://{}",
+        listener.local_addr().expect("address should exist")
+    );
+    let (report_tx, report_rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let runtime = Runtime::new().expect("runtime should build");
+        runtime.block_on(async move {
+            let listener =
+                tokio::net::TcpListener::from_std(listener).expect("tokio listener should wrap");
+            let (stream, _) = listener.accept().await.expect("client should connect");
+            let mut websocket = accept_async(stream)
+                .await
+                .expect("websocket handshake should succeed");
+
+            let _ = websocket.next().await;
+            let _ = websocket.next().await;
+            let _ = websocket.next().await;
+
+            let extra_binary_frame_seen = matches!(
+                tokio::time::timeout(Duration::from_millis(250), websocket.next()).await,
+                Ok(Some(Ok(Message::Binary(_))))
+            );
+            let _ = report_tx.send(extra_binary_frame_seen);
+
+            websocket
+                .close(None)
+                .await
+                .expect("websocket should close cleanly");
+        });
+    });
+
+    (address, report_rx)
+}
+
 fn unused_ws_url() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
     let address = listener.local_addr().expect("address should exist");
@@ -148,6 +194,54 @@ fn spawn_http_403_server() -> String {
     });
 
     address
+}
+
+#[test]
+fn session_rejects_audio_appends_after_commit() {
+    let (url, report_rx) = spawn_server_that_reports_frames_after_commit();
+    let config = DoubaoAsrConfig {
+        url,
+        app_id: "app-id".to_string(),
+        access_token: "token".to_string(),
+        resource_id: "volc.bigasr.sauc.duration".to_string(),
+        model: "bigmodel".to_string(),
+        audio_format: "pcm".to_string(),
+        audio_rate: 16_000,
+        audio_bits: 16,
+        audio_channel: 1,
+        audio_language: "zh-CN".to_string(),
+        enable_itn: false,
+        enable_ddc: false,
+        enable_punc: false,
+        show_utterances: true,
+        force_to_speech_time: 0,
+        end_window_size: 800,
+        boosting_table_id: None,
+        context_json: None,
+    };
+
+    let (session, _) = DoubaoStreamingSession::connect(config).expect("session should connect");
+    let client = session.client();
+    client
+        .append_audio(vec![0, 1, 2, 3])
+        .expect("initial audio append should succeed");
+    session.commit().expect("commit should succeed");
+
+    let append_after_commit = client.append_audio(vec![4, 5, 6, 7]);
+
+    assert!(
+        append_after_commit.is_err(),
+        "append_audio after commit must be rejected locally"
+    );
+    assert_eq!(
+        report_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("server should report whether an extra frame arrived"),
+        false,
+        "server must not receive binary frames after the commit frame"
+    );
+
+    session.close().expect("session should close cleanly");
 }
 
 #[test]

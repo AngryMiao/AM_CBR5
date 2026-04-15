@@ -134,7 +134,7 @@ fn ensure_overlay_window(app: &mut App) -> tauri::Result<()> {
     .decorations(false)
     .always_on_top(true)
     .skip_taskbar(true)
-    .transparent(true)
+    // .transparent(true)  // Handled by tauri.conf.json
     .background_color(Color(0, 0, 0, 0))
     .shadow(false)
     .visible(false)
@@ -166,7 +166,7 @@ fn ensure_result_window(app: &mut App) -> tauri::Result<()> {
     .decorations(false)
     .always_on_top(true)
     .skip_taskbar(true)
-    .transparent(true)
+    // .transparent(true)  // Handled by tauri.conf.json
     .background_color(Color(0, 0, 0, 0))
     .shadow(false)
     .visible(false)

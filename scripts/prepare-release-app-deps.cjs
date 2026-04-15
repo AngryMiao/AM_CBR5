@@ -13,22 +13,12 @@ const shell = process.platform === 'win32'
 
 syncReleaseVersion()
 
-let installResult = spawnSync('npm', ['ci', '--omit=dev', '--ignore-scripts'], {
+let installResult = spawnSync('pnpm', ['install', '--prod', '--ignore-scripts'], {
   cwd: releaseAppDir,
   stdio: 'inherit',
   env: installEnv,
   shell,
 })
-
-if (installResult.error?.code === 'ENOENT') {
-  console.warn('[prepare-release-app-deps] npm not found, using pnpm install --prod')
-  installResult = spawnSync('pnpm', ['install', '--prod', '--ignore-scripts'], {
-    cwd: releaseAppDir,
-    stdio: 'inherit',
-    env: installEnv,
-    shell,
-  })
-}
 
 if (installResult.error) {
   console.error(`[prepare-release-app-deps] Failed to install release/app dependencies: ${installResult.error.message}`)

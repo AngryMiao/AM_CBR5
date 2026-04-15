@@ -27,10 +27,12 @@ enum SessionCommand {
 #[derive(Clone)]
 pub struct DoubaoStreamingClient {
     command_tx: UnboundedSender<SessionCommand>,
+    final_packet_sent: Arc<AtomicBool>,
 }
 
 pub struct DoubaoStreamingSession {
     command_tx: UnboundedSender<SessionCommand>,
+    final_packet_sent: Arc<AtomicBool>,
     worker: Option<thread::JoinHandle<()>>,
 }
 
@@ -57,6 +59,8 @@ impl DoubaoStreamingSession {
         let (event_tx, event_rx) = mpsc::channel();
         let (ready_tx, ready_rx) = mpsc::channel();
         let ready_sent = Arc::new(AtomicBool::new(false));
+        let final_packet_sent = Arc::new(AtomicBool::new(false));
+        let worker_final_packet_sent = Arc::clone(&final_packet_sent);
 
         let worker = thread::spawn(move || {
             let runtime = match Builder::new_current_thread().enable_all().build() {
@@ -82,12 +86,15 @@ impl DoubaoStreamingSession {
                     let _ = ready_error_tx.send(Err(cause));
                 }
             }
+
+            worker_final_packet_sent.store(true, Ordering::SeqCst);
         });
 
         match ready_rx.recv() {
             Ok(Ok(())) => Ok((
                 Self {
                     command_tx,
+                    final_packet_sent,
                     worker: Some(worker),
                 },
                 event_rx,
@@ -116,10 +123,12 @@ impl DoubaoStreamingSession {
     pub fn client(&self) -> DoubaoStreamingClient {
         DoubaoStreamingClient {
             command_tx: self.command_tx.clone(),
+            final_packet_sent: Arc::clone(&self.final_packet_sent),
         }
     }
 
     pub fn close(mut self) -> Result<(), DoubaoAsrError> {
+        self.final_packet_sent.store(true, Ordering::SeqCst);
         let _ = self.command_tx.send(SessionCommand::Close);
 
         if let Some(worker) = self.worker.take() {
@@ -138,12 +147,24 @@ impl DoubaoStreamingClient {
             return Ok(());
         }
 
+        if self.final_packet_sent.load(Ordering::SeqCst) {
+            return Err(DoubaoAsrError::new(
+                "doubao session has already sent the final audio packet",
+            ));
+        }
+
         self.command_tx
             .send(SessionCommand::AppendAudio(chunk))
             .map_err(|_| DoubaoAsrError::new("doubao session is no longer running"))
     }
 
     pub fn commit(&self) -> Result<(), DoubaoAsrError> {
+        if self.final_packet_sent.swap(true, Ordering::SeqCst) {
+            return Err(DoubaoAsrError::new(
+                "doubao session has already sent the final audio packet",
+            ));
+        }
+
         self.command_tx
             .send(SessionCommand::Commit)
             .map_err(|_| DoubaoAsrError::new("doubao session is no longer running"))

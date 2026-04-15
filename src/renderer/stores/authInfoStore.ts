@@ -1,6 +1,5 @@
 import { createStore, useStore } from 'zustand'
-import { persist, subscribeWithSelector } from 'zustand/middleware'
-import { immer } from 'zustand/middleware/immer'
+import { persist, subscribeWithSelector, immer } from 'zustand/middleware'
 
 type AuthTokens = {
   accessToken: string

@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use asr_core::{
@@ -133,6 +134,33 @@ pub struct McpToolRuntimeDiagnostics {
 pub struct AppState {
     runtime: Mutex<RuntimeStore>,
     waveform: Arc<Mutex<AudioWaveformStream>>,
+}
+
+#[cfg_attr(test, allow(dead_code))]
+struct AudioWaveformDispatch {
+    chunk_tx: mpsc::Sender<Vec<i16>>,
+}
+
+#[cfg_attr(test, allow(dead_code))]
+impl AudioWaveformDispatch {
+    fn new(waveform: Arc<Mutex<AudioWaveformStream>>) -> Self {
+        let (chunk_tx, chunk_rx) = mpsc::channel::<Vec<i16>>();
+        thread::spawn(move || {
+            while let Ok(chunk) = chunk_rx.recv() {
+                push_audio_waveform_samples(&waveform, &chunk);
+            }
+        });
+
+        Self { chunk_tx }
+    }
+
+    fn send(&self, chunk: &[i16]) {
+        if chunk.is_empty() {
+            return;
+        }
+
+        let _ = self.chunk_tx.send(chunk.to_vec());
+    }
 }
 
 impl Default for AppState {
@@ -1356,14 +1384,14 @@ impl AppState {
             }
         };
         let client = session.client();
-        let waveform = Arc::clone(&self.waveform);
+        let waveform_dispatch = AudioWaveformDispatch::new(Arc::clone(&self.waveform));
         let (capture, capture_ready) =
             match MicrophoneRecordingSession::start_with_preferred_device_and_chunk_callback(
                 Some(preferred_microphone_device_id.as_str()),
                 target_audio_rate,
                 move |chunk| {
                     let _ = client.append_audio(samples_to_pcm_bytes(chunk));
-                    push_audio_waveform_samples(&waveform, chunk);
+                    waveform_dispatch.send(chunk);
                 },
             ) {
                 Ok(value) => value,
@@ -1419,9 +1447,15 @@ impl AppState {
             .ok_or_else(|| "当前没有活动的语音任务".to_string())?;
 
         let clip = match task.capture.take() {
-            Some(ActiveCapture::Microphone(capture)) => {
-                capture.stop().map_err(|cause| cause.to_string())?
-            }
+            Some(ActiveCapture::Microphone(capture)) => match capture.stop() {
+                Ok(clip) => clip,
+                Err(cause) => {
+                    return Ok(self.fail_voice_task_with_task(
+                        Some(task),
+                        format!("麦克风采集异常: {cause}"),
+                    ));
+                }
+            },
             #[cfg(test)]
             Some(ActiveCapture::Test) => return Err("测试采集不能用于生产路径".to_string()),
             None => return Err("麦克风采集未启动".to_string()),
@@ -1453,6 +1487,14 @@ impl AppState {
 
     fn fail_voice_task(&self, message: impl Into<String>) -> RuntimeSnapshot {
         let task = self.take_active_task();
+        self.fail_voice_task_with_task(task, message)
+    }
+
+    fn fail_voice_task_with_task(
+        &self,
+        task: Option<ActiveVoiceTask>,
+        message: impl Into<String>,
+    ) -> RuntimeSnapshot {
         let message = message.into();
         let snapshot = {
             let mut runtime = self.runtime.lock().expect("runtime store lock poisoned");

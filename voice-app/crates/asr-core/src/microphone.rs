@@ -1,5 +1,7 @@
+use std::any::Any;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -258,6 +260,56 @@ impl AudioCaptureError {
     }
 }
 
+fn run_guarded_audio_callback(error_state: &Arc<Mutex<Option<String>>>, callback: impl FnOnce()) {
+    if audio_callback_has_failed(error_state) {
+        return;
+    }
+
+    if let Err(payload) = catch_unwind(AssertUnwindSafe(callback)) {
+        store_audio_callback_error(
+            error_state,
+            format!(
+                "microphone input callback panicked: {}",
+                panic_payload_message(payload)
+            ),
+        );
+    }
+}
+
+fn audio_callback_has_failed(error_state: &Arc<Mutex<Option<String>>>) -> bool {
+    match error_state.lock() {
+        Ok(error) => error.is_some(),
+        Err(_) => true,
+    }
+}
+
+fn store_audio_callback_error(error_state: &Arc<Mutex<Option<String>>>, message: String) {
+    if let Ok(mut error) = error_state.lock() {
+        if error.is_none() {
+            *error = Some(message);
+        }
+    }
+}
+
+fn take_audio_callback_error(error_state: &Arc<Mutex<Option<String>>>) -> Option<String> {
+    match error_state.lock() {
+        Ok(mut error) => error.take(),
+        Err(_) => Some("microphone input callback error state lock poisoned".to_string()),
+    }
+}
+
+fn panic_payload_message(payload: Box<dyn Any + Send>) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        return (*message).to_string();
+    }
+
+    if let Some(message) = payload.downcast_ref::<String>() {
+        return message.clone();
+    }
+
+    "unknown panic payload".to_string()
+}
+
 fn capture_microphone_until_stopped(
     ready_tx: mpsc::Sender<Result<MicrophoneCaptureReady, AudioCaptureError>>,
     stop_rx: mpsc::Receiver<()>,
@@ -295,21 +347,25 @@ fn capture_microphone_until_stopped(
     let stream = match config.sample_format() {
         cpal::SampleFormat::F32 => {
             let samples = Arc::clone(&samples);
-            let error_state = Arc::clone(&error);
+            let callback_error_state = Arc::clone(&error);
+            let stream_error_state = Arc::clone(&error);
             let on_chunk = Arc::clone(&on_chunk);
             let resampler = Arc::clone(&resampler);
             device
                 .build_input_stream(
                     &config.clone().into(),
                     move |data: &[f32], _| {
-                        let chunk = normalize_f32_samples(data, channels);
-                        let chunk = resample_chunk(&chunk, &resampler);
-                        append_chunk(&chunk, &samples, &on_chunk);
+                        run_guarded_audio_callback(&callback_error_state, || {
+                            let chunk = normalize_f32_samples(data, channels);
+                            let chunk = resample_chunk(&chunk, &resampler);
+                            append_chunk(&chunk, &samples, &on_chunk);
+                        });
                     },
                     move |cause| {
-                        if let Ok(mut error) = error_state.lock() {
-                            *error = Some(cause.to_string());
-                        }
+                        store_audio_callback_error(
+                            &stream_error_state,
+                            format!("microphone stream failed while recording: {cause}"),
+                        );
                     },
                     None,
                 )
@@ -319,21 +375,25 @@ fn capture_microphone_until_stopped(
         }
         cpal::SampleFormat::I16 => {
             let samples = Arc::clone(&samples);
-            let error_state = Arc::clone(&error);
+            let callback_error_state = Arc::clone(&error);
+            let stream_error_state = Arc::clone(&error);
             let on_chunk = Arc::clone(&on_chunk);
             let resampler = Arc::clone(&resampler);
             device
                 .build_input_stream(
                     &config.clone().into(),
                     move |data: &[i16], _| {
-                        let chunk = normalize_i16_samples(data, channels);
-                        let chunk = resample_chunk(&chunk, &resampler);
-                        append_chunk(&chunk, &samples, &on_chunk);
+                        run_guarded_audio_callback(&callback_error_state, || {
+                            let chunk = normalize_i16_samples(data, channels);
+                            let chunk = resample_chunk(&chunk, &resampler);
+                            append_chunk(&chunk, &samples, &on_chunk);
+                        });
                     },
                     move |cause| {
-                        if let Ok(mut error) = error_state.lock() {
-                            *error = Some(cause.to_string());
-                        }
+                        store_audio_callback_error(
+                            &stream_error_state,
+                            format!("microphone stream failed while recording: {cause}"),
+                        );
                     },
                     None,
                 )
@@ -343,21 +403,25 @@ fn capture_microphone_until_stopped(
         }
         cpal::SampleFormat::U16 => {
             let samples = Arc::clone(&samples);
-            let error_state = Arc::clone(&error);
+            let callback_error_state = Arc::clone(&error);
+            let stream_error_state = Arc::clone(&error);
             let on_chunk = Arc::clone(&on_chunk);
             let resampler = Arc::clone(&resampler);
             device
                 .build_input_stream(
                     &config.into(),
                     move |data: &[u16], _| {
-                        let chunk = normalize_u16_samples(data, channels);
-                        let chunk = resample_chunk(&chunk, &resampler);
-                        append_chunk(&chunk, &samples, &on_chunk);
+                        run_guarded_audio_callback(&callback_error_state, || {
+                            let chunk = normalize_u16_samples(data, channels);
+                            let chunk = resample_chunk(&chunk, &resampler);
+                            append_chunk(&chunk, &samples, &on_chunk);
+                        });
                     },
                     move |cause| {
-                        if let Ok(mut error) = error_state.lock() {
-                            *error = Some(cause.to_string());
-                        }
+                        store_audio_callback_error(
+                            &stream_error_state,
+                            format!("microphone stream failed while recording: {cause}"),
+                        );
                     },
                     None,
                 )
@@ -387,14 +451,8 @@ fn capture_microphone_until_stopped(
         match stop_rx.recv_timeout(Duration::from_millis(50)) {
             Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                if let Some(message) = error
-                    .lock()
-                    .expect("audio error state lock poisoned")
-                    .take()
-                {
-                    return Err(AudioCaptureError::new(format!(
-                        "microphone stream failed while recording: {message}"
-                    )));
+                if let Some(message) = take_audio_callback_error(&error) {
+                    return Err(AudioCaptureError::new(message));
                 }
             }
         }
@@ -551,7 +609,7 @@ impl StreamingResampler {
             self.next_output_position += step;
         }
 
-        let consumed = self.next_output_position.floor() as usize;
+        let consumed = (self.next_output_position.floor() as usize).min(self.source.len());
         if consumed > 0 {
             self.source.drain(..consumed);
             self.next_output_position -= consumed as f64;
@@ -563,7 +621,27 @@ impl StreamingResampler {
 
 #[cfg(test)]
 mod tests {
-    use super::StreamingResampler;
+    use std::sync::{Arc, Mutex};
+
+    use super::{run_guarded_audio_callback, take_audio_callback_error, StreamingResampler};
+
+    #[test]
+    fn guarded_audio_callback_catches_chunk_handler_panics() {
+        let error = Arc::new(Mutex::new(None));
+
+        let callback_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            run_guarded_audio_callback(&error, || panic!("waveform channel exploded"));
+        }));
+
+        assert!(
+            callback_result.is_ok(),
+            "audio callback panics must not unwind across CoreAudio"
+        );
+        assert_eq!(
+            take_audio_callback_error(&error).as_deref(),
+            Some("microphone input callback panicked: waveform channel exploded")
+        );
+    }
 
     #[test]
     fn resampler_keeps_samples_when_input_matches_output_rate() {
@@ -583,6 +661,22 @@ mod tests {
         assert_eq!(
             output,
             vec![0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45]
+        );
+    }
+
+    #[test]
+    fn resampler_does_not_panic_when_downsample_step_overshoots_chunk_length() {
+        let mut resampler = StreamingResampler::new(48_000, 16_000);
+        let chunk = (0_i16..512_i16).collect::<Vec<_>>();
+
+        let output = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            resampler.process_chunk(&chunk)
+        }));
+
+        assert!(output.is_ok(), "downsampling a 512-frame chunk should not panic");
+        assert_eq!(
+            output.expect("resampler output should exist"),
+            (0_i16..=510_i16).step_by(3).collect::<Vec<_>>()
         );
     }
 }
