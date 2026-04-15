@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "xyz.angrymiao.voiceapp",
   "build": {
-    "beforeDevCommand": "pnpm exec vite --host 127.0.0.1 --port 1420 --strictPort",
+    "beforeDevCommand": "pnpm run dev:tauri",
     "beforeBuildCommand": "pnpm build",
     "devUrl": "http://127.0.0.1:1420",
     "frontendDist": "../dist"

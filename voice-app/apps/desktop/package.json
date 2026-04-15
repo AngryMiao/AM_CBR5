@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:tauri": "pnpm run build:skill-bundles && vite --host 127.0.0.1 --port 1420 --strictPort",
     "build:skill-bundles": "node ../../skill-bundles/angrymiao-voice-control/scripts/build-runtime.cjs",
     "build": "pnpm run build:skill-bundles && vite build",
     "test": "vitest run"

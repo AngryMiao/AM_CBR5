@@ -507,7 +507,9 @@ enum CGEventType {
     KeyDown = 10,
     KeyUp = 11,
     FlagsChanged = 12,
+    #[allow(dead_code)] // 仅由 CoreGraphics 事件回调返回，Rust 侧不会直接构造
     TapDisabledByTimeout = 0xFFFF_FFFE,
+    #[allow(dead_code)] // 仅由 CoreGraphics 事件回调返回，Rust 侧不会直接构造
     TapDisabledByUserInput = 0xFFFF_FFFF,
 }
 

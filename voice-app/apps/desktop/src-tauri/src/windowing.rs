@@ -131,6 +131,7 @@ fn ensure_overlay_window(app: &mut App) -> tauri::Result<()> {
     .inner_size(OVERLAY_WIDTH, OVERLAY_HEIGHT)
     .center()
     .resizable(false)
+    .focusable(should_make_runtime_window_focusable(OVERLAY_WINDOW_LABEL))
     .decorations(false)
     .always_on_top(true)
     .skip_taskbar(true)
@@ -163,6 +164,7 @@ fn ensure_result_window(app: &mut App) -> tauri::Result<()> {
     .inner_size(RESULT_WIDTH, RESULT_HEIGHT)
     .center()
     .resizable(false)
+    .focusable(should_make_runtime_window_focusable(RESULT_WINDOW_LABEL))
     .decorations(false)
     .always_on_top(true)
     .skip_taskbar(true)
@@ -383,6 +385,19 @@ fn should_enable_window_shadow(label: &str) -> bool {
     label == MAIN_WINDOW_LABEL
 }
 
+fn should_make_runtime_window_focusable(label: &str) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        return label != RESULT_WINDOW_LABEL;
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = label;
+        true
+    }
+}
+
 fn should_use_transparent_runtime_window(label: &str) -> bool {
     label == OVERLAY_WINDOW_LABEL || label == RESULT_WINDOW_LABEL
 }
@@ -488,7 +503,8 @@ mod tests {
 
     use super::{
         overlay_bounds_for_work_area, result_bounds_for_work_area, should_enable_window_shadow,
-        should_hide_window_on_close, should_use_transparent_runtime_window,
+        should_hide_window_on_close, should_make_runtime_window_focusable,
+        should_use_transparent_runtime_window,
         window_visibility_for_phase, window_visibility_for_snapshot, WorkArea, OVERLAY_HEIGHT,
         OVERLAY_WIDTH, RESULT_HEIGHT, RESULT_WIDTH,
     };
@@ -505,6 +521,22 @@ mod tests {
         assert!(!should_use_transparent_runtime_window("main"));
         assert!(should_use_transparent_runtime_window("overlay"));
         assert!(should_use_transparent_runtime_window("result"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn result_window_is_not_focusable_on_macos() {
+        assert!(should_make_runtime_window_focusable("main"));
+        assert!(should_make_runtime_window_focusable("overlay"));
+        assert!(!should_make_runtime_window_focusable("result"));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn runtime_windows_remain_focusable_off_macos() {
+        assert!(should_make_runtime_window_focusable("main"));
+        assert!(should_make_runtime_window_focusable("overlay"));
+        assert!(should_make_runtime_window_focusable("result"));
     }
 
     #[cfg(target_os = "windows")]
