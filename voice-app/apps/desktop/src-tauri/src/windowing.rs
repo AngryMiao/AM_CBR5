@@ -342,8 +342,8 @@ fn main_window_visible(app: &AppHandle) -> bool {
 }
 
 fn should_enable_window_shadow(label: &str) -> bool {
-    // Main window needs system shadow to distinguish from other white backgrounds
-    // Overlay and result windows remain shadowless for overlay/floating effect
+    // Main window needs system shadow (Windows DWM provides shadow for non-transparent windows)
+    // Overlay and result windows are small floating windows, no shadow needed
     label == MAIN_WINDOW_LABEL
 }
 
@@ -355,9 +355,8 @@ fn apply_runtime_window_chrome(window: tauri::WebviewWindow) -> tauri::Result<()
     #[cfg(target_os = "windows")]
     {
         suppress_windows_runtime_window_border(&window);
-        // Set transparent background for main window to allow CSS background
-        if window.label() == MAIN_WINDOW_LABEL {
-            let _ = window.set_background_color(Some(Color(0, 0, 0, 0)));
+        if let Some(background_color) = resolve_windows_background_color(window.label()) {
+            let _ = window.set_background_color(Some(background_color));
         }
     }
 
@@ -366,11 +365,6 @@ fn apply_runtime_window_chrome(window: tauri::WebviewWindow) -> tauri::Result<()
 
 #[cfg(target_os = "windows")]
 fn suppress_windows_runtime_window_border(window: &tauri::WebviewWindow) {
-    const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
-    const DWMWA_BORDER_COLOR: u32 = 34;
-    const DWMWA_COLOR_NONE: u32 = 0xFFFF_FFFE;
-    const DWMWCP_DONOTROUND: u32 = 1;
-
     #[link(name = "dwmapi")]
     unsafe extern "system" {
         fn DwmSetWindowAttribute(
@@ -379,29 +373,75 @@ fn suppress_windows_runtime_window_border(window: &tauri::WebviewWindow) {
             pvAttribute: *const c_void,
             cbAttribute: u32,
         ) -> i32;
+        fn DwmExtendFrameIntoClientArea(
+            hwnd: *mut c_void,
+            margins: *const MARGINS,
+        ) -> i32;
     }
+
+    #[repr(C)]
+    #[allow(non_snake_case)]
+    struct MARGINS {
+        cxLeftWidth: i32,
+        cxRightWidth: i32,
+        cyTopHeight: i32,
+        cyBottomHeight: i32,
+    }
+
+    // DWMWA_BORDER_COLOR is Windows 11 only (build 22000+)
+    const DWMWA_BORDER_COLOR: u32 = 34;
+    const DWMWA_COLOR_NONE: u32 = 0xFFFFFFFF;
 
     let Ok(hwnd) = window.hwnd() else {
         return;
     };
 
-    let corner_preference = DWMWCP_DONOTROUND;
-    let border_color = DWMWA_COLOR_NONE;
+    if window.label() == MAIN_WINDOW_LABEL {
+        unsafe {
+            // Method 1: Extend frame into client area with small positive margins
+            // This helps remove the visible border while preserving the shadow
+            // Works on Windows Vista+ (older than Windows 11)
+            let margins = MARGINS {
+                cxLeftWidth: 1,
+                cxRightWidth: 1,
+                cyTopHeight: 1,
+                cyBottomHeight: 1,
+            };
+            let _ = DwmExtendFrameIntoClientArea(hwnd.0, &margins);
 
-    unsafe {
-        let _ = DwmSetWindowAttribute(
-            hwnd.0,
-            DWMWA_WINDOW_CORNER_PREFERENCE,
-            &corner_preference as *const _ as *const c_void,
-            size_of::<u32>() as u32,
-        );
-        let _ = DwmSetWindowAttribute(
-            hwnd.0,
-            DWMWA_BORDER_COLOR,
-            &border_color as *const _ as *const c_void,
-            size_of::<u32>() as u32,
-        );
+            // Method 2: Also try DWMWA_BORDER_COLOR (Windows 11 only, may not work on Win10)
+            let border_color = rgb_colorref(245, 245, 247);
+            let _ = DwmSetWindowAttribute(
+                hwnd.0,
+                DWMWA_BORDER_COLOR,
+                &border_color as *const _ as *const c_void,
+                size_of::<u32>() as u32,
+            );
+        }
+    } else {
+        // Overlay and result windows: no visible border
+        unsafe {
+            let border_color = DWMWA_COLOR_NONE;
+            let _ = DwmSetWindowAttribute(
+                hwnd.0,
+                DWMWA_BORDER_COLOR,
+                &border_color as *const _ as *const c_void,
+                size_of::<u32>() as u32,
+            );
+        }
     }
+}
+
+#[cfg(target_os = "windows")]
+fn resolve_windows_background_color(_label: &str) -> Option<Color> {
+    // Main window is no longer transparent - uses solid background for system shadow
+    // Overlay and result windows don't need explicit background color
+    None
+}
+
+#[cfg(target_os = "windows")]
+const fn rgb_colorref(red: u8, green: u8, blue: u8) -> u32 {
+    red as u32 | ((green as u32) << 8) | ((blue as u32) << 16)
 }
 
 #[cfg(test)]
@@ -419,6 +459,26 @@ mod tests {
         assert!(should_enable_window_shadow("main"));
         assert!(!should_enable_window_shadow("overlay"));
         assert!(!should_enable_window_shadow("result"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn main_window_has_no_explicit_background_color() {
+        use super::resolve_windows_background_color;
+
+        // Main window no longer needs transparent background - solid background for shadow
+        assert_eq!(resolve_windows_background_color("main"), None);
+        assert_eq!(resolve_windows_background_color("overlay"), None);
+        assert_eq!(resolve_windows_background_color("result"), None);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn main_window_border_matches_background_color() {
+        use super::rgb_colorref;
+
+        // Border color should match Apple light gray background #f5f5f7
+        assert_eq!(rgb_colorref(245, 245, 247), 0xF7F5F5);
     }
 
     #[test]

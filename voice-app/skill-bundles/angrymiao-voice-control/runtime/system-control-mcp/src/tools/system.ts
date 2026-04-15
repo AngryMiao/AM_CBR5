@@ -1,5 +1,4 @@
-import { execSync } from 'child_process'
-import open from 'open'
+import { execFileSync, execSync } from 'child_process'
 import {
   getLockScreenCommand,
   getLockScreenFallbackCommands,
@@ -93,6 +92,36 @@ function getCloseApplicationCommand(appName: string, platform = getPlatform()): 
   }
 }
 
+function openBrowserWithSystemCommand(
+  url: string,
+  browserTarget: ReturnType<typeof resolveBrowserLaunchTarget>,
+  platform = getPlatform()
+) {
+  // Keep browser launching on native commands so the bundled runtime can stay CJS-safe.
+  switch (platform) {
+    case 'darwin': {
+      const args = browserTarget.appName ? ['-a', browserTarget.appName, url] : [url]
+      execFileSync('open', args, { timeout: 10000 })
+      return
+    }
+    case 'win32': {
+      if (browserTarget.appName) {
+        execFileSync(browserTarget.appName, [url], { timeout: 10000 })
+        return
+      }
+
+      execFileSync('rundll32.exe', ['url.dll,FileProtocolHandler', url], {
+        timeout: 10000,
+      })
+      return
+    }
+    case 'linux': {
+      execFileSync(browserTarget.appName || 'xdg-open', [url], { timeout: 10000 })
+      return
+    }
+  }
+}
+
 export async function executeSystemCommand(
   command: SystemCommandType,
   options?: { url?: string; browser?: string; appName?: string }
@@ -136,11 +165,10 @@ export async function executeSystemCommand(
         if (browserTarget.error) {
           return { success: false, message: browserTarget.error }
         }
+        openBrowserWithSystemCommand(url, browserTarget)
         if (browserTarget.appName) {
-          await open(url, { app: { name: browserTarget.appName } })
           return { success: true, message: `已在 ${browserTarget.displayName} 中打开: ${url}` }
         }
-        await open(url)
         return { success: true, message: `已在浏览器中打开: ${url}` }
       }
       case 'open-application': {

@@ -87,100 +87,102 @@ export default function App() {
   }
 
   return (
-    <div className="desktop-shell">
-      <header className="desktop-titlebar">
-        <div
-          aria-label="窗口拖拽区"
-          className="desktop-titlebar-drag"
-          {...titlebarDragHandlers}
-        />
+    <div className="desktop-frame">
+      <div className="desktop-shell">
+        <header className="desktop-titlebar">
+          <div
+            aria-label="窗口拖拽区"
+            className="desktop-titlebar-drag"
+            {...titlebarDragHandlers}
+          />
 
-        <div className="desktop-window-controls">
-          <Button
-            aria-label="最小化窗口"
-            className="desktop-window-button"
-            onClick={() => void minimizeCurrentWindow()}
-            onMouseDown={(event) => event.stopPropagation()}
-            onPointerDown={(event) => event.stopPropagation()}
-            size="icon"
-            type="button"
-            variant="ghost"
-          >
-            <Minus className="h-4 w-4" />
-          </Button>
-          <Button
-            aria-label="切换窗口最大化"
-            className="desktop-window-button"
-            onClick={() => void toggleCurrentWindowMaximize()}
-            onMouseDown={(event) => event.stopPropagation()}
-            onPointerDown={(event) => event.stopPropagation()}
-            size="icon"
-            type="button"
-            variant="ghost"
-          >
-            <Square className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            aria-label="关闭窗口"
-            className="desktop-window-button desktop-window-button-danger"
-            onClick={() => void closeCurrentWindow()}
-            onMouseDown={(event) => event.stopPropagation()}
-            onPointerDown={(event) => event.stopPropagation()}
-            size="icon"
-            type="button"
-            variant="ghost"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      </header>
-
-      <div className="desktop-workspace">
-        <aside className="workspace-sidebar">
-          <div className="workspace-sidebar-head">
-            <div className="workspace-sidebar-heading">
-              <span className="workspace-sidebar-brand-mark" aria-hidden="true">
-                <Mic className="w-4 h-4" />
-              </span>
-              <strong>AngryMiao</strong>
-            </div>
+          <div className="desktop-window-controls">
+            <Button
+              aria-label="最小化窗口"
+              className="desktop-window-button"
+              onClick={() => void minimizeCurrentWindow()}
+              onMouseDown={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+              size="icon"
+              type="button"
+              variant="ghost"
+            >
+              <Minus className="h-4 w-4" />
+            </Button>
+            <Button
+              aria-label="切换窗口最大化"
+              className="desktop-window-button"
+              onClick={() => void toggleCurrentWindowMaximize()}
+              onMouseDown={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+              size="icon"
+              type="button"
+              variant="ghost"
+            >
+              <Square className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              aria-label="关闭窗口"
+              className="desktop-window-button desktop-window-button-danger"
+              onClick={() => void closeCurrentWindow()}
+              onMouseDown={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+              size="icon"
+              type="button"
+              variant="ghost"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
+        </header>
 
-          <nav aria-label="主导航" className="workspace-nav">
-            {MAIN_PANELS.map((panel) => (
-              <Button
-                key={panel.key}
-                aria-current={activePanel === panel.key ? 'page' : undefined}
-                className={`workspace-nav-button ${activePanel === panel.key ? 'workspace-nav-button-active' : ''}`}
-                onClick={() => setActivePanel(panel.key)}
-                variant="ghost"
-              >
-                <span className="workspace-nav-icon">{panel.icon}</span>
-                <span>{panel.label}</span>
-              </Button>
-            ))}
-          </nav>
-        </aside>
+        <div className="desktop-workspace">
+          <aside className="workspace-sidebar">
+            <div className="workspace-sidebar-head">
+              <div className="workspace-sidebar-heading">
+                <span className="workspace-sidebar-brand-mark" aria-hidden="true">
+                  <Mic className="w-4 h-4" />
+                </span>
+                <strong>AngryMiao</strong>
+              </div>
+            </div>
 
-        <main className="workspace-main">
-          {activePanel === 'settings' ? (
-            <section className="workspace-panel animate-panel-fade-in" data-panel={activePanel} key="settings">
-              <SettingsPanel />
-            </section>
-          ) : activePanel === 'history' ? (
-            <section className="workspace-panel animate-panel-fade-in" data-panel={activePanel} key="history">
-              <HistoryPanel />
-            </section>
-          ) : activePanel === 'logs' ? (
-            <section className="workspace-panel animate-panel-fade-in" data-panel={activePanel} key="logs">
-              <LogsPanel />
-            </section>
-          ) : activePanel === 'runtime' ? (
-            <section className="workspace-panel animate-panel-fade-in" data-panel={activePanel} key="runtime">
-              <RuntimeStatus />
-            </section>
-          ) : null}
-        </main>
+            <nav aria-label="主导航" className="workspace-nav">
+              {MAIN_PANELS.map((panel) => (
+                <Button
+                  key={panel.key}
+                  aria-current={activePanel === panel.key ? 'page' : undefined}
+                  className={`workspace-nav-button ${activePanel === panel.key ? 'workspace-nav-button-active' : ''}`}
+                  onClick={() => setActivePanel(panel.key)}
+                  variant="ghost"
+                >
+                  <span className="workspace-nav-icon">{panel.icon}</span>
+                  <span>{panel.label}</span>
+                </Button>
+              ))}
+            </nav>
+          </aside>
+
+          <main className="workspace-main">
+            {activePanel === 'settings' ? (
+              <section className="workspace-panel animate-panel-fade-in" data-panel={activePanel} key="settings">
+                <SettingsPanel />
+              </section>
+            ) : activePanel === 'history' ? (
+              <section className="workspace-panel animate-panel-fade-in" data-panel={activePanel} key="history">
+                <HistoryPanel />
+              </section>
+            ) : activePanel === 'logs' ? (
+              <section className="workspace-panel animate-panel-fade-in" data-panel={activePanel} key="logs">
+                <LogsPanel />
+              </section>
+            ) : activePanel === 'runtime' ? (
+              <section className="workspace-panel animate-panel-fade-in" data-panel={activePanel} key="runtime">
+                <RuntimeStatus />
+              </section>
+            ) : null}
+          </main>
+        </div>
       </div>
     </div>
   )
