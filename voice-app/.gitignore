@@ -4,4 +4,5 @@ dist/
 coverage/
 target/
 target-tray-tests/
+target-runtime-window-tests/
 *.log

@@ -6,7 +6,7 @@ use std::{ffi::c_void, mem::size_of};
 
 use ipc_contract::{RuntimeSnapshot, RESULT_WINDOW_MODE_HIDDEN};
 use tauri::{
-    webview::Color, App, AppHandle, Manager, PhysicalPosition, Runtime, WebviewUrl,
+    webview::Color, App, AppHandle, Manager, PhysicalPosition, PhysicalSize, Runtime, WebviewUrl,
     WebviewWindowBuilder, Window, WindowEvent,
 };
 
@@ -134,7 +134,7 @@ fn ensure_overlay_window(app: &mut App) -> tauri::Result<()> {
     .decorations(false)
     .always_on_top(true)
     .skip_taskbar(true)
-    // .transparent(true)  // Handled by tauri.conf.json
+    .transparent(should_use_transparent_runtime_window(OVERLAY_WINDOW_LABEL))
     .background_color(Color(0, 0, 0, 0))
     .shadow(false)
     .visible(false)
@@ -166,7 +166,7 @@ fn ensure_result_window(app: &mut App) -> tauri::Result<()> {
     .decorations(false)
     .always_on_top(true)
     .skip_taskbar(true)
-    // .transparent(true)  // Handled by tauri.conf.json
+    .transparent(should_use_transparent_runtime_window(RESULT_WINDOW_LABEL))
     .background_color(Color(0, 0, 0, 0))
     .shadow(false)
     .visible(false)
@@ -256,12 +256,18 @@ fn relayout_runtime_windows(app: &AppHandle) -> tauri::Result<()> {
     let work_area = resolve_work_area(app)?;
 
     if let Some(window) = app.get_webview_window(OVERLAY_WINDOW_LABEL) {
-        let bounds = overlay_bounds_for_work_area(work_area);
+        let bounds = overlay_bounds_for_work_area(
+            work_area,
+            runtime_window_size(&window, OVERLAY_WIDTH, OVERLAY_HEIGHT),
+        );
         window.set_position(PhysicalPosition::new(bounds.x, bounds.y))?;
     }
 
     if let Some(window) = app.get_webview_window(RESULT_WINDOW_LABEL) {
-        let bounds = result_bounds_for_work_area(work_area);
+        let bounds = result_bounds_for_work_area(
+            work_area,
+            runtime_window_size(&window, RESULT_WIDTH, RESULT_HEIGHT),
+        );
         window.set_position(PhysicalPosition::new(bounds.x, bounds.y))?;
     }
 
@@ -301,17 +307,47 @@ fn resolve_work_area(app: &AppHandle) -> tauri::Result<WorkArea> {
     })
 }
 
-fn overlay_bounds_for_work_area(work_area: WorkArea) -> WindowBounds {
+fn runtime_window_size(
+    window: &tauri::WebviewWindow,
+    fallback_width: f64,
+    fallback_height: f64,
+) -> PhysicalSize<u32> {
+    window
+        .outer_size()
+        .ok()
+        .filter(|size| size.width > 0 && size.height > 0)
+        .or_else(|| {
+            window
+                .inner_size()
+                .ok()
+                .filter(|size| size.width > 0 && size.height > 0)
+        })
+        .unwrap_or_else(|| PhysicalSize::new(fallback_width as u32, fallback_height as u32))
+}
+
+fn centered_x_for_work_area(work_area: WorkArea, window_width: u32) -> i32 {
+    work_area.x + ((work_area.width as i32 - window_width as i32) / 2)
+}
+
+fn overlay_bounds_for_work_area(
+    work_area: WorkArea,
+    window_size: PhysicalSize<u32>,
+) -> WindowBounds {
     WindowBounds {
-        x: work_area.x + ((work_area.width as i32 - OVERLAY_WIDTH as i32) / 2),
-        y: work_area.y + work_area.height as i32 - OVERLAY_HEIGHT as i32 - OVERLAY_BOTTOM_MARGIN,
+        x: centered_x_for_work_area(work_area, window_size.width),
+        y: work_area.y + work_area.height as i32
+            - window_size.height as i32
+            - OVERLAY_BOTTOM_MARGIN,
     }
 }
 
-fn result_bounds_for_work_area(work_area: WorkArea) -> WindowBounds {
+fn result_bounds_for_work_area(
+    work_area: WorkArea,
+    window_size: PhysicalSize<u32>,
+) -> WindowBounds {
     WindowBounds {
-        x: work_area.x + ((work_area.width as i32 - RESULT_WIDTH as i32) / 2),
-        y: work_area.y + ((work_area.height as i32 - RESULT_HEIGHT as i32) / 2),
+        x: centered_x_for_work_area(work_area, window_size.width),
+        y: work_area.y + ((work_area.height as i32 - window_size.height as i32) / 2),
     }
 }
 
@@ -347,6 +383,10 @@ fn should_enable_window_shadow(label: &str) -> bool {
     label == MAIN_WINDOW_LABEL
 }
 
+fn should_use_transparent_runtime_window(label: &str) -> bool {
+    label == OVERLAY_WINDOW_LABEL || label == RESULT_WINDOW_LABEL
+}
+
 fn apply_runtime_window_chrome(window: tauri::WebviewWindow) -> tauri::Result<()> {
     let _ = window.set_shadow(should_enable_window_shadow(window.label()));
     let _ = window.hide_menu();
@@ -373,10 +413,7 @@ fn suppress_windows_runtime_window_border(window: &tauri::WebviewWindow) {
             pvAttribute: *const c_void,
             cbAttribute: u32,
         ) -> i32;
-        fn DwmExtendFrameIntoClientArea(
-            hwnd: *mut c_void,
-            margins: *const MARGINS,
-        ) -> i32;
+        fn DwmExtendFrameIntoClientArea(hwnd: *mut c_void, margins: *const MARGINS) -> i32;
     }
 
     #[repr(C)]
@@ -435,7 +472,7 @@ fn suppress_windows_runtime_window_border(window: &tauri::WebviewWindow) {
 #[cfg(target_os = "windows")]
 fn resolve_windows_background_color(_label: &str) -> Option<Color> {
     // Main window is no longer transparent - uses solid background for system shadow
-    // Overlay and result windows don't need explicit background color
+    // Overlay and result windows rely on transparent(true) + transparent webview backgrounds
     None
 }
 
@@ -447,11 +484,13 @@ const fn rgb_colorref(red: u8, green: u8, blue: u8) -> u32 {
 #[cfg(test)]
 mod tests {
     use ipc_contract::RuntimeSnapshot;
+    use tauri::PhysicalSize;
 
     use super::{
         overlay_bounds_for_work_area, result_bounds_for_work_area, should_enable_window_shadow,
-        should_hide_window_on_close, window_visibility_for_phase, window_visibility_for_snapshot,
-        WorkArea, OVERLAY_WIDTH,
+        should_hide_window_on_close, should_use_transparent_runtime_window,
+        window_visibility_for_phase, window_visibility_for_snapshot, WorkArea, OVERLAY_HEIGHT,
+        OVERLAY_WIDTH, RESULT_HEIGHT, RESULT_WIDTH,
     };
 
     #[test]
@@ -459,6 +498,13 @@ mod tests {
         assert!(should_enable_window_shadow("main"));
         assert!(!should_enable_window_shadow("overlay"));
         assert!(!should_enable_window_shadow("result"));
+    }
+
+    #[test]
+    fn enables_transparent_runtime_window_only_for_overlay_and_result() {
+        assert!(!should_use_transparent_runtime_window("main"));
+        assert!(should_use_transparent_runtime_window("overlay"));
+        assert!(should_use_transparent_runtime_window("result"));
     }
 
     #[cfg(target_os = "windows")]
@@ -606,27 +652,65 @@ mod tests {
 
     #[test]
     fn overlay_bounds_are_centered_horizontally_at_bottom() {
-        let bounds = overlay_bounds_for_work_area(WorkArea {
-            x: 100,
-            y: 50,
-            width: 1600,
-            height: 900,
-        });
+        let bounds = overlay_bounds_for_work_area(
+            WorkArea {
+                x: 100,
+                y: 50,
+                width: 1600,
+                height: 900,
+            },
+            PhysicalSize::new(OVERLAY_WIDTH as u32, OVERLAY_HEIGHT as u32),
+        );
 
         assert_eq!(bounds.x, 620);
         assert_eq!(bounds.y, 792);
     }
 
     #[test]
+    fn overlay_bounds_use_actual_physical_window_size_when_centering() {
+        let bounds = overlay_bounds_for_work_area(
+            WorkArea {
+                x: 100,
+                y: 50,
+                width: 1600,
+                height: 900,
+            },
+            PhysicalSize::new(840, 192),
+        );
+
+        assert_eq!(bounds.x, 480);
+        assert_eq!(bounds.y, 728);
+    }
+
+    #[test]
     fn result_bounds_are_centered() {
-        let bounds = result_bounds_for_work_area(WorkArea {
-            x: 40,
-            y: 20,
-            width: 1440,
-            height: 900,
-        });
+        let bounds = result_bounds_for_work_area(
+            WorkArea {
+                x: 40,
+                y: 20,
+                width: 1440,
+                height: 900,
+            },
+            PhysicalSize::new(RESULT_WIDTH as u32, RESULT_HEIGHT as u32),
+        );
 
         assert_eq!(bounds.x, 400);
         assert_eq!(bounds.y, 210);
+    }
+
+    #[test]
+    fn result_bounds_use_actual_physical_window_size_when_centering() {
+        let bounds = result_bounds_for_work_area(
+            WorkArea {
+                x: 40,
+                y: 20,
+                width: 1440,
+                height: 900,
+            },
+            PhysicalSize::new(1080, 780),
+        );
+
+        assert_eq!(bounds.x, 220);
+        assert_eq!(bounds.y, 80);
     }
 }
