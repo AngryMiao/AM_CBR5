@@ -8,6 +8,8 @@ export type VoiceCapsulePhase =
   | 'executing'
   | 'error'
 
+const TRANSCRIPTION_PREVIEW_MAX_CHARS = 14
+
 interface VoiceCapsuleProps {
   phase: VoiceCapsulePhase
   transcript?: string
@@ -69,9 +71,10 @@ export const VoiceCapsule: FC<VoiceCapsuleProps> = ({
       {showTranscript && displayText && (
         <span
           className="
-            text-[13px] text-white/70
+            inline-block align-bottom
+            text-[13px] text-white/70 text-right
             max-w-[200px]
-            overflow-hidden text-ellipsis whitespace-nowrap
+            overflow-hidden whitespace-nowrap
             pl-2 ml-1
             border-l border-white/20
           "
@@ -84,7 +87,10 @@ export const VoiceCapsule: FC<VoiceCapsuleProps> = ({
   )
 }
 
-function formatTranscriptionPreview(text: string, maxChars = 24): string {
+function formatTranscriptionPreview(
+  text: string,
+  maxChars = TRANSCRIPTION_PREVIEW_MAX_CHARS,
+): string {
   const normalized = text.trim()
   if (!normalized) return ''
   if (normalized.length <= maxChars) return normalized

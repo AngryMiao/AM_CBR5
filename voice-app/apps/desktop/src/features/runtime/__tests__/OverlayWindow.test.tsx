@@ -40,4 +40,26 @@ describe('OverlayWindow waveform stream', () => {
       expect(renderedBars[5]?.style.height).toBe('3px')
     })
   })
+
+  it('keeps the latest transcription suffix visible in the capsule preview', async () => {
+    const longTranscript = '这是前面的旧内容这是前面的旧内容这是最新识别出来的文字片段'
+    vi.mocked(getCurrentWindow).mockImplementation(() => ({ label: 'overlay' } as never))
+    setRuntimeSnapshotForTest({
+      phase: '正在聆听',
+      transcript: longTranscript,
+      result: '',
+      detail: '正在接收语音输入。',
+      input_mode: 'transcription',
+      result_window_mode: 'hidden',
+    })
+
+    render(<App />)
+
+    const preview = await screen.findByTitle(longTranscript)
+    const expectedPreview = `…${longTranscript.trim().slice(-14)}`
+
+    expect(preview).toHaveTextContent(expectedPreview)
+    expect(preview).toHaveClass('text-right')
+    expect(preview).not.toHaveClass('text-ellipsis')
+  })
 })

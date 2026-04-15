@@ -212,8 +212,7 @@ describe('App shell', () => {
     expect(screen.queryByText('按住语音快捷键开始输入')).toBeNull()
     expect(screen.queryByText('实时识别')).toBeNull()
     expect(screen.queryByText('LISTEN')).toBeNull()
-    expect(container.querySelector('.typeless-overlay-handle-right')).toBeNull()
-    expect(container.querySelectorAll('.typeless-overlay-wave-bar')).toHaveLength(5)
+    expect(container.querySelectorAll('.voice-bar')).toHaveLength(0)
     expect(screen.queryByText('历史记录')).toBeNull()
     expect(screen.queryByText('设置')).toBeNull()
   })
@@ -232,7 +231,11 @@ describe('App shell', () => {
     const { container } = render(<App />)
 
     expect(await screen.findByText('这是转录中的实时文本')).toBeInTheDocument()
-    expect(container.querySelector('.typeless-overlay-handle-left')?.textContent).toBe('✎')
+    expect(
+      container.querySelector(
+        'path[d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"]',
+      ),
+    ).not.toBeNull()
   })
 
   it('keeps the default listening icon for agent mode in the overlay window', async () => {
@@ -249,7 +252,9 @@ describe('App shell', () => {
     const { container } = render(<App />)
 
     expect(await screen.findByRole('status')).toBeInTheDocument()
-    expect(container.querySelector('.typeless-overlay-handle-left')?.textContent).toBe('●')
+    expect(
+      container.querySelector('rect[x="9"][y="2"][width="6"][height="11"][rx="3"]'),
+    ).not.toBeNull()
   })
 
   it('renders result chrome instead of the main shell in the result window', async () => {
